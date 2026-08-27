@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.naverblog.daily-generate</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/beomseok/00_AI/01_ NAVER_BLOG_AUTOMATE/.venv/bin/python</string>
+		<string>-m</string>
+		<string>tools.automation_runner</string>
+		<string>run</string>
+		<string>daily-generate</string>
+		<string>--mode</string>
+		<string>beta</string>
+		<string>--keyword</string>
+		<string>__SET_KEYWORD__</string>
+		<string>--dry-run</string>
+	</array>
+	<key>WorkingDirectory</key>
+	<string>/Users/beomseok/00_AI/01_ NAVER_BLOG_AUTOMATE</string>
+	<key>StandardOutPath</key>
+	<string>/Users/beomseok/00_AI/01_ NAVER_BLOG_AUTOMATE/.automation/logs/launchd/daily-generate.stdout.log</string>
+	<key>StandardErrorPath</key>
+	<string>/Users/beomseok/00_AI/01_ NAVER_BLOG_AUTOMATE/.automation/logs/launchd/daily-generate.stderr.log</string>
+	<key>Disabled</key>
+	<true/>
+</dict>
+</plist>

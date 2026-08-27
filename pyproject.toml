@@ -1,0 +1,27 @@
+[project]
+name = "naver-blog-workflow"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "jsonschema[format-nongpl]>=4.26,<5",
+]
+
+[tool.basedpyright]
+include = ["tools", "tests"]
+typeCheckingMode = "all"
+pythonVersion = "3.13"
+executionEnvironments = [{ root = ".", extraPaths = ["/Users/beomseok/00_AI/01_ NAVER_BLOG_AUTOMATE"] }]
+reportAny = "none"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = ["-ra", "--strict-config", "--strict-markers"]
+
+[dependency-groups]
+dev = [
+    "basedpyright>=1.39,<2",
+    "hypothesis>=6.165,<7",
+    "pytest>=9.1,<10",
+    "ruff>=0.16,<1",
+]

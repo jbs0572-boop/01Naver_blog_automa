@@ -1,0 +1,294 @@
+from __future__ import annotations
+
+# pyright: reportAny=false
+import hashlib
+import json
+import re
+import struct
+from datetime import datetime
+from pathlib import Path
+from typing import Final
+
+from tools.workflow_contract import (
+    ContractError,
+    JSONMap,
+    JSONValue,
+    SchemaError,
+    validate_instance,
+)
+
+HASH_RE: Final = re.compile(r"^sha256:[0-9a-f]{64}$")
+SIZE_RE: Final = re.compile(r"^[1-9][0-9]*x[1-9][0-9]*$")
+SNAPSHOT: Final = "gpt-image-2-2026-04-21"
+SCHEMA_PATH: Final = (
+    Path(__file__).resolve().parents[1] / "schemas" / "workflow-contract.schema.json"
+)
+METADATA_FIELDS: Final = (
+    "generation_provider",
+    "generation_model",
+    "generation_snapshot",
+    "generation_control",
+    "quality",
+    "size",
+    "prompt_template_version",
+    "prompt_sha256",
+    "reference_sha256",
+    "output_sha256",
+    "generated_at",
+    "provenance_status",
+    "output_path",
+)
+SCORE_FIELDS: Final = (
+    "subject_relevance",
+    "composition_legibility",
+    "rendering_completion",
+    "information_contribution",
+    "style_consistency",
+)
+AUTOMATED_CHECKS: Final = (
+    "decode_check",
+    "duplicate_check",
+    "ocr_check",
+    "visual_contract_check",
+    "mobile_render_check",
+)
+MOBILE_VIEWPORT: Final = "390x844"
+
+
+def _map(value: JSONValue, label: str) -> JSONMap:
+    if not isinstance(value, dict):
+        raise ContractError(f"JSON object required: {label}")
+    return value
+
+
+def _text(data: JSONMap, key: str) -> str:
+    value = data.get(key)
+    if not isinstance(value, str) or not value:
+        raise ContractError(f"missing or invalid image field: {key}")
+    return value
+
+
+def _digest(value: JSONValue, key: str) -> str:
+    if not isinstance(value, str) or not HASH_RE.fullmatch(value):
+        raise ContractError(f"invalid SHA-256 field: {key}")
+    return value
+
+
+def _timestamp(value: JSONValue, key: str) -> None:
+    if not isinstance(value, str):
+        raise ContractError(f"invalid timestamp field: {key}")
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError as error:
+        raise ContractError(f"invalid timestamp field: {key}") from error
+    if parsed.tzinfo is None:
+        raise ContractError(f"timestamp must include timezone: {key}")
+
+
+def _has_image_signature(path: Path) -> bool:
+    raw = path.read_bytes()
+    if raw.startswith(b"\x89PNG\r\n\x1a\n"):
+        return (
+            len(raw) >= 24
+            and raw[12:16] == b"IHDR"
+            and struct.unpack(">II", raw[16:24]) > (0, 0)
+        )
+    return raw.startswith((b"\xff\xd8\xff", b"GIF87a", b"GIF89a", b"RIFF")) and (
+        b"WEBP" in raw[:16] or raw.startswith((b"\xff\xd8\xff", b"GIF87a", b"GIF89a"))
+    )
+
+
+def _records(path: Path) -> list[JSONMap]:
+    records: list[JSONMap] = []
+    for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            raw: JSONValue = json.loads(line)
+        except json.JSONDecodeError as error:
+            raise ContractError(f"invalid JSON at {path}:{line_no}") from error
+        records.append(_map(raw, f"{path}:{line_no}"))
+    if not records:
+        raise ContractError(f"image metadata is empty: {path}")
+    return records
+
+
+def _check_metadata(record: JSONMap, index: int, mode: str, metadata_path: Path) -> str:
+    try:
+        validate_instance(record, SCHEMA_PATH)
+    except SchemaError as error:
+        raise ContractError(
+            f"image metadata record {index} does not match workflow schema: {error}"
+        ) from error
+    missing = [key for key in METADATA_FIELDS if key not in record]
+    if missing:
+        raise ContractError(
+            f"image metadata record {index} is missing: {', '.join(missing)}"
+        )
+    if (
+        _text(record, "generation_provider") != "openai"
+        or _text(record, "generation_model") != "gpt-image-2"
+    ):
+        raise ContractError(
+            f"image metadata record {index} has unsupported provider or model"
+        )
+    if _text(record, "generation_snapshot") != SNAPSHOT:
+        raise ContractError(
+            f"image metadata record {index} has unsupported model snapshot"
+        )
+    control = _text(record, "generation_control")
+    if control not in {"locked", "unlocked"}:
+        raise ContractError(
+            f"image metadata record {index} has invalid generation_control"
+        )
+    if mode == "formal" and control != "locked":
+        raise ContractError(
+            f"formal image metadata record {index} is not generation_control=locked"
+        )
+    if _text(record, "quality") != "high" or not SIZE_RE.fullmatch(
+        _text(record, "size")
+    ):
+        raise ContractError(
+            f"image metadata record {index} has invalid quality or size"
+        )
+    _ = _text(record, "prompt_template_version")
+    _ = _digest(record["prompt_sha256"], "prompt_sha256")
+    references = record["reference_sha256"]
+    if not isinstance(references, list) or any(
+        not isinstance(value, str) or not HASH_RE.fullmatch(value)
+        for value in references
+    ):
+        raise ContractError(
+            f"image metadata record {index} has invalid reference_sha256"
+        )
+    output_digest = _digest(record["output_sha256"], "output_sha256")
+    _timestamp(record["generated_at"], "generated_at")
+    if _text(record, "provenance_status") not in {
+        "generated",
+        "official",
+        "licensed",
+        "captured",
+    }:
+        raise ContractError(
+            f"image metadata record {index} has invalid provenance_status"
+        )
+    if "seed" in record:
+        raise ContractError(f"image metadata record {index} contains unsupported seed")
+    output_path = record["output_path"]
+    if (
+        not isinstance(output_path, str)
+        or output_path.startswith("/")
+        or ".." in Path(output_path).parts
+    ):
+        raise ContractError(f"image metadata record {index} has unsafe output_path")
+    output_file = metadata_path.parent / output_path
+    if not output_file.is_file():
+        raise ContractError(f"image metadata output is missing: {output_path}")
+    if not _has_image_signature(output_file):
+        raise ContractError(
+            f"image metadata output is not a recognized image: {output_path}"
+        )
+    actual = f"sha256:{hashlib.sha256(output_file.read_bytes()).hexdigest()}"
+    if actual != output_digest:
+        raise ContractError(f"image metadata output hash changed: {output_path}")
+    return control
+
+
+def validate_image_metadata(path: Path, mode: str) -> JSONMap:
+    if mode not in {"beta", "formal"}:
+        raise ContractError("mode must be beta or formal")
+    records = _records(path)
+    controls = [
+        _check_metadata(record, index, mode, path)
+        for index, record in enumerate(records, 1)
+    ]
+    output_digests = [record.get("output_sha256") for record in records]
+    if len({digest for digest in output_digests if isinstance(digest, str)}) != len(
+        output_digests
+    ):
+        raise ContractError("image metadata contains duplicate output_sha256 values")
+    return {
+        "metadata": str(path),
+        "records": len(records),
+        "generation_control": {
+            "locked": controls.count("locked"),
+            "unlocked": controls.count("unlocked"),
+        },
+        "formal_ready": all(control == "locked" for control in controls),
+    }
+
+
+def validate_image_quality(path: Path) -> JSONMap:
+    records = _records(path)
+    for index, record in enumerate(records, 1):
+        try:
+            validate_instance(record, SCHEMA_PATH)
+        except SchemaError as error:
+            raise ContractError(
+                f"image quality record {index} does not match workflow schema: {error}"
+            ) from error
+        checks = record.get("automated_checks")
+        if not isinstance(checks, dict) or any(
+            checks.get(key) != "passed" for key in AUTOMATED_CHECKS
+        ):
+            raise ContractError(
+                f"image quality record {index} has a failed automated check"
+            )
+        scores = record.get("scores")
+        if not isinstance(scores, dict):
+            raise ContractError(f"image quality record {index} is missing scores")
+        values: list[int] = []
+        for key in SCORE_FIELDS:
+            value = scores.get(key)
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, int)
+                or value < 0
+                or value > 4
+            ):
+                raise ContractError(
+                    f"image quality record {index} has invalid score: {key}"
+                )
+            values.append(value)
+        if sum(values) < 16 or min(values) < 3:
+            raise ContractError(
+                f"image quality record {index} is below 16/20 or has a score below 3"
+            )
+        mobile_viewport = record.get("mobile_viewport")
+        mobile_render_path = record.get("mobile_render_path")
+        if (
+            mobile_viewport != MOBILE_VIEWPORT
+            or not isinstance(mobile_render_path, str)
+            or mobile_render_path.startswith("/")
+            or ".." in Path(mobile_render_path).parts
+        ):
+            raise ContractError(
+                f"image quality record {index} is missing the fixed mobile render evidence"
+            )
+        if not (path.parent / mobile_render_path).is_file():
+            raise ContractError(
+                f"image quality render evidence is missing: {mobile_render_path}"
+            )
+        if not _has_image_signature(path.parent / mobile_render_path):
+            raise ContractError(
+                f"image quality render evidence is not a recognized image: {mobile_render_path}"
+            )
+        mobile_render_digest = record.get("mobile_render_sha256")
+        if not isinstance(mobile_render_digest, str) or not HASH_RE.fullmatch(
+            mobile_render_digest
+        ):
+            raise ContractError(
+                f"image quality record {index} has invalid mobile render hash"
+            )
+        actual_mobile_digest = f"sha256:{hashlib.sha256((path.parent / mobile_render_path).read_bytes()).hexdigest()}"
+        if actual_mobile_digest != mobile_render_digest:
+            raise ContractError(
+                f"image quality render evidence changed: {mobile_render_path}"
+            )
+        if (
+            record.get("immediate_failure") is not False
+            or record.get("mobile_rendered") is not True
+            or record.get("human_verdict") != "passed"
+        ):
+            raise ContractError(f"image quality record {index} has not passed Q3")
+    return {"quality": str(path), "records": len(records), "passed": True}
