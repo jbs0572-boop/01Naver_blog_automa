@@ -2,12 +2,10 @@ from __future__ import annotations
 
 # pyright: reportAny=false
 import json
-import os
 import sys
 from pathlib import Path
 
 from tools.image_quality import validate_image_metadata, validate_image_quality
-from tools.tool_policy import ToolAction, classify_tool_call
 from tools.workflow_contract import (
     ContractError,
     JSONMap,
@@ -19,6 +17,7 @@ from tools.workflow_contract import (
     verify_gate,
     verify_manifest,
 )
+from tools.workflow_hook import run_hook
 
 
 def _options(arguments: list[str]) -> dict[str, str]:
@@ -40,13 +39,6 @@ def _required(values: dict[str, str], key: str) -> str:
     return value
 
 
-def _required_env(key: str) -> str:
-    value = os.environ.get(key)
-    if not value:
-        raise ContractError(f"missing environment variable: {key}")
-    return value
-
-
 def _root(values: dict[str, str]) -> Path:
     return Path(values.get("root", ".")).resolve()
 
@@ -58,91 +50,6 @@ def _write_json(path: Path, value: JSONMap) -> None:
     )
 
 
-def _workspace_from_cwd(cwd: str) -> Path:
-    current = Path(cwd).resolve()
-    for candidate in (current, *current.parents):
-        if (candidate / "AGENTS.md").is_file() and (
-            candidate / "workflow-optimization-implementation-plan.md"
-        ).is_file():
-            return candidate
-    raise ContractError("workflow workspace root could not be found from hook cwd")
-
-
-def _hook() -> int:
-    try:
-        raw_value: JSONValue = json.loads(sys.stdin.read())
-        if not isinstance(raw_value, dict):
-            raise ContractError("hook input must be a JSON object")
-        raw: JSONMap = raw_value
-        tool_name_value = raw.get("tool_name")
-        if not isinstance(tool_name_value, str):
-            raise ContractError("hook tool_name must be a string")
-        tool_input_value = raw.get("tool_input", {})
-        if not isinstance(tool_input_value, dict):
-            raise ContractError("hook tool_input must be an object")
-        decision = classify_tool_call(tool_name_value, tool_input_value)
-        if decision.action in {ToolAction.INTERNAL, ToolAction.READ}:
-            return 0
-        if decision.action is ToolAction.DENY:
-            print(
-                json.dumps(
-                    {
-                        "hookSpecificOutput": {
-                            "hookEventName": "PreToolUse",
-                            "permissionDecision": "deny",
-                            "permissionDecisionReason": decision.reason,
-                        }
-                    }
-                )
-            )
-            return 0
-        lock_value = os.environ.get("WORKFLOW_LOCK")
-        if lock_value and Path(lock_value).is_file():
-            raise ContractError("workflow execution lock is active")
-        root = _workspace_from_cwd(str(raw.get("cwd", os.getcwd())))
-        gate = _required_env("WORKFLOW_GATE")
-        manifest = Path(_required_env("WORKFLOW_MANIFEST"))
-        run_log = Path(_required_env("WORKFLOW_RUN_LOG"))
-        run_id = _required_env("WORKFLOW_RUN_ID")
-        target_id = _required_env("WORKFLOW_TARGET_ID")
-        result = verify_gate(
-            root=root,
-            manifest_path=manifest,
-            run_log=run_log,
-            gate=gate,
-            run_id=run_id,
-            target_id=target_id,
-            notion_page_id=os.environ.get("WORKFLOW_NOTION_PAGE_ID"),
-            notion_verified_at=os.environ.get("WORKFLOW_NOTION_VERIFIED_AT"),
-            blog_id=os.environ.get("WORKFLOW_BLOG_ID"),
-        )
-        print(
-            json.dumps(
-                {
-                    "hookSpecificOutput": {
-                        "hookEventName": "PreToolUse",
-                        "permissionDecision": "allow",
-                        "permissionDecisionReason": f"verified {result['verified_artifact_digest']}",
-                    }
-                }
-            )
-        )
-        return 0
-    except (ContractError, json.JSONDecodeError, OSError) as error:
-        print(
-            json.dumps(
-                {
-                    "hookSpecificOutput": {
-                        "hookEventName": "PreToolUse",
-                        "permissionDecision": "deny",
-                        "permissionDecisionReason": str(error),
-                    }
-                }
-            )
-        )
-        return 0
-
-
 def main(arguments: list[str]) -> int:
     if len(arguments) < 2:
         raise ContractError(
@@ -150,7 +57,7 @@ def main(arguments: list[str]) -> int:
         )
     command = arguments[1]
     if command == "hook":
-        return _hook()
+        return run_hook()
     values = _options(arguments[2:])
     root = _root(values)
     if command == "manifest":

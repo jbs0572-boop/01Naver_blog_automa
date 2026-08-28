@@ -4,8 +4,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from tools.contract_types import ContractError
-from tools.gate import verify_gate
+from tools.contract_types import ContractError, JSONMap
+from tools.gate import GateRequest, authorize_external_write
 from tools.manifest import verify_manifest
 
 
@@ -45,7 +45,7 @@ class ExternalWritePlan:
     dry_run: bool
     would_execute: bool
 
-    def as_json(self) -> dict[str, object]:
+    def as_json(self) -> JSONMap:
         return {
             "system": self.system.value,
             "action": self.action.value,
@@ -68,16 +68,21 @@ def plan_external_write(request: ExternalWriteRequest) -> ExternalWritePlan:
         raise ContractError(
             f"external adapter gate does not match system: {request.system.value}"
         )
-    verified = verify_gate(
-        root=request.root,
-        manifest_path=request.manifest_path,
-        run_log=request.run_log,
-        gate=request.gate,
-        run_id=request.run_id,
-        target_id=request.target_id,
-        notion_page_id=request.notion_page_id,
-        notion_verified_at=request.notion_verified_at,
-        blog_id=request.blog_id,
+    verified = authorize_external_write(
+        GateRequest(
+            root=request.root,
+            manifest_path=request.manifest_path,
+            run_log=request.run_log,
+            gate=request.gate,
+            run_id=request.run_id,
+            target_id=request.target_id,
+            notion_connector=request.system is ExternalSystem.NOTION,
+            notion_operation="create_pages",
+            notion_resource_id=request.target_id,
+            notion_page_id=request.notion_page_id,
+            notion_verified_at=request.notion_verified_at,
+            blog_id=request.blog_id,
+        )
     )
     manifest = verify_manifest(request.root, request.manifest_path)
     if not request.dry_run:

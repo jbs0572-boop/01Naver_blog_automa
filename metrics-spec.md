@@ -48,7 +48,7 @@ stage·lane 이벤트 필수 필드:
 
 ## 승인 이벤트
 
-승인 이벤트도 같은 `runs/<run_id>.jsonl`에 기록하며, 실행별 로그의 단일 작성자가 기록한다. 승인 이벤트는 단계 성공 이벤트로 대체하지 않는다.
+승인 이벤트도 같은 `runs/<run_id>.jsonl`에 기록하며, 실행별 로그의 단일 작성자가 기록한다. 승인 이벤트는 단계 성공 이벤트로 대체하지 않는다. 정식 모드 Gate A와 Gate B에만 기록하며, 베타 Notion 저장은 승인 이벤트를 만들지 않는다.
 
 승인 이벤트 필수 필드는 `event_type`, `pipeline_version`, `run_id`, `gate`, `decision`, `scope`, `target_id`, `artifact_digest`, `requested_at`, `decided_at`이다. `batch_id`, `topic_id`, `stage`, `status`, `attempt`은 실행 맥락에 필요할 때 추가한다.
 
@@ -70,6 +70,7 @@ stage·lane 이벤트 필수 필드:
 - `scope`: `per-run` 또는 `batch`
 - `artifact_digest`: 최종 Markdown, image-map.md, 참조 이미지의 고정 순서 manifest를 SHA-256으로 계산한 값
 - canonical 순서: `final Markdown → naver-layout → naver-copy → image-map → 본문 이미지 등장 순서 → thumbnail`
+- 화면·복사 원본·Notion 본문 이미지 순서: 전용 썸네일을 첫 번째 이미지 블록으로 고정하고 이후 본문 이미지 순서를 따른다. canonical 순서는 승인·해시 계산용이므로 이 배치 순서와 다르다.
 - 개별 artifact의 `size_bytes`와 raw-byte SHA-256을 manifest에 기록한다. `artifact_digest`는 자기 필드를 제외한 canonical JSON의 UTF-8·정렬 key·무공백 SHA-256이다.
 - Gate B 승인에는 `notion_page_id`, `notion_last_verified_at`, `blog_id`를 추가하고, 승인 대상과 현재 값이 일치해야 한다.
 - Gate B 승인에는 `notion_roundtrip_digest`를 추가하고 현재 manifest digest와 일치시킨다.

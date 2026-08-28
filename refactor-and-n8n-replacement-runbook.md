@@ -382,8 +382,8 @@ python3 -m compileall -q tools tests
 ### Phase G. 외부 연동 준비
 
 - Notion/Naver adapter의 request/response 타입과 dry-run만 구현
-- Gate A/B 입력을 검증하는 테스트 작성
-- 실제 외부 쓰기는 사용자 승인 전까지 호출하지 않음
+- 베타 Notion 쓰기 조건과 Gate A/B 입력을 검증하는 테스트 작성
+- 베타 Notion 쓰기는 Q1·manifest·지정 데이터 소스 검증 후 허용하고, 정식 외부 쓰기는 사용자 승인 전까지 호출하지 않음
 - Naver 최종 게시 기능은 구현하지 않음
 
 ## 11. 중단 조건

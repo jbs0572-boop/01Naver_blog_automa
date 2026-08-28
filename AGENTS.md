@@ -42,7 +42,7 @@ Codex만 사용해 네이버 블로그 글을 만들고, 검수한 결과를 지
 
 `topic-selector → researcher → writer → image-maker → content-assembler → notion-rider → naver-rider`
 
-모든 신규 실행은 `pipeline_version=workflow-optimized-v1`을 사용한다. `schemas/workflow-contract.schema.json`이 단계 이벤트·승인·시각 슬롯·이미지 생성 메타데이터·품질 기록·canonical manifest의 단일 계약이며, 실행 검증기는 다음 명령으로 호출한다.
+모든 신규 실행은 `pipeline_version=workflow-optimized-v1`을 사용한다. `schemas/workflow-contract.schema.json`이 단계 이벤트·승인·시각 슬롯·이미지 생성 메타데이터·품질 기록·canonical manifest의 단일 계약이며, 실행 검증기는 다음 명령으로 호출한다. `gate` 명령은 정식 모드 Gate A 또는 Gate B 승인 검증에만 사용한다.
 
 ```text
 python3 -m tools.workflow_verifier manifest --root . --keyword <키워드> --run-id <run_id> --topic-id <topic_id> --mode <beta|formal> --created-at <KST ISO-8601> --output manifests/<run_id>-workflow-manifest.json
@@ -51,7 +51,7 @@ python3 -m tools.workflow_verifier gate --root . --manifest manifests/<run_id>-w
 python3 -m tools.workflow_verifier validate-schema --input <JSON 또는 JSONL 계약 기록>
 ```
 
-canonical manifest 파일 순서는 `final/[키워드].md → final/[키워드]-naver-layout.md → final/[키워드]-naver-copy.md → assets/[키워드]/image-map.md → 본문 Markdown에 등장하는 이미지 순서 → 전용 썸네일`이다. 각 파일은 실제 byte의 `size_bytes`와 SHA-256을 기록하며, `artifact_digest`는 자기 필드를 제외한 canonical JSON을 UTF-8·정렬 key·무공백으로 직렬화해 계산한다. 이 세 최종 Markdown 파일과 image-map·참조 이미지·썸네일은 승인 범위에서 제외할 수 없다.
+canonical manifest 파일 순서는 `final/[키워드].md → final/[키워드]-naver-layout.md → final/[키워드]-naver-copy.md → assets/[키워드]/image-map.md → 본문 Markdown에 등장하는 이미지 순서 → 전용 썸네일`이다. 이 순서는 무결성·해시 계산용이며 화면·복사 원본·Notion 본문 이미지의 배치 순서를 뜻하지 않는다. 화면·복사 원본·Notion 본문에서는 전용 썸네일을 항상 첫 번째 이미지 블록으로 고정하고 그 뒤에 본문 이미지 순서를 따른다. 각 파일은 실제 byte의 `size_bytes`와 SHA-256을 기록하며, `artifact_digest`는 자기 필드를 제외한 canonical JSON을 UTF-8·정렬 key·무공백으로 직렬화해 계산한다. 이 세 최종 Markdown 파일과 image-map·참조 이미지·썸네일은 manifest 검증 범위에서 제외할 수 없고, 정식 모드에서는 승인 범위에서도 제외할 수 없다.
 
 | 단계 | 입력 | 출력 | 통과 조건 |
 |---|---|---|---|
@@ -60,7 +60,7 @@ canonical manifest 파일 순서는 `final/[키워드].md → final/[키워드]-
 | writer | 리서치, 문체·SEO 가이드 | `drafts/[키워드].md` | 근거 기반 본문, 총정리 범위 충족, 제목 약속·독자 질문·독창적 구성 충족, 반복 제거, 시각 슬롯 메타데이터가 있는 `[IMAGE:]` 마커가 있음 |
 | image-maker | 초안, 리서치의 시각 슬롯, 이미지 가이드, 마커 | `assets/[키워드]/` 및 연결표 | 시각 슬롯의 의도·유형·출처 정책과 실제 자산이 일치하고, 각 이미지가 본문에 새로운 정보를 추가하며 썸네일·본문 이미지의 역할이 중복되지 않음 |
 | content-assembler | 초안, 이미지, 연결표 | `final/[키워드].md`, `final/[키워드]-naver-layout.md`, `final/[키워드]-naver-copy.md` | 시각 계약, 마커·이미지 수·순서·경로·썸네일·본문 보존과 네이버 블록 배치 검사가 통과됨 |
-| notion-rider | 완성 글, 이미지, 모드·차수 | Notion 데이터베이스 새 항목 | 저장 후 다시 열어 본문과 이미지가 확인됨 |
+| notion-rider | 완성 글, 이미지, 모드·차수 | Notion 데이터베이스 새 항목 | `content-assembler`의 블록 순서를 그대로 저장하고 첫 이미지가 전용 썸네일이며, 저장 후 다시 열어 본문과 이미지가 확인됨 |
 | naver-rider | 완성 글, 네이버 배치 명세, 이미지, 정식 모드 | 네이버 블로그 임시저장 글 | 제목·본문·이미지·출처·대표 이미지가 확인되고 임시저장됨. 발행하지 않음 |
 
 이전 단계의 출력이 없거나 검수를 통과하지 못하면 다음 단계를 호출하지 않는다. 총괄 에이전트는 직접 주제 선정, 조사, 글쓰기, 이미지 제작·조립을 하지 않고 담당 에이전트를 호출하고 결과만 확인한다.
@@ -98,13 +98,13 @@ fallback: "대체 유형 또는 중단 조건"
 - 독립 이미지 슬롯의 실제 생성을 최대 2개까지 병렬화하는 것은 베타 10회에서 파일 충돌·필수 자산 누락이 0건이고, 품질 Gate 저하가 없으며, 중앙값 소요 시간이 기준선보다 감소하고, 추가 비용이 수용 가능한 경우에만 별도 승인 후 허용한다. 조건 하나라도 충족하지 못하면 직렬 생성을 유지한다.
 - 병렬 Lane은 고유한 Lane ID와 담당 범위를 가져야 하며 주 담당자만 병합·기록·최종 통과 판정을 한다. 이 경계를 지키지 못하면 해당 단계는 성공으로 보고하지 않는다.
 
-## 4-3. 외부 저장 승인 Gate
+## 4-3. 외부 저장 제어와 승인 Gate
 
-승인은 새 파이프라인 단계나 새 에이전트가 아니라 기존 Rider가 외부 상태를 변경하기 전에 확인하는 선행 조건이다. 승인 기록이 없거나 조건이 맞지 않으면 연결 도구를 호출해 쓰기·업로드·에디터 변경을 시작하지 않는다.
+정식 모드의 승인은 새 파이프라인 단계나 새 에이전트가 아니라 기존 Rider가 외부 상태를 변경하기 전에 확인하는 선행 조건이다. 베타 모드의 Notion 저장은 Gate A 승인 이벤트 없이 진행하되 Q1, canonical manifest, 지정 데이터 소스, Notion 연결 도구 검증을 통과해야 한다.
 
-### Gate A: Notion 쓰기
+### Gate A: 정식 모드 Notion 쓰기
 
-notion-rider는 다음 조건이 모두 맞을 때만 페이지 생성과 파일 업로드를 시작한다.
+정식 모드의 notion-rider는 다음 조건이 모두 맞을 때만 페이지 생성과 파일 업로드를 시작한다.
 
 - content-assembler의 기존 검수 결과가 통과다.
 - 승인 대상 데이터 소스 ID가 notion-config.md의 설정과 실제 조회 결과에 모두 일치한다.
@@ -114,12 +114,12 @@ notion-rider는 다음 조건이 모두 맞을 때만 페이지 생성과 파일
 
 품질 판정 시점은 새 단계를 만들지 않고 다음 결과로 분리한다.
 
-- Q1: `content-assembler`가 근거·최신성·제목 약속·독자 질문·시각 계약·세 최종 파일·canonical manifest를 자동 검사한다. Q1 실패 시 Gate A를 요청하지 않는다.
-- Q2: `notion-rider`가 저장 후 제목·본문·목록·표·링크·이미지·썸네일 순서, 첨부 완료, 중복 `run_id`, 정규화 구조 digest를 재조회해 검사한다. Q2 실패는 콘텐츠 품질과 별도로 `storage_integrity=failed`다.
+- Q1: `content-assembler`가 근거·최신성·제목 약속·독자 질문·시각 계약·세 최종 파일·canonical manifest를 자동 검사한다. Q1 실패 시 정식 모드는 Gate A를 요청하지 않고, 베타 모드는 Notion 쓰기를 시작하지 않는다.
+- Q2: `notion-rider`가 저장 후 제목·본문·목록·표·링크·이미지·썸네일 순서, 첫 이미지 블록이 전용 썸네일인지, 첨부 완료, 중복 `run_id`, 정규화 구조 digest를 재조회해 검사한다. Q2 실패는 콘텐츠 품질과 별도로 `storage_integrity=failed`다.
 - Q3: 사용자 또는 승인된 검수자가 원본과 모바일 렌더링을 함께 평가한다. `사람 검수=통과`와 이미지 5개 항목 총점 16/20 이상·개별 3점 미만 없음이 확인되기 전에는 Gate B를 요청하지 않는다.
 
-외부 Notion·네이버·브라우저·컴퓨터 도구의 쓰기는 `.codex/hooks.json`의 Codex `PreToolUse` Hook이 같은 manifest·로그·run_id·대상·Gate를 검증한 뒤에만 허용한다. Hook 자체는 승인을 만들지 않으며, 승인 이벤트가 없거나 digest가 다르면 도구 호출을 차단한다.
-Hook 실행 환경에는 `WORKFLOW_GATE`, `WORKFLOW_MANIFEST`, `WORKFLOW_RUN_LOG`, `WORKFLOW_RUN_ID`, `WORKFLOW_TARGET_ID`를 이번 실행 값으로 주입해야 한다. 하나라도 없으면 외부 쓰기는 차단되며, 인증 토큰·쿠키는 이 환경이나 로그에 기록하지 않는다.
+외부 Notion·네이버·브라우저·컴퓨터 도구의 쓰기는 `.codex/hooks.json`의 Codex `PreToolUse` Hook이 manifest·로그·run_id·대상·쓰기 종류를 검증한 뒤에만 허용한다. 정식 모드는 승인 이벤트와 digest까지 검증한다. 베타 Notion 쓰기는 승인 이벤트를 요구하지 않지만 `mode=beta`, manifest와 Q1의 동일 `run_id`·`topic_id`, 현재 manifest 무결성, 지정 데이터 소스 ID, 실제 `create-pages` 부모의 데이터 소스 ID가 모두 맞아야 한다. 승인 없는 베타 쓰기는 Notion 첨부 생성과 지정 데이터 소스의 새 페이지 생성만 허용하며 기존 페이지 수정·복제·이동·삭제 및 브라우저·네이버 우회 쓰기는 차단한다.
+Hook 실행 환경에는 `WORKFLOW_GATE`, `WORKFLOW_MANIFEST`, `WORKFLOW_RUN_LOG`, `WORKFLOW_RUN_ID`, `WORKFLOW_TARGET_ID`를 이번 실행 값으로 주입해야 한다. 베타의 `WORKFLOW_GATE=notion_write`는 승인 기록이 아니라 쓰기 종류 식별자다. 하나라도 없으면 외부 쓰기는 차단되며, 인증 토큰·쿠키는 이 환경이나 로그에 기록하지 않는다.
 
 ### Gate B: 네이버 에디터 입력·임시저장
 
@@ -132,7 +132,7 @@ naver-rider는 Notion 저장 후 재조회와 사람 검수가 끝난 뒤, 제�
 - Notion 페이지 재조회 결과의 `notion_roundtrip_digest`가 승인된 `artifact_digest`와 일치한다.
 - 승인 결정이 approved이고 만료되지 않았으며, 승인 이후 Notion 복사 원본·최종 산출물·이미지가 변경되지 않았다.
 
-Gate B 승인 후에도 임시저장 버튼 직전의 기존 사용자 확인을 다시 받는다. 두 확인 중 하나라도 없으면 임시저장하지 않는다. 정식 모드는 Gate A와 Gate B를 모두 사용하고, 베타 모드는 Gate A만 사용하며 naver-rider를 호출하지 않는다. CLI 명령이나 샌드박스 실행 승인은 업무상 Gate A·Gate B 승인으로 간주하지 않는다.
+Gate B 승인 후에도 임시저장 버튼 직전의 기존 사용자 확인을 다시 받는다. 두 확인 중 하나라도 없으면 임시저장하지 않는다. 정식 모드는 Gate A와 Gate B를 모두 사용한다. 베타 모드는 Gate A 승인 이벤트와 Gate B를 사용하지 않고 Q1 통과 직후 지정 Notion 데이터베이스에 저장하며 naver-rider를 호출하지 않는다. CLI 명령이나 샌드박스 실행 승인은 정식 모드의 업무상 Gate A·Gate B 승인으로 간주하지 않는다.
 
 ## 5. 단계별 호출과 보고
 
@@ -159,7 +159,7 @@ Gate B 승인 후에도 임시저장 버튼 직전의 기존 사용자 확인을
 - 이미지: 관계도·정보 도식은 주장별 출처와 확실도를 연결표에 기록하고, 도식이 실제 본문 정보를 추가하는지 확인한다.
 - 이미지: 본문 이미지와 별도로 전용 썸네일 1개가 있으며, `[THUMBNAIL]` 항목·썸네일 파일·검수 결과가 `image-map.md`에 기록되어 있다.
 - 조립: 원문은 이미지 마커 치환 외에 바뀌지 않았고, 이미지 누락·중복·순서 오류가 없다.
-- Notion: `notion-config.md`의 지정 데이터베이스와 실제 스키마를 다시 확인한 뒤 새 항목에 저장하고, 저장 후 본문·소제목·목록·링크·이미지 순서를 확인했다.
+- Notion: `notion-config.md`의 지정 데이터베이스와 실제 스키마를 다시 확인한 뒤 새 항목에 저장하고, `content-assembler`의 순서를 보존했으며 첫 이미지 블록이 전용 썸네일인지와 본문·소제목·목록·링크·이미지 순서를 확인했다.
 - Notion 이미지는 로컬 경로만 기록하지 않고 실제 첨부 업로드 후 `file-upload://...` 이미지 블록으로 표시한다.
 - 네이버 정식 모드: `naver-rider`가 네이버 에디터를 모바일 모드로 전환한 뒤 Notion의 검수 완료 페이지를 복사 원본으로 사용해 새 글을 입력하고, 저장 직전 사용자 확인 후 임시저장했다. 발행하지 않았다.
 

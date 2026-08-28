@@ -1,5 +1,5 @@
 {
-  "description": "Block Notion and Naver external writes unless the workflow verifier confirms the current approval and artifact digest.",
+  "description": "Authorize only beta Notion attachments and target-bound page creation after Q1 and manifest checks; require approval and artifact verification for formal Notion and Naver writes.",
   "hooks": {
     "PreToolUse": [
       {

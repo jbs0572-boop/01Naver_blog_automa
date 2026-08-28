@@ -54,19 +54,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str, str]:
             "ended_at": "2026-08-27T00:01:00+00:00",
             "status": "passed",
             "attempt": 1,
-        },
-        {
-            "event_type": "approval",
-            "pipeline_version": PIPELINE_VERSION,
-            "run_id": run_id,
-            "gate": "notion_write",
-            "decision": "approved",
-            "scope": "per-run",
-            "target_id": "datasource-adapter",
-            "artifact_digest": manifest["artifact_digest"],
-            "requested_at": "2026-08-27T00:02:00+00:00",
-            "decided_at": "2026-08-27T00:03:00+00:00",
-        },
+        }
     ]
     _ = run_log.write_text(
         "".join(json.dumps(event) + "\n" for event in events), encoding="utf-8"

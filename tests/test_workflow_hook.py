@@ -39,7 +39,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, JSONMap, str]:
         "temporary test root\n", encoding="utf-8"
     )
     manifest = build_manifest(
-        tmp_path, keyword, run_id, "TOPIC-hook", "beta", "2026-08-27T00:00:00+00:00"
+        tmp_path, keyword, run_id, "TOPIC-hook", "formal", "2026-08-27T00:00:00+00:00"
     )
     manifest_path = tmp_path / "manifest.json"
     _ = manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
