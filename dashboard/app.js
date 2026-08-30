@@ -87,6 +87,15 @@ function showConfirmationAction(task) {
   });
 }
 
+function showExternalRetryAction(task, detail = null) {
+  if (!task || !task.task_id || !task.run_id) return false;
+  setManualStatus(`외부 저장 실패 · ${detail || task.message || task.error || "원인 미상"}`, "error", {
+    label: "외부 저장 재시도",
+    handler: () => continueExternal(task.task_id),
+  });
+  return true;
+}
+
 async function pollManualRun(taskId) {
   const response = await fetch(`/api/manual-run/${encodeURIComponent(taskId)}`, {cache:"no-store"});
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -98,7 +107,9 @@ async function pollManualRun(taskId) {
     return;
   }
   setManualBusy(false);
-  if (task.status === "failed") {
+  if (task.result_status === "failed" && task.run_id) {
+    showExternalRetryAction(task);
+  } else if (task.status === "failed") {
     setManualStatus(`실행 차단 · ${task.message || task.error || "원인 미상"}`, "error");
   } else if (task.result_status === "awaiting_user_confirmation") {
     showConfirmationAction(task);
@@ -120,7 +131,9 @@ async function continueExternal(taskId) {
     const task = await response.json();
     if (!response.ok) throw new Error(task.error || `HTTP ${response.status}`);
     state.manualTask = task;
-    if (task.result_status === "awaiting_user_confirmation") {
+    if (task.result_status === "failed" && task.run_id) {
+      showExternalRetryAction(task);
+    } else if (task.result_status === "awaiting_user_confirmation") {
       showConfirmationAction(task);
     } else if (task.result_status === "local-only") {
       setManualStatus(task.message || "외부 저장 대기 · 연결이 필요합니다.", "warning");
@@ -129,7 +142,9 @@ async function continueExternal(taskId) {
     }
     await load();
   } catch (error) {
-    setManualStatus(`외부 저장 실패 · ${error.message}`, "error");
+    if (!showExternalRetryAction(state.manualTask, error.message)) {
+      setManualStatus(`외부 저장 실패 · ${error.message}`, "error");
+    }
   }
 }
 
