@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import Final
 
 from tools.contract_types import ContractError
 from tools.external_adapter import ExternalSystem, ExternalWriteRequest
@@ -21,9 +22,29 @@ from tools.runner_types import (
 )
 from tools.weekly_report import write_weekly_report
 
+_NAVER_TITLE_BLOCK: Final[re.Pattern[str]] = re.compile(
+    r"(?ms)^\[TITLE\][ \t]*\n(?P<title>.*?)^\[/TITLE\][ \t]*$"
+)
+
 
 def _topic_id(request: RunnerRequest, run_id: str) -> str:
     return f"TOPIC-{request.keyword}" if request.keyword else f"TOPIC-{run_id}"
+
+
+def naver_input_title(body: str, fallback: str) -> str:
+    title_block = _NAVER_TITLE_BLOCK.search(body)
+    if title_block is not None:
+        title = " ".join(title_block.group("title").splitlines()).strip()
+        if title:
+            return title
+    return next(
+        (
+            line[2:].strip()
+            for line in body.splitlines()
+            if line.startswith("# ")
+        ),
+        fallback,
+    )
 
 
 def _manifest_for(request: RunnerRequest, run_id: str, created_at: str) -> Path:
@@ -143,14 +164,7 @@ def stage_action(context: StageRunContext) -> StageResult:
             if not input_path.is_file():
                 raise ContractError(f"Naver input is missing: {input_path}")
             body = input_path.read_text(encoding="utf-8")
-            title = next(
-                (
-                    line[2:].strip()
-                    for line in body.splitlines()
-                    if line.startswith("# ")
-                ),
-                request.keyword,
-            )
+            title = naver_input_title(body, request.keyword)
             manifest_path = (
                 request.root / "manifests" / f"{run_id}-workflow-manifest.json"
             )
