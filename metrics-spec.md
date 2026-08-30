@@ -1,14 +1,14 @@
-# 베타 성능 지표 사양
+# 운영 워크플로우 성능 지표 사양
 
 ## 목적
 
-대량 베타 작업의 처리량·지연·실패·비용을 같은 방식으로 기록하고, Notion에서는 사람이 읽을 수 있는 요약을 확인한다.
+단일 운영 워크플로우의 처리량·지연·실패·비용을 같은 방식으로 기록하고, Notion에서는 사람이 읽을 수 있는 요약을 확인한다.
 
 신규 기록의 `pipeline_version`은 `workflow-optimized-v1`로 고정한다. 원시 JSONL은 Schema 계약을 따르고, 기존 로그는 덮어쓰지 않는다.
 
 ## 작업 단위
 
-- `batch_id`: 하나의 베타 배치 식별자
+- `batch_id`: 실행 묶음 식별자. 단일 실행에도 안전한 값으로 기록할 수 있다.
 - `run_id`: 글 한 편의 전체 파이프라인 실행 식별자
 - `topic_id`: 주제 manifest의 고유 식별자
 - `stage`: `topic-selector`, `researcher`, `writer`, `image-maker`, `content-assembler`, `notion-rider`, `naver-rider`
@@ -21,7 +21,7 @@ Q1·Q2·Q3는 단계명이 아니라 판정 시점 필드다. Q1은 외부 저�
 실행·Lane 이벤트는 `runs/*.jsonl`에 한 줄씩 저장한다. 한 실행 로그는 단일 작성자가 기록하며, Lane은 읽기·준비 결과만 반환하고 정식 산출물이나 공유 로그를 직접 수정하지 않는다.
 
 ```json
-{"event_type":"stage","pipeline_version":"workflow-optimized-v1","batch_id":"beta-2026-08-25-01","run_id":"beta-0001","topic_id":"2026-01-001","stage":"researcher","parent_stage":null,"lane_id":null,"worker_role":"researcher","depends_on":[],"started_at":"2026-08-25T09:00:00+09:00","ended_at":"2026-08-25T09:02:00+09:00","status":"passed","attempt":1,"artifacts":[],"error_type":null,"error_message_safe":null}
+{"event_type":"stage","pipeline_version":"workflow-optimized-v1","batch_id":"ops-2026-08-25-01","run_id":"ops-0001","topic_id":"2026-01-001","stage":"researcher","parent_stage":null,"lane_id":null,"worker_role":"researcher","depends_on":[],"started_at":"2026-08-25T09:00:00+09:00","ended_at":"2026-08-25T09:02:00+09:00","status":"passed","attempt":1,"artifacts":[],"error_type":null,"error_message_safe":null}
 ```
 
 stage·lane 이벤트 필수 필드:
@@ -46,36 +46,9 @@ stage·lane 이벤트 필수 필드:
 
 비밀값·토큰·쿠키·개인정보·전체 인증 헤더는 기록하지 않는다.
 
-## 승인 이벤트
+## 외부 쓰기 검증 기록
 
-승인 이벤트도 같은 `runs/<run_id>.jsonl`에 기록하며, 실행별 로그의 단일 작성자가 기록한다. 승인 이벤트는 단계 성공 이벤트로 대체하지 않는다. 정식 모드 Gate A와 Gate B에만 기록하며, 베타 Notion 저장은 승인 이벤트를 만들지 않는다.
-
-승인 이벤트 필수 필드는 `event_type`, `pipeline_version`, `run_id`, `gate`, `decision`, `scope`, `target_id`, `artifact_digest`, `requested_at`, `decided_at`이다. `batch_id`, `topic_id`, `stage`, `status`, `attempt`은 실행 맥락에 필요할 때 추가한다.
-
-    {
-      "event_type": "approval",
-      "pipeline_version": "workflow-optimized-v1",
-      "run_id": "RUN-YYYYMMDD-HHMMSS",
-      "gate": "notion_write",
-      "decision": "approved",
-      "scope": "per-run",
-      "target_id": "notion-data-source-id",
-      "artifact_digest": "sha256:...",
-      "requested_at": "2026-08-26T10:00:00+09:00",
-      "decided_at": "2026-08-26T10:05:00+09:00"
-    }
-
-- `gate`: `notion_write` 또는 `naver_draft_save`
-- `decision`: `approved`, `rejected`, `expired`
-- `scope`: `per-run` 또는 `batch`
-- `artifact_digest`: 최종 Markdown, image-map.md, 참조 이미지의 고정 순서 manifest를 SHA-256으로 계산한 값
-- canonical 순서: `final Markdown → naver-layout → naver-copy → image-map → 본문 이미지 등장 순서 → thumbnail`
-- 화면·복사 원본·Notion 본문 이미지 순서: 전용 썸네일을 첫 번째 이미지 블록으로 고정하고 이후 본문 이미지 순서를 따른다. canonical 순서는 승인·해시 계산용이므로 이 배치 순서와 다르다.
-- 개별 artifact의 `size_bytes`와 raw-byte SHA-256을 manifest에 기록한다. `artifact_digest`는 자기 필드를 제외한 canonical JSON의 UTF-8·정렬 key·무공백 SHA-256이다.
-- Gate B 승인에는 `notion_page_id`, `notion_last_verified_at`, `blog_id`를 추가하고, 승인 대상과 현재 값이 일치해야 한다.
-- Gate B 승인에는 `notion_roundtrip_digest`를 추가하고 현재 manifest digest와 일치시킨다.
-- 배치 승인에는 정확한 실행 목록, `max_items`, 만료 시각을 추가한다. 실행 목록·대상·해시가 달라지면 승인하지 않는다.
-- 승인 기록에는 토큰·쿠키·인증정보와 불필요한 개인정보를 넣지 않는다.
+Notion과 네이버 외부 쓰기는 별도 승인 이벤트를 기록하지 않는다. 실행 로그의 단계 이벤트에 `run_id`, `topic_id`, 대상 ID, `artifact_digest`, Q1·Q2 결과와 외부 쓰기 결과를 기록한다. 네이버 임시저장 직전 사용자 확인은 별도의 `confirmation` 이벤트로 기록하며 토큰·쿠키·인증정보와 불필요한 개인정보를 포함하지 않는다.
 
 ## 기존 로그 호환
 
@@ -101,7 +74,7 @@ stage·lane 이벤트 필수 필드:
 
 ## 이미지 생성·검수 원시 기록
 
-생성 이미지마다 `generation_provider`, `generation_model`, `generation_snapshot`, `generation_control`, `quality`, `size`, `prompt_template_version`, `prompt_sha256`, `reference_sha256`, `output_sha256`, `output_path`, `generated_at`, `provenance_status`를 기록한다. `output_path`는 metadata JSONL 기준 안전한 상대 경로이며 검증기가 실제 파일 byte의 `output_sha256`를 다시 계산한다. `gpt-image-2-2026-04-21`·`high`·고정 profile을 실제 호출에 전달하지 못한 결과는 `generation_control=unlocked`이며 정식 품질 통과가 아니다. seed는 기록하거나 재현성 근거로 사용하지 않는다.
+생성 이미지마다 `generation_provider`, `generation_model`, `generation_snapshot`, `generation_control`, `quality`, `size`, `prompt_template_version`, `prompt_sha256`, `reference_sha256`, `output_sha256`, `output_path`, `generated_at`, `provenance_status`를 기록한다. `output_path`는 metadata JSONL 기준 안전한 상대 경로이며 검증기가 실제 파일 byte의 `output_sha256`를 다시 계산한다. 고정 profile을 실제 호출에 전달하지 못한 결과는 `generation_control=unlocked`이며 운영 품질 Gate를 통과할 수 없다. seed는 기록하거나 재현성 근거로 사용하지 않는다.
 
 자동 검수 결과와 사람 검수 결과는 `assets/[키워드]/image-quality.jsonl`에 원시값으로 남긴다. 사람 평가 항목은 계획서의 5개 점수 필드로 0~4점씩 기록하며 총점 16/20 이상, 개별 3점 미만 없음, 즉시 실패 없음, `mobile_viewport=390x844`의 실제 `mobile_render_path`와 `mobile_render_sha256` 재검증을 모두 만족해야 한다.
 
@@ -119,7 +92,7 @@ stage·lane 이벤트 필수 필드:
 - `품질 점수` ← evaluation-rubric 최종 점수
 - `성능 판정` ← 성능 기준에 따른 `대기`, `통과`, `경고`, `실패`
 
-단계별 상세 시간과 원시 이벤트는 Notion 본문에 반복해서 넣지 않고 `runs/*.jsonl`에서 관리한다. 베타 요약 보고서에는 집계값만 넣는다.
+단계별 상세 시간과 원시 이벤트는 Notion 본문에 반복해서 넣지 않고 `runs/*.jsonl`에서 관리한다. 운영 요약 보고서에는 집계값만 넣는다.
 
 ## 성능 판정
 

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from typing import Protocol
 
-from tools.contract_types import ContractError, JSONMap
+from tools.contract_types import ContractError, JSONMap, JSONValue
 from tools.gate import GateRequest, authorize_external_write
 from tools.manifest import verify_manifest
 
@@ -34,6 +37,10 @@ class ExternalWriteRequest:
     blog_id: str | None = None
 
 
+class NotionAdapter(Protocol):
+    def write_and_verify(self, request: ExternalWriteRequest) -> JSONMap: ...
+
+
 @dataclass(frozen=True, slots=True)
 class ExternalWritePlan:
     system: ExternalSystem
@@ -56,6 +63,90 @@ class ExternalWritePlan:
             "dry_run": self.dry_run,
             "would_execute": self.would_execute,
         }
+
+
+def normalize_notion_page(page: JSONMap) -> JSONMap:
+    blocks = page.get("blocks")
+    if not isinstance(blocks, list):
+        raise ContractError("Notion page blocks must be an array")
+    normalized_blocks: list[JSONValue] = []
+    for value in blocks:
+        if not isinstance(value, dict):
+            raise ContractError("Notion block must be an object")
+        block_type = value.get("type")
+        if not isinstance(block_type, str):
+            raise ContractError("Notion block type is missing")
+        normalized: JSONMap = {"type": block_type}
+        for key in ("plain_text", "heading_level", "list_type", "url"):
+            item = value.get(key)
+            if isinstance(item, (str, int)):
+                normalized[key] = item
+        table_cells = value.get("table_cells")
+        if isinstance(table_cells, list) and all(
+            isinstance(cell, str) for cell in table_cells
+        ):
+            normalized["table_cells"] = table_cells
+        image = value.get("image")
+        if isinstance(image, dict):
+            image_data: JSONMap = {}
+            for key in ("artifact_role", "original_sha256", "caption", "order"):
+                item = image.get(key)
+                if isinstance(item, (str, int)):
+                    image_data[key] = item
+            normalized["image"] = image_data
+        normalized_blocks.append(normalized)
+    title = page.get("title")
+    if not isinstance(title, str):
+        raise ContractError("Notion page title is missing")
+    return {
+        "title": title,
+        "properties": page.get("properties", {}),
+        "blocks": normalized_blocks,
+    }
+
+
+def notion_content_digest(page: JSONMap) -> str:
+    normalized = normalize_notion_page(page)
+    encoded = json.dumps(
+        normalized, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    return "sha256:" + hashlib.sha256(encoded).hexdigest()
+
+
+def verify_notion_round_trip(
+    expected: JSONMap,
+    actual: JSONMap,
+    page_id: str,
+    verified_at: str,
+    artifact_digest: str,
+) -> JSONMap:
+    expected_digest = notion_content_digest(expected)
+    actual_digest = notion_content_digest(actual)
+    actual_blocks = actual["blocks"]
+    if not isinstance(actual_blocks, list):
+        raise ContractError("Notion round-trip blocks are invalid")
+    image_roles: list[str | int] = []
+    for value in actual_blocks:
+        if not isinstance(value, dict):
+            continue
+        image = value.get("image")
+        if isinstance(image, dict):
+            role = image.get("artifact_role")
+            if isinstance(role, (str, int)):
+                image_roles.append(role)
+    if not image_roles or image_roles[0] != "thumbnail":
+        raise ContractError("Notion first image block must be the thumbnail")
+    if expected_digest != actual_digest:
+        raise ContractError("Notion round-trip content digest does not match")
+    return {
+        "storage_integrity": "passed",
+        "notion_page_id": page_id,
+        "notion_last_verified_at": verified_at,
+        "expected_notion_content_digest": expected_digest,
+        "notion_content_digest": actual_digest,
+        "notion_roundtrip_digest": artifact_digest,
+        "first_image_block": "thumbnail",
+    }
 
 
 def plan_external_write(request: ExternalWriteRequest) -> ExternalWritePlan:
@@ -109,5 +200,9 @@ __all__ = [
     "ExternalSystem",
     "ExternalWritePlan",
     "ExternalWriteRequest",
+    "NotionAdapter",
+    "normalize_notion_page",
+    "notion_content_digest",
     "plan_external_write",
+    "verify_notion_round_trip",
 ]

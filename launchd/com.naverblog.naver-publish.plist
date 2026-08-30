@@ -4,6 +4,8 @@
 <dict>
 	<key>Label</key>
 	<string>com.naverblog.naver-publish</string>
+	<key>Comment</key>
+	<string>Manual-only helper. The runner starts this job after Notion Q2; it is not calendar scheduled.</string>
 	<key>ProgramArguments</key>
 	<array>
 		<string>/Users/beomseok/00_AI/01_ NAVER_BLOG_AUTOMATE/.venv/bin/python</string>
@@ -11,8 +13,6 @@
 		<string>tools.automation_runner</string>
 		<string>run</string>
 		<string>naver-publish</string>
-		<string>--mode</string>
-		<string>formal</string>
 		<string>--run-id</string>
 		<string>__SET_RUN_ID__</string>
 		<string>--dry-run</string>

@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from tools.contract_types import JSONValue
+from tools.contract_types import JSONMap, JSONValue
 from tools.schema_validation import SchemaError, validate_instance
 
 
-def _write_schema(tmp_path: Path, schema: dict[str, object]) -> Path:
+def _write_schema(tmp_path: Path, schema: JSONMap) -> Path:
     path = tmp_path / "schema.json"
     _ = path.write_text(json.dumps(schema), encoding="utf-8")
     return path
@@ -18,7 +18,7 @@ def _write_schema(tmp_path: Path, schema: dict[str, object]) -> Path:
 def test_standard_draft_combinators_are_enforced(tmp_path: Path) -> None:
     conditional_value: JSONValue = {"kind": "x"}
     contains_value: JSONValue = ["x", 3]
-    cases: tuple[tuple[dict[str, object], bool, JSONValue], ...] = (
+    cases: tuple[tuple[JSONMap, bool, JSONValue], ...] = (
         ({"oneOf": [{"type": "string"}, {"type": "integer"}]}, True, "text"),
         (
             {
@@ -94,3 +94,27 @@ def test_validation_errors_have_deterministic_order(tmp_path: Path) -> None:
             validate_instance({"a": "wrong"}, path)
         messages.append(str(caught.value))
     assert messages[0] == messages[1]
+
+
+def test_stage_result_schema_is_strict_for_structured_output() -> None:
+    schema_path = Path(__file__).parents[1] / "schemas" / "stage-result.schema.json"
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    artifact_pattern = schema["properties"]["artifacts"]["items"].get("pattern")
+    assert artifact_pattern is None or "(?" not in artifact_pattern
+
+    def visit(value: JSONValue, path: str) -> None:
+        if isinstance(value, dict):
+            if value.get("type") == "object":
+                assert value.get("additionalProperties") is False, path
+                properties = value.get("properties")
+                required = value.get("required")
+                if isinstance(properties, dict) and isinstance(required, list):
+                    assert set(required) == set(properties), path
+            for key, child in value.items():
+                visit(child, f"{path}.{key}")
+            return
+        if isinstance(value, list):
+            for index, child in enumerate(value):
+                visit(child, f"{path}[{index}]")
+
+    visit(schema, "$")

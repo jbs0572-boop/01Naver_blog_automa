@@ -12,7 +12,7 @@
 
 `official_asset`, `portrait_grid`, `character_cards`, `side_by_side`, `timeline`, `process_flow`, `relationship_map`, `official_screenshot`, `map`, `chart`, `original_photo`, `generated_illustration`, `text_only`
 
-선택 우선순위는 `제목 약속 > 독자 질문 > 근거 제시 > 독창성 > 장식`이다. `portrait_grid`는 공식·허가된 인물 자산을 우선 카드형으로 조립하는 유형이다. 해당 자산을 확보하지 못하고 슬롯의 `source_policy`를 `generated_allowed`로 전환한 경우에는 실존 인물 얼굴 생성 이미지로 대체할 수 있으며, 생성·합성 사실과 확인된 인물명·역할을 연결표와 캡션에 표시한다. 이 전환을 선택하면 `research/[키워드].md`, 초안 마커, `image-map.md`의 `source_policy`를 모두 `generated_allowed`로 갱신한다. 역할을 추정하거나 생성 얼굴을 공식 사진처럼 표시하지 않는다. `official_asset` 또는 `official_screenshot`이 요구된 슬롯은 생성 이미지로 대체하지 않는다. `generated_illustration`은 식별 가능한 실존 인물·제품·공식 화면·문서·로고를 재현하지 않는 경우에만 사용한다.
+선택 우선순위는 `제목 약속 > 독자 질문 > 근거 제시 > 독창성 > 장식`이다. `portrait_grid`는 공식·허가된 인물 자산을 우선 카드형으로 조립하는 유형이다. 해당 자산을 확보하지 못하고 슬롯의 `source_policy`를 `generated_allowed`로 전환한 경우에는 실존 인물 얼굴 생성 이미지로 대체할 수 있으며, 생성·합성 사실과 확인된 인물명·역할을 연결표와 자산 메타데이터에 표시한다. 네이버 화면에서는 외부 출처가 있는 이미지에만 출처명 캡션을 표시하고, 생성·합성 이미지는 하단 캡션을 쓰지 않는다. 생성·합성 사실과 역할 확인 범위는 대체텍스트·`image-map.md` 또는 본문에 둔다. 이 전환을 선택하면 `research/[키워드].md`, 초안 마커, `image-map.md`의 `source_policy`를 모두 `generated_allowed`로 갱신한다. 역할을 추정하거나 생성 얼굴을 공식 사진처럼 표시하지 않는다. `official_asset` 또는 `official_screenshot`이 요구된 슬롯은 생성 이미지로 대체하지 않는다. `generated_illustration`은 식별 가능한 실존 인물·제품·공식 화면·문서·로고를 재현하지 않는 경우에만 사용한다.
 
 ## 단계적 병렬 처리
 
@@ -24,9 +24,9 @@
 
 각 Lane은 고유한 Lane ID와 담당 범위를 갖고 결과·근거·한계를 주 담당 image-maker에게 반환한다. 실제 이미지 생성, 파일 저장·해시 기록, image-map.md 작성, 썸네일 확정, 전체 이미지 최종 검수는 주 담당자가 직렬로 수행하며, Lane이 정식 자산이나 연결표를 직접 수정하지 않는다.
 
-독립된 이미지 슬롯의 실제 생성을 최대 2개까지 병렬화하는 2차 적용은 베타 10회 검증 후에만 허용한다. 다음 조건을 모두 충족해야 한다.
+독립된 이미지 슬롯의 실제 생성을 최대 2개까지 병렬화하는 2차 적용은 검증된 실행 10회 후에만 허용한다. 다음 조건을 모두 충족해야 한다.
 
-- 정식 산출물 파일 충돌이 0건이다.
+- 운영 산출물 파일 충돌이 0건이다.
 - 필수 이미지와 image-map.md 누락이 0건이다.
 - 기존 품질 Gate 통과율이 저하되지 않았다.
 - 병렬 대상 단계의 중앙값 소요 시간이 기준선보다 감소했다.
@@ -62,7 +62,7 @@
 2. 생성형 이미지는 주제의 대상·장면·분위기를 표현해야 하며, 단순 텍스트 카드·범용 인포그래픽·출처 불명 이미지는 생성형 썸네일로 인정하지 않는다.
 3. 썸네일은 키워드와 글의 핵심 내용을 한눈에 보여줘야 한다.
 4. 실제 공식 화면·앱 화면·제품 화면이 핵심인 글은 해당 공식 자료를 직접 캡처한다.
-5. 공식 대표 자산을 확보한 경우 원본을 썸네일로 직접 활용하고, 확보하지 못한 경우에만 주제 맞춤형 생성형 이미지로 대체한다. 이전 베타 자산은 품질 재검수 없이 재사용하지 않는다.
+5. 공식 대표 자산을 확보한 경우 원본을 썸네일로 직접 활용하고, 확보하지 못한 경우에만 주제 맞춤형 생성형 이미지로 대체한다. 이전 실행 자산은 품질 재검수 없이 재사용하지 않는다.
 6. 빈 배경, 임시 이미지, 본문과 무관한 이미지는 썸네일로 사용할 수 없다. 공식 대표 자산을 확보했는데 단순 텍스트 인포그래픽만 사용하는 것은 통과시키지 않는다.
 7. 생성·캡처한 썸네일은 실제로 열리는지, 해상도와 비율이 적절한지, 제목·키워드와 일치하는지 검수한다.
 8. 썸네일 파일은 `assets/[키워드]/thumbnail.png` 또는 `thumbnail.jpg`로 저장하고 `image-map.md`에 `[THUMBNAIL]` 항목으로 기록한다. 썸네일은 본문 마커용 이미지와 별도 파일이어야 하며 동일 파일·동일 해시를 재사용하지 않는다.
@@ -72,7 +72,7 @@
 
 ## 생성 메타데이터와 품질 원장
 
-생성 자산은 `assets/[키워드]/image-generation.jsonl`에 이미지별 한 줄로 기록한다. `generation_snapshot`은 `gpt-image-2-2026-04-21`로 고정하고, 실제 호출 계층에서 모델·품질·size profile을 전달하지 못하면 `generation_control=unlocked`로 기록한다. `unlocked` 자산은 베타 calibration에는 남길 수 있지만 정식 품질 통과·Gate B 대상이 될 수 없다. seed는 기록하거나 재현성 근거로 만들지 않는다.
+생성 자산은 `assets/[키워드]/image-generation.jsonl`에 이미지별 한 줄로 기록한다. `generation_snapshot`은 `gpt-image-2-2026-04-21`로 고정하고, 실제 호출 계층에서 모델·품질·size profile을 전달하지 못하면 `generation_control=unlocked`로 기록한다. `unlocked` 자산은 운영 품질 Gate를 통과할 수 없다. seed는 기록하거나 재현성 근거로 만들지 않는다.
 
 ```yaml
 generation_provider: "openai"
@@ -93,7 +93,7 @@ provenance_status: "generated | official | licensed | captured"
 검증 명령은 다음과 같다.
 
 ```text
-python3 -m tools.workflow_verifier validate-image-metadata --metadata assets/<키워드>/image-generation.jsonl --mode <beta|formal>
+python3 -m tools.workflow_verifier validate-image-metadata --metadata assets/<키워드>/image-generation.jsonl
 python3 -m tools.workflow_verifier validate-image-quality --quality assets/<키워드>/image-quality.jsonl
 ```
 

@@ -10,7 +10,13 @@ from tools.contract_types import (
 )
 from tools.gate import GateRequest, authorize_external_write, verify_gate
 from tools.log_contract import validate_log
-from tools.manifest import Manifest, ManifestFile, build_manifest, verify_manifest
+from tools.manifest import (
+    Manifest,
+    ManifestBuildInput,
+    ManifestFile,
+    build_manifest,
+    verify_manifest,
+)
 from tools.schema_validation import validate_instance
 
 __all__ = [
@@ -21,6 +27,7 @@ __all__ = [
     "JSONMap",
     "JSONValue",
     "Manifest",
+    "ManifestBuildInput",
     "ManifestFile",
     "SchemaError",
     "authorize_external_write",

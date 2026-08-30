@@ -27,7 +27,7 @@ def _workspace_from_cwd(cwd: str) -> Path:
     current = Path(cwd).resolve()
     for candidate in (current, *current.parents):
         if (candidate / "AGENTS.md").is_file() and (
-            candidate / "workflow-optimization-implementation-plan.md"
+            candidate / "notion-config.md"
         ).is_file():
             return candidate
     raise ContractError("workflow workspace root could not be found from hook cwd")

@@ -90,7 +90,7 @@ while IFS='|' read -r stem run_id; do
   stage_event "$log" 'writer' 'researcher' 'writer' '["researcher"]' 'passed' "$draft_artifacts" "$quality_common" '' '' "$run_id" "$stem"
   stage_event "$log" 'image-maker' 'writer' 'image-maker' '["writer"]' 'passed' "$image_artifacts" "$quality_common" '' '' "$run_id" "$stem"
   stage_event "$log" 'content-assembler' 'image-maker' 'content-assembler' '["image-maker"]' 'passed' "$final_artifacts" "$quality_common" '' '' "$run_id" "$stem"
-  stage_event "$log" 'notion-rider' 'content-assembler' 'notion-rider' '["content-assembler"]' 'pending' "[$(artifact_json "$final"),$(artifact_json "$image_map"),$(artifact_json "$asset_dir/body-scene.png"),$(artifact_json "$asset_dir/thumbnail.png")]" '{"storage_integrity":"pending","approval_required":false,"external_write_started":false}' '' '' "$run_id" "$stem"
+  stage_event "$log" 'notion-rider' 'content-assembler' 'notion-rider' '["content-assembler"]' 'pending' "[$(artifact_json "$final"),$(artifact_json "$image_map"),$(artifact_json "$asset_dir/body-scene.png"),$(artifact_json "$asset_dir/thumbnail.png")]" '{"storage_integrity":"pending","external_write_started":false}' '' '' "$run_id" "$stem"
 done <<EOF
 $topics
 EOF
@@ -109,7 +109,7 @@ printf '%s\n' "- batch_manifest_digest: sha256:$batch_digest" >> "$request_path"
 printf '%s\n' '' >> "$request_path"
 printf '%s\n' '## 저장 준비 범위' >> "$request_path"
 printf '%s\n' '' >> "$request_path"
-printf '%s\n' '아래 10개 run_id는 Q1과 manifest 검증을 통과한 Notion 직렬 저장 대상이다. 베타 Gate A 승인 이벤트는 만들지 않는다.' >> "$request_path"
+printf '%s\n' '아래 10개 run_id는 Q1과 manifest 검증을 통과한 Notion 직렬 저장 대상이다.' >> "$request_path"
 printf '%s\n' '' >> "$request_path"
 printf '%s\n' '| 차수 | run_id | manifest | artifact_digest |' >> "$request_path"
 printf '%s\n' '|---:|---|---|---|' >> "$request_path"

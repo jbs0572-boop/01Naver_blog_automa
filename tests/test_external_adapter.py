@@ -11,7 +11,7 @@ from tools.external_adapter import (
     ExternalWriteRequest,
     plan_external_write,
 )
-from tools.manifest import build_manifest
+from tools.manifest import ManifestBuildInput, build_manifest
 
 
 def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str, str]:
@@ -36,9 +36,9 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str, str]:
     _ = (tmp_path / "notion-config.md").write_text(
         "- 데이터 소스 ID: `datasource-adapter`\n", encoding="utf-8"
     )
-    manifest = build_manifest(
-        tmp_path, keyword, run_id, "TOPIC-adapter", "beta", "2026-08-27T00:00:00+00:00"
-    )
+    manifest = build_manifest(ManifestBuildInput(
+        tmp_path, keyword, run_id, "TOPIC-adapter", "2026-08-27T00:00:00+00:00"
+    ))
     manifest_path = tmp_path / "manifest.json"
     _ = manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     run_log = tmp_path / "run.jsonl"

@@ -64,10 +64,10 @@ class ImageQualityTests(unittest.TestCase):
                 "provenance_status": "generated",
             },
         )
-        result = validate_image_metadata(metadata, "formal")
-        self.assertEqual(result["formal_ready"], True)
+        result = validate_image_metadata(metadata)
+        self.assertEqual(result["production_ready"], True)
 
-    def test_unlocked_metadata_is_blocked_in_formal_mode(self) -> None:
+    def test_unlocked_metadata_is_blocked_in_production_workflow(self) -> None:
         metadata = self._write_jsonl(
             "unlocked.jsonl",
             {
@@ -86,7 +86,7 @@ class ImageQualityTests(unittest.TestCase):
             },
         )
         with self.assertRaises(ContractError):
-            _ = validate_image_metadata(metadata, "formal")
+            _ = validate_image_metadata(metadata)
 
     def test_metadata_missing_required_field_is_blocked(self) -> None:
         metadata = self._write_jsonl(
@@ -106,7 +106,7 @@ class ImageQualityTests(unittest.TestCase):
             },
         )
         with self.assertRaises(ContractError):
-            _ = validate_image_metadata(metadata, "beta")
+            _ = validate_image_metadata(metadata)
 
     def test_quality_requires_mobile_human_pass(self) -> None:
         _ = (self.root / "mobile.png").write_bytes(self._image_bytes())

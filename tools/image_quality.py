@@ -4,11 +4,16 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-import struct
 from datetime import datetime
 from pathlib import Path
 from typing import Final
 
+from tools.image_contract import (
+    AUTOMATED_CHECKS,
+    MOBILE_VIEWPORT,
+    SCORE_FIELDS,
+    has_image_signature,
+)
 from tools.workflow_contract import (
     ContractError,
     JSONMap,
@@ -38,21 +43,6 @@ METADATA_FIELDS: Final = (
     "provenance_status",
     "output_path",
 )
-SCORE_FIELDS: Final = (
-    "subject_relevance",
-    "composition_legibility",
-    "rendering_completion",
-    "information_contribution",
-    "style_consistency",
-)
-AUTOMATED_CHECKS: Final = (
-    "decode_check",
-    "duplicate_check",
-    "ocr_check",
-    "visual_contract_check",
-    "mobile_render_check",
-)
-MOBILE_VIEWPORT: Final = "390x844"
 
 
 def _map(value: JSONValue, label: str) -> JSONMap:
@@ -85,19 +75,6 @@ def _timestamp(value: JSONValue, key: str) -> None:
         raise ContractError(f"timestamp must include timezone: {key}")
 
 
-def _has_image_signature(path: Path) -> bool:
-    raw = path.read_bytes()
-    if raw.startswith(b"\x89PNG\r\n\x1a\n"):
-        return (
-            len(raw) >= 24
-            and raw[12:16] == b"IHDR"
-            and struct.unpack(">II", raw[16:24]) > (0, 0)
-        )
-    return raw.startswith((b"\xff\xd8\xff", b"GIF87a", b"GIF89a", b"RIFF")) and (
-        b"WEBP" in raw[:16] or raw.startswith((b"\xff\xd8\xff", b"GIF87a", b"GIF89a"))
-    )
-
-
 def _records(path: Path) -> list[JSONMap]:
     records: list[JSONMap] = []
     for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
@@ -113,7 +90,7 @@ def _records(path: Path) -> list[JSONMap]:
     return records
 
 
-def _check_metadata(record: JSONMap, index: int, mode: str, metadata_path: Path) -> str:
+def _check_metadata(record: JSONMap, index: int, metadata_path: Path) -> str:
     try:
         validate_instance(record, SCHEMA_PATH)
     except SchemaError as error:
@@ -141,9 +118,9 @@ def _check_metadata(record: JSONMap, index: int, mode: str, metadata_path: Path)
         raise ContractError(
             f"image metadata record {index} has invalid generation_control"
         )
-    if mode == "formal" and control != "locked":
+    if control != "locked":
         raise ContractError(
-            f"formal image metadata record {index} is not generation_control=locked"
+            f"image metadata record {index} is not generation_control=locked"
         )
     if _text(record, "quality") != "high" or not SIZE_RE.fullmatch(
         _text(record, "size")
@@ -184,7 +161,7 @@ def _check_metadata(record: JSONMap, index: int, mode: str, metadata_path: Path)
     output_file = metadata_path.parent / output_path
     if not output_file.is_file():
         raise ContractError(f"image metadata output is missing: {output_path}")
-    if not _has_image_signature(output_file):
+    if not has_image_signature(output_file):
         raise ContractError(
             f"image metadata output is not a recognized image: {output_path}"
         )
@@ -194,12 +171,10 @@ def _check_metadata(record: JSONMap, index: int, mode: str, metadata_path: Path)
     return control
 
 
-def validate_image_metadata(path: Path, mode: str) -> JSONMap:
-    if mode not in {"beta", "formal"}:
-        raise ContractError("mode must be beta or formal")
+def validate_image_metadata(path: Path) -> JSONMap:
     records = _records(path)
     controls = [
-        _check_metadata(record, index, mode, path)
+        _check_metadata(record, index, path)
         for index, record in enumerate(records, 1)
     ]
     output_digests = [record.get("output_sha256") for record in records]
@@ -214,7 +189,7 @@ def validate_image_metadata(path: Path, mode: str) -> JSONMap:
             "locked": controls.count("locked"),
             "unlocked": controls.count("unlocked"),
         },
-        "formal_ready": all(control == "locked" for control in controls),
+        "production_ready": all(control == "locked" for control in controls),
     }
 
 
@@ -269,7 +244,7 @@ def validate_image_quality(path: Path) -> JSONMap:
             raise ContractError(
                 f"image quality render evidence is missing: {mobile_render_path}"
             )
-        if not _has_image_signature(path.parent / mobile_render_path):
+        if not has_image_signature(path.parent / mobile_render_path):
             raise ContractError(
                 f"image quality render evidence is not a recognized image: {mobile_render_path}"
             )

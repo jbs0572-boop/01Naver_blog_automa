@@ -11,7 +11,7 @@
 - 이미지 연결표: `assets/[키워드]/image-map.md`
 - 시각 계약: `research/[키워드].md`의 시각 슬롯과 초안 마커의 `visual_slot_id`·`visual_intent`·`asset_type`·`required_by`·`source_policy`·`subject_scope`·`section`·`fallback`
 - 썸네일: `assets/[키워드]/thumbnail.png` 또는 `thumbnail.jpg`
-- 출력: `final/[키워드].md`, `final/[키워드]-naver-layout.md`, `final/[키워드]-naver-copy.md`
+- 출력: `final/[키워드].md`, `final/[키워드]-naver-layout.md`, `final/[키워드]-naver-copy.md`, `final/[키워드]-naver-input.md`
 - 확장자는 대소문자를 구분하지 않고 `png`, `jpg`, `jpeg`, `webp`, `gif`를 지원한다.
 
 `[키워드]`는 두 입력 경로에서 동일해야 한다. 입력 파일이나 이미지 디렉터리가 없으면 조립을 시작하지 말고 오류를 보고한다.
@@ -30,7 +30,11 @@
 
    결과 파일은 `final/[키워드].md`에 저장되므로 이미지 경로는 결과 파일 기준 상대 경로인 `../assets/[키워드]/...`를 사용한다. 파일명은 실제 디렉터리의 이름을 그대로 사용하고 URL 인코딩, 임의의 이름 변경, 절대 경로 사용을 하지 않는다.
 6. 출력 디렉터리 `final/`이 없으면 만든다. 검증을 모두 통과한 경우에만 `final/[키워드].md`를 UTF-8로 저장한다.
-7. `final/[키워드]-naver-layout.md`에 네이버 에디터 입력 순서를 기록하고, `final/[키워드]-naver-copy.md`에 Notion에서 복사해 네이버에 붙여 넣을 수 있는 순서의 본문 블록을 생성한다.
+7. `final/[키워드]-naver-copy.md`에 Notion에 저장할 raw 블록 순서를 생성하고, `final/[키워드]-naver-layout.md`와 `final/[키워드]-naver-input.md`에는 네이버 화면용 표시 블록을 생성한다.
+
+8. 네이버 표시용 파생본에서는 `## 출처` 섹션의 출처 항목에 붙은 `— 등록 YYYY-MM-DD, YYYY-MM-DD 확인`, `등록일 YYYY-MM-DD, YYYY-MM-DD KST 확인` 형태의 조사 메타데이터만 제거한다. 출처명·URL·본문의 기준일·이미지 캡션은 변경하지 않는다.
+
+9. 파생본 생성 전에 UTF-8 BOM·제로폭 문자를 정규화하고, 출처 섹션에 `— 등록...`만 남은 고아 문구가 있으면 저장하지 않고 오류로 중단한다.
 
 ## 네이버 배치 명세
 
@@ -47,22 +51,26 @@
 - 일반 본문 이미지 블록은 관련 설명 문단 바로 뒤에 하나씩 배치한다. 전용 썸네일은 이 규칙의 예외로 문서의 첫 번째 이미지 블록에 둔다.
 - 이미지 2개 이상을 연속 배치하지 않는다. 갤러리 구성이 필요한 경우만 예외로 기록한다.
 - 전용 썸네일은 본문 이미지와 구분하되 문서의 첫 번째 이미지 블록으로 고정하고 `representative=true`로 표시한다.
-- 이미지마다 대체텍스트와 이미지 바로 아래 출처 캡션을 기록한다.
-- 출처 캡션에는 실제 참고한 출처명만 간단히 기록한다. 일반적으로 핵심 출처 1~2개를 `·`로 구분한다.
+- 이미지마다 대체텍스트를 기록한다. 대체텍스트는 편집 메타데이터이고, 네이버 화면에 보이는 캡션과 구분한다.
+- 실제 외부 출처가 있는 이미지에만 네이버 화면의 이미지 하단 캡션을 둔다. 캡션은 `출처: 기관명`처럼 실제 참고한 출처명만 간단히 기록하고, 일반적으로 핵심 출처 1~2개를 `·`로 구분한다. 생성·합성 이미지는 하단 캡션을 완전히 생략한다.
 - `증거 상태`, `연구 관계 매트릭스 기준`, `미확인 관계·결말은 단정하지 않음`처럼 출처가 아닌 검수 메모·편집 기준·주의사항은 출처 캡션에 넣지 않는다. 필요한 내용은 본문, 대체텍스트 또는 `image-map.md`에 기록한다.
 - 관계도·비교표·확실도 도식의 출처와 증거 상태는 `image-map.md`에 연결해 보존하되, 네이버 출처 캡션에는 출처명만 표시한다.
 - 표와 소제목은 네이버 전용 블록으로 입력해야 하므로 평문 입력 대상인지 명시한다.
+- `목차` 목록이 끝난 뒤 첫 주제 소제목 전에는 빈 한 줄 블록을 둔다. 이후 각 주제 소제목을 시작할 때도 직전 블록과 빈 한 줄을 유지한다.
 
 ## 네이버 복사 전용 산출물
 
-`final/[키워드]-naver-copy.md`는 네이버 작성 담당자가 Notion 검수 완료 페이지와 대조하면서 그대로 블록 단위로 복사할 수 있는 입력 원본이다.
+`final/[키워드]-naver-copy.md`는 Notion 본문에 저장하는 raw 블록 원본이다. `final/[키워드]-naver-input.md`는 이 raw 원본에서 네이버 화면에 불필요한 출처 등록일·확인일만 제거한 파생 입력 원본이며, 네이버 작성 담당자는 이를 사용한다.
 
 - 제목은 본문에 중복하지 않고 별도 `TITLE` 블록으로 둔다.
 - 본문은 `TEXT`, `HEADING`, `LIST`, `TABLE`, `IMAGE`, `CAPTION` 블록 순서로 기록한다.
 - Markdown 이미지 문법, 로컬 경로, HTML, 코드펜스는 사용하지 않는다.
-- 이미지 블록 다음에는 반드시 대체텍스트와 출처 캡션이 이어진다.
+- 이미지 블록 다음에는 대체텍스트가 이어지고, 실제 외부 출처가 있는 경우에만 출처 캡션을 둔다. 화면에 표시되는 출처 캡션은 출처명만 남기고 설명 문장은 금지하며, 생성·합성 이미지는 캡션 블록을 생략한다.
+- `목차` 다음 첫 주제와 이후 각 주제 소제목 앞에는 빈 한 줄 블록을 보존한다.
 - 썸네일은 문서 첫 이미지 블록으로 두고 `representative=true`로 표시한다.
 - 이 파일의 순서와 Notion 페이지의 실제 블록 순서가 다르면 저장하지 않고 `content-assembler` 오류로 처리한다.
+
+`naver-input.md`의 출처 항목에는 출처명과 URL만 남아야 하며, `등록일`, `확인일`, `KST 확인` 또는 날짜 꼬리표만 있는 별도 줄이 남아 있으면 실패한다. raw `naver-copy.md`와의 차이는 출처 섹션의 표시 메타데이터 제거로만 제한한다.
 
 ## 변경 불가 원칙
 
@@ -99,8 +107,8 @@
 - 경로 검사: 모든 이미지 파일이 실제로 존재하고 일반 파일이며 지원 확장자를 사용한다. 결과의 각 이미지 경로가 `final/[키워드].md` 기준으로 해당 파일을 정확히 가리키는지 확인한다.
 - 썸네일 검사: `thumbnail.png` 또는 `thumbnail.jpg`가 실제로 존재하고 본문 이미지와 다른 파일·해시이며, 연결표의 `[THUMBNAIL]` 항목과 일치하는지 확인한다.
 - 출력 검사: 결과 파일을 다시 읽어 이미지 태그 수와 입력 마커 수가 같고, `[IMAGE:` 문자열이 남아 있지 않은지 확인한다. 마커 치환 구간 이외의 본문이 원문과 동일한지도 확인한다.
-- 네이버 명세 검사: 모든 본문 이미지에 위치·대체텍스트·출처 캡션이 있고, 이미지 연속 배치·대표 이미지 중복·미지원 Markdown 표가 없는지 확인한다.
-- 네이버 복사 검사: `naver-copy.md`의 블록 순서가 Notion 복사 원본과 일치하고, Markdown·로컬 경로·미완성 placeholder가 남아 있지 않은지 확인한다.
+- 네이버 명세 검사: 모든 본문 이미지에 위치·대체텍스트가 있고, 외부 출처 이미지에는 출처 캡션이 출처명만으로 존재하며 생성·합성 이미지에는 캡션이 없는지 확인한다. 이미지 연속 배치·대표 이미지 중복·미지원 Markdown 표도 함께 검사한다.
+- 네이버 복사 검사: raw `naver-copy.md`의 블록 순서가 Notion 복사 원본과 일치하고, 네이버 `naver-input.md`·`naver-layout.md`의 블록 순서가 서로 일치하는지 확인한다. 네이버 입력본에는 출처 날짜 꼬리표·BOM·고아 문구·Markdown·로컬 경로·미완성 placeholder가 남아 있지 않아야 한다.
 - 정보 도식 검사: 관계도·비교표·확실도 도식의 출처명·대체텍스트가 실제 블록과 일치하고, 증거 상태와 제작 방식이 `image-map.md` 및 본문 기록과 일치하는지 확인한다. 캡션에 검수 메모가 반복되지 않았는지도 확인한다.
 - 식별 자산 검사: 출연진·인물·제품·장소 카드의 표시명·역할·원본 자산 또는 생성 근거·증거 상태가 카드 단위로 일치하는지 확인한다. 생성 얼굴은 `source_policy=generated_allowed`, 생성·합성 사실, 확인된 인물명·역할의 근거가 함께 기록되어야 하며, 확인되지 않은 식별 정보를 이미지가 확정하는 경우 실패한다.
 
@@ -127,22 +135,23 @@
 
 ## 완료 조건
 
-`final/[키워드].md`, `final/[키워드]-naver-layout.md`, `final/[키워드]-naver-copy.md`가 생성되어야 하며, 모든 `[IMAGE:]` 마커가 올바른 상대 경로의 이미지 태그로 치환되어야 한다. 전용 썸네일은 `image-map.md`에서 별도로 확인되어야 한다. 본문은 마커 치환 외에는 원문과 동일해야 하고, 복사 전용 산출물은 Notion 블록과 순서가 일치해야 한다. 위 필수 검증 중 하나라도 통과하지 못하면 작업은 실패로 처리한다.
+`final/[키워드].md`, `final/[키워드]-naver-layout.md`, `final/[키워드]-naver-copy.md`, `final/[키워드]-naver-input.md`가 생성되어야 하며, 모든 `[IMAGE:]` 마커가 올바른 상대 경로의 이미지 태그로 치환되어야 한다. 전용 썸네일은 `image-map.md`에서 별도로 확인되어야 한다. 본문과 raw 복사 원본은 마커 치환 외에는 원문과 동일해야 하고, 네이버 입력본은 허용된 출처 표시 메타데이터 제거만 반영해야 한다. 위 필수 검증 중 하나라도 통과하지 못하면 작업은 실패로 처리한다.
 
 ## canonical manifest 생성
 
-기존 조립 검수가 모두 통과한 뒤, 외부 저장을 요청하기 전에 정식 산출물 manifest를 생성한다. 다음 파일은 모두 고정 순서로 포함되어야 한다.
+기존 조립 검수가 모두 통과한 뒤, 외부 저장을 요청하기 전에 운영 산출물 manifest를 생성한다. 다음 파일은 모두 고정 순서로 포함되어야 한다.
 
 1. `final/[키워드].md`
 2. `final/[키워드]-naver-layout.md`
 3. `final/[키워드]-naver-copy.md`
-4. `assets/[키워드]/image-map.md`
-5. 본문 Markdown에서 등장하는 본문 이미지
-6. 전용 썸네일
+4. `final/[키워드]-naver-input.md`
+5. `assets/[키워드]/image-map.md`
+6. 본문 Markdown에서 등장하는 본문 이미지
+7. 전용 썸네일
 
 ```text
-python3 -m tools.workflow_verifier manifest --root . --keyword <키워드> --run-id <run_id> --topic-id <topic_id> --mode <beta|formal> --created-at <KST ISO-8601> --output manifests/<run_id>-workflow-manifest.json
+python3 -m tools.workflow_verifier manifest --root . --keyword <키워드> --run-id <run_id> --topic-id <topic_id> --created-at <KST ISO-8601> --output manifests/<run_id>-workflow-manifest.json
 python3 -m tools.workflow_verifier verify-manifest --root . --manifest manifests/<run_id>-workflow-manifest.json
 ```
 
-manifest 생성 후 세 최종 파일·image-map·본문 이미지·썸네일 중 하나라도 바뀌면 Q1을 실패로 기록하고 새 manifest와 새 승인을 요청한다. manifest가 없거나 검증되지 않으면 `content-assembler` 성공 보고와 `notion-rider` 호출을 모두 금지한다.
+manifest 생성 후 네 최종 파일·image-map·본문 이미지·썸네일 중 하나라도 바뀌면 Q1을 실패로 기록하고 새 manifest를 생성·검증한다. manifest가 없거나 검증되지 않으면 `content-assembler` 성공 보고와 `notion-rider` 호출을 모두 금지한다. 감사 호환 필드 `mode=formal`은 manifest 작성기가 내부적으로 고정하며, 호출자가 입력하거나 라우팅에 사용할 수 없다.

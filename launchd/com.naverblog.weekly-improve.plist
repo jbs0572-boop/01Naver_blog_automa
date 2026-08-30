@@ -11,9 +11,6 @@
 		<string>tools.automation_runner</string>
 		<string>run</string>
 		<string>weekly-improve</string>
-		<string>--mode</string>
-		<string>beta</string>
-		<string>--dry-run</string>
 	</array>
 	<key>WorkingDirectory</key>
 	<string>/Users/beomseok/00_AI/01_ NAVER_BLOG_AUTOMATE</string>
@@ -21,7 +18,14 @@
 	<string>/Users/beomseok/00_AI/01_ NAVER_BLOG_AUTOMATE/.automation/logs/launchd/weekly-improve.stdout.log</string>
 	<key>StandardErrorPath</key>
 	<string>/Users/beomseok/00_AI/01_ NAVER_BLOG_AUTOMATE/.automation/logs/launchd/weekly-improve.stderr.log</string>
-	<key>Disabled</key>
-	<true/>
+	<key>StartCalendarInterval</key>
+	<dict>
+		<key>Weekday</key>
+		<integer>1</integer>
+		<key>Hour</key>
+		<integer>23</integer>
+		<key>Minute</key>
+		<integer>30</integer>
+	</dict>
 </dict>
 </plist>

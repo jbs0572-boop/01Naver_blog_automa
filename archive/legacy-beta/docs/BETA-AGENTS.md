@@ -17,9 +17,9 @@
 - 병렬 작업은 researcher의 research-official·research-supporting-visual 읽기 전용 Lane 최대 2개와 image-maker의 준비·검증 Lane 최대 2개로 제한한다. Lane은 정식 산출물·실행 로그·자산을 직접 쓰지 않고, 주 담당자 한 명만 병합·기록·최종 판정을 수행한다.
 - image-maker의 실제 이미지 생성은 직렬로 수행한다. 베타 10회 결과에서 파일 충돌 0건, 필수 이미지·연결표 누락 0건, 품질 Gate 저하 없음, 기준선 대비 중앙값 시간 감소, 추가 비용 수용 가능 조건을 모두 확인하기 전에는 실제 이미지 슬롯 병렬 생성을 허용하지 않는다.
 - notion-rider를 호출하기 전마다 content-assembler Q1 통과, 실제 조회한 데이터 소스 ID와 notion-config.md의 일치, 최종 Markdown·image-map.md·참조 이미지 canonical manifest의 SHA-256 일치를 확인한다. 하나라도 맞지 않으면 Notion 쓰기·업로드를 시작하지 않는다.
-- 베타에서는 Gate A 승인과 승인 이벤트를 사용하지 않으며 Gate B와 naver-rider도 사용하지 않는다. Hook이 manifest와 Q1의 `run_id`·`topic_id`, 설정 데이터 소스와 실제 `create-pages` 부모를 대조한 뒤 Notion 첨부 생성과 지정 데이터 소스의 새 페이지 생성만 허용한다. 기존 페이지 수정·복제·이동·삭제 및 브라우저·네이버 쓰기로 우회하지 않는다.
-- 베타 실행의 판정 순서는 `Q1 자동 품질 → Notion 저장 → Q2 저장 무결성 → Q3 사람 검수`로 고정한다. `notion-rider`는 Q1과 manifest 검증 직후 호출하고, 저장 후 Q2가 통과되기 전에는 베타 완료로 보고하지 않는다.
-- Q1과 manifest는 `python3 -m tools.workflow_verifier verify-manifest --root . --manifest manifests/<run_id>-workflow-manifest.json`으로 재검증한다. 외부 쓰기 Hook의 `WORKFLOW_GATE=notion_write`는 승인 요청이 아니라 쓰기 종류 식별자이며, 별도 승인 이벤트를 만들거나 `gate` 명령을 실행하지 않는다.
+- 베타에서는 naver-rider를 사용하지 않는다. Hook이 manifest와 Q1의 `run_id`·`topic_id`, 설정 데이터 소스와 실제 `create-pages` 부모를 대조한 뒤 Notion 첨부 생성과 지정 데이터 소스의 새 페이지 생성만 허용한다. 기존 페이지 수정·복제·이동·삭제 및 브라우저·네이버 쓰기로 우회하지 않는다.
+- 베타 실행의 판정 순서는 `Q1 자동 품질 → Notion 저장 → Q2 저장 무결성`으로 고정한다. Q3 품질 기록이 있더라도 베타 완료를 차단하지 않는다. `notion-rider`는 Q1과 manifest 검증 직후 호출하고, 저장 후 Q2가 통과되면 베타 완료로 보고한다.
+- Q1과 manifest는 `python3 -m tools.workflow_verifier verify-manifest --root . --manifest manifests/<run_id>-workflow-manifest.json`으로 재검증한다. 외부 쓰기 Hook의 `WORKFLOW_GATE=notion_write`는 쓰기 종류 식별자다.
 - 베타 manifest에도 `final/[키워드]-naver-layout.md`와 `final/[키워드]-naver-copy.md`를 포함한다. 네이버를 호출하지 않더라도 두 파일·image-map·본문 참조 이미지·썸네일이 바뀌면 현재 manifest 검증 실패로 Notion 쓰기를 차단하고 manifest를 다시 생성한다.
 - 각 단계는 자동 품질 Gate를 통과해야 다음 단계로 진행한다. 최신성, 제목 약속 충족, 총정리 범위 커버리지, 독자 질문 답변, 반복 제거, 독창적 구성과 차별화 포인트 반영 여부를 검사하고 결과와 실패 사유를 실행 기록에 남긴다. `미확인`은 즉시 삭제하지 않고 공식 확인·보조 출처 확인·자료 기반 해석·미확인 상태를 기록한다. 사람 검수를 추가하는 것이 아니라 기존 자동 파이프라인의 차단 조건을 강화한다.
 - 베타 품질 기록에는 최소한 `coverage_score`, `evidence_status`, `originality_score`, `relationship_map_check`, `image_information_gain_check`를 포함한다. `총정리` 제목을 사용한 글은 제목에 약속한 각 항목의 상태와 본문 위치가 있어야 한다.

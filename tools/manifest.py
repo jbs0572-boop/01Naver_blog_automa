@@ -14,6 +14,7 @@ from tools.contract_types import (
     JSONMap,
     JSONValue,
 )
+from tools.manifest_input import ManifestBuildInput
 from tools.manifest_parsing import (
     as_map,
     aware_datetime,
@@ -28,9 +29,10 @@ ROLE_ORDER: Final = {
     "final_markdown": 1,
     "naver_layout": 2,
     "naver_copy": 3,
-    "image_map": 4,
-    "body_image": 5,
-    "thumbnail": 6,
+    "naver_input": 4,
+    "image_map": 5,
+    "body_image": 6,
+    "thumbnail": 7,
 }
 IMAGE_RE: Final = re.compile(r"!\[[^\]]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
 SHA256_RE: Final = re.compile(r"^[0-9a-f]{64}$")
@@ -105,9 +107,7 @@ def _manifest_from_json(data: JSONMap) -> Manifest:
         or manifest.pipeline_version != PIPELINE_VERSION
     ):
         raise ContractError("manifest version is not workflow-optimized-v1")
-    if manifest.mode not in {"beta", "formal"} or not DIGEST_RE.fullmatch(
-        manifest.artifact_digest
-    ):
+    if manifest.mode != "formal" or not DIGEST_RE.fullmatch(manifest.artifact_digest):
         raise ContractError("manifest mode or artifact_digest is invalid")
     if tuple(sorted(files, key=lambda item: item.order)) != files:
         raise ContractError("manifest file order is not canonical")
@@ -185,11 +185,12 @@ def _body_paths(root: Path, final_path: Path, thumbnail: Path) -> list[Path]:
     return paths
 
 
-def build_manifest(
-    root: Path, keyword: str, run_id: str, topic_id: str, mode: str, created_at: str
-) -> JSONMap:
-    if mode not in {"beta", "formal"}:
-        raise ContractError("mode must be beta or formal")
+def build_manifest(source: ManifestBuildInput) -> JSONMap:
+    root = source.root
+    keyword = source.keyword
+    run_id = source.run_id
+    topic_id = source.topic_id
+    created_at = source.created_at
     parts = Path(keyword).parts
     if not keyword or Path(keyword).is_absolute() or ".." in parts or len(parts) != 1:
         raise ContractError("keyword must be a single safe path component")
@@ -204,19 +205,25 @@ def build_manifest(
         _record(root, "final_markdown", 1, final_path),
         _record(root, "naver_layout", 2, root / "final" / f"{keyword}-naver-layout.md"),
         _record(root, "naver_copy", 3, root / "final" / f"{keyword}-naver-copy.md"),
-        _record(root, "image_map", 4, asset_dir / "image-map.md"),
     ]
+    naver_input = root / "final" / f"{keyword}-naver-input.md"
+    if naver_input.is_file():
+        entries.append(_record(root, "naver_input", 4, naver_input))
+    entries.append(
+        _record(root, "image_map", len(entries) + 1, asset_dir / "image-map.md")
+    )
+    body_start_order = len(entries) + 1
     entries.extend(
-        _record(root, "body_image", 5 + index, path)
+        _record(root, "body_image", body_start_order + index, path)
         for index, path in enumerate(body_paths)
     )
-    entries.append(_record(root, "thumbnail", 5 + len(body_paths), thumbnail))
+    entries.append(_record(root, "thumbnail", len(entries) + 1, thumbnail))
     data: JSONMap = {
         "schema_version": SCHEMA_VERSION,
         "pipeline_version": PIPELINE_VERSION,
         "run_id": run_id,
         "topic_id": topic_id,
-        "mode": mode,
+        "mode": "formal",
         "created_at": created_at,
         "files": [entry.as_json() for entry in entries],
     }
@@ -261,4 +268,10 @@ def verify_manifest(root: Path, manifest_path: Path) -> Manifest:
     return manifest
 
 
-__all__ = ["Manifest", "ManifestFile", "build_manifest", "verify_manifest"]
+__all__ = [
+    "Manifest",
+    "ManifestBuildInput",
+    "ManifestFile",
+    "build_manifest",
+    "verify_manifest",
+]

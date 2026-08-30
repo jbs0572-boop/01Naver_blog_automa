@@ -9,14 +9,14 @@ from pathlib import Path
 import pytest
 
 from tools.contract_types import PIPELINE_VERSION, JSONMap, JSONValue
-from tools.manifest import build_manifest
+from tools.manifest import ManifestBuildInput, build_manifest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str]:
-    keyword = "beta-hook"
-    run_id = "RUN-beta-hook"
+    keyword = "notion-hook"
+    run_id = "RUN-notion-hook"
     final_dir = tmp_path / "final"
     asset_dir = tmp_path / "assets" / keyword
     final_dir.mkdir(parents=True)
@@ -25,7 +25,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str]:
     _ = (asset_dir / "thumbnail.png").write_bytes(b"thumbnail")
     _ = (asset_dir / "image-map.md").write_text("# map\n", encoding="utf-8")
     _ = (final_dir / f"{keyword}.md").write_text(
-        "![body](../assets/beta-hook/body.png)\n", encoding="utf-8"
+        "![body](../assets/notion-hook/body.png)\n", encoding="utf-8"
     )
     _ = (final_dir / f"{keyword}-naver-layout.md").write_text(
         "# layout\n", encoding="utf-8"
@@ -34,20 +34,16 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str]:
         "# copy\n", encoding="utf-8"
     )
     _ = (tmp_path / "notion-config.md").write_text(
-        "- 데이터 소스 ID: `datasource-beta-hook`\n", encoding="utf-8"
+        "- 데이터 소스 ID: `datasource-notion-hook`\n", encoding="utf-8"
     )
     _ = (tmp_path / "AGENTS.md").write_text("test root\n", encoding="utf-8")
-    _ = (tmp_path / "workflow-optimization-implementation-plan.md").write_text(
-        "test root\n", encoding="utf-8"
-    )
-    manifest = build_manifest(
+    manifest = build_manifest(ManifestBuildInput(
         tmp_path,
         keyword,
         run_id,
-        "TOPIC-beta-hook",
-        "beta",
+        "TOPIC-notion-hook",
         "2026-08-27T00:00:00+00:00",
-    )
+    ))
     manifest_path = tmp_path / "manifest.json"
     _ = manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     run_log = tmp_path / "run.jsonl"
@@ -59,9 +55,9 @@ def _stage(run_id: str) -> JSONMap:
     return {
         "event_type": "stage",
         "pipeline_version": PIPELINE_VERSION,
-        "batch_id": "BATCH-beta-hook",
+        "batch_id": "BATCH-notion-hook",
         "run_id": run_id,
-        "topic_id": "TOPIC-beta-hook",
+        "topic_id": "TOPIC-notion-hook",
         "stage": "content-assembler",
         "started_at": "2026-08-27T00:00:00+00:00",
         "ended_at": "2026-08-27T00:01:00+00:00",
@@ -117,19 +113,19 @@ def _decision(result: JSONMap) -> JSONValue:
     [
         (
             "mcp__codex_apps__notion_notion_create_pages",
-            {"parent": {"data_source_id": "datasource-beta-hook"}},
+            {"parent": {"data_source_id": "datasource-notion-hook"}},
             "allow",
         ),
         (
             "mcp__notion__create_page",
-            {"parent": {"data_source_id": "datasource-beta-hook"}},
+            {"parent": {"data_source_id": "datasource-notion-hook"}},
             "allow",
         ),
         ("mcp__codex_apps__notion_notion_create_attachment", {}, "allow"),
         ("browser.click", {}, "deny"),
     ],
 )
-def test_beta_approval_free_write_is_limited_to_notion(
+def test_approval_free_write_is_limited_to_notion(
     tmp_path: Path, tool_name: str, tool_input: JSONMap, expected: str
 ) -> None:
     root, manifest_path, run_log, run_id = _fixture(tmp_path)
@@ -142,7 +138,7 @@ def test_beta_approval_free_write_is_limited_to_notion(
         WORKFLOW_MANIFEST=str(manifest_path),
         WORKFLOW_RUN_LOG=str(run_log),
         WORKFLOW_RUN_ID=run_id,
-        WORKFLOW_TARGET_ID="datasource-beta-hook",
+        WORKFLOW_TARGET_ID="datasource-notion-hook",
     )
 
     assert _decision(result) == expected
@@ -162,7 +158,7 @@ def test_beta_approval_free_write_is_limited_to_notion(
         ("mcp__codex_apps__notion_notion_duplicate_page", {"page_id": "other"}),
     ],
 )
-def test_beta_approval_free_write_denies_unbound_notion_targets(
+def test_approval_free_write_denies_unbound_notion_targets(
     tmp_path: Path, tool_name: str, tool_input: JSONMap
 ) -> None:
     root, manifest_path, run_log, run_id = _fixture(tmp_path)
@@ -175,31 +171,31 @@ def test_beta_approval_free_write_denies_unbound_notion_targets(
         WORKFLOW_MANIFEST=str(manifest_path),
         WORKFLOW_RUN_LOG=str(run_log),
         WORKFLOW_RUN_ID=run_id,
-        WORKFLOW_TARGET_ID="datasource-beta-hook",
+        WORKFLOW_TARGET_ID="datasource-notion-hook",
     )
 
     assert _decision(result) == "deny"
 
 
-def test_beta_hook_binds_manifest_and_q1_to_same_run(tmp_path: Path) -> None:
+def test_hook_binds_manifest_and_q1_to_same_run(tmp_path: Path) -> None:
     root, manifest_path, run_log, _ = _fixture(tmp_path)
     _ = run_log.write_text(json.dumps(_stage("RUN-other")) + "\n", encoding="utf-8")
 
     result = _hook(
         root,
         "mcp__codex_apps__notion_notion_create_pages",
-        {"parent": {"data_source_id": "datasource-beta-hook"}},
+        {"parent": {"data_source_id": "datasource-notion-hook"}},
         WORKFLOW_GATE="notion_write",
         WORKFLOW_MANIFEST=str(manifest_path),
         WORKFLOW_RUN_LOG=str(run_log),
         WORKFLOW_RUN_ID="RUN-other",
-        WORKFLOW_TARGET_ID="datasource-beta-hook",
+        WORKFLOW_TARGET_ID="datasource-notion-hook",
     )
 
     assert _decision(result) == "deny"
 
 
-def test_beta_approval_free_write_never_updates_existing_page(tmp_path: Path) -> None:
+def test_approval_free_write_never_updates_existing_page(tmp_path: Path) -> None:
     root, manifest_path, run_log, run_id = _fixture(tmp_path)
 
     result = _hook(
@@ -210,8 +206,25 @@ def test_beta_approval_free_write_never_updates_existing_page(tmp_path: Path) ->
         WORKFLOW_MANIFEST=str(manifest_path),
         WORKFLOW_RUN_LOG=str(run_log),
         WORKFLOW_RUN_ID=run_id,
-        WORKFLOW_TARGET_ID="datasource-beta-hook",
+        WORKFLOW_TARGET_ID="datasource-notion-hook",
         WORKFLOW_NOTION_PAGE_ID="unrelated-page",
     )
 
     assert _decision(result) == "deny"
+
+
+def test_production_notion_write_does_not_require_approval(tmp_path: Path) -> None:
+    root, manifest_path, run_log, run_id = _fixture(tmp_path)
+
+    result = _hook(
+        root,
+        "mcp__codex_apps__notion_notion_create_pages",
+        {"parent": {"data_source_id": "datasource-notion-hook"}},
+        WORKFLOW_GATE="notion_write",
+        WORKFLOW_MANIFEST=str(manifest_path),
+        WORKFLOW_RUN_LOG=str(run_log),
+        WORKFLOW_RUN_ID=run_id,
+        WORKFLOW_TARGET_ID="datasource-notion-hook",
+    )
+
+    assert _decision(result) == "allow"

@@ -22,7 +22,7 @@ topic-selector
   → content-assembler
   → notion-rider
   → Notion 저장 무결성 검사
-  → 사람 검수
+  → (선택) 사람 검수 기록
 ```
 
 ### 정식 모드
@@ -33,11 +33,10 @@ topic-selector
   → writer
   → image-maker
   → content-assembler
-  → Gate A
   → notion-rider
   → Notion 저장 무결성 검사
-  → 사람 검수
-  → Gate B
+  → (선택) 사람 검수 기록
+  → 네이버 쓰기 선행 검증
   → naver-rider
 ```
 
@@ -47,7 +46,7 @@ topic-selector
 
 | ID | 현재 결함 | 위험 | 목표 상태 | 해결 수준 |
 |---|---|---|---|---|
-| `OPT-01` | `naver-rider`가 사용하는 `naver-layout.md`, `naver-copy.md`가 현재 `artifact_digest` 범위에 없음 | 승인 후 네이버 입력물이 바뀌어도 기존 승인이 남을 수 있음 | 외부 저장에 사용되는 모든 파일을 하나의 canonical manifest와 해시에 결합 | 완전 해결 가능 |
+| `OPT-01` | `naver-rider`가 사용하는 `naver-layout.md`, `naver-copy.md`가 현재 `artifact_digest` 범위에 없음 | 검증 후 네이버 입력물이 바뀌어도 변경을 놓칠 수 있음 | 외부 저장에 사용되는 모든 파일을 하나의 canonical manifest와 해시에 결합 | 완전 해결 가능 |
 | `OPT-02` | 이미지 연결표에 모델 스냅샷·품질·크기·프롬프트·참조 해시가 없음 | 같은 지침으로도 결과를 재현하거나 품질 하락 원인을 추적하기 어려움 | 생성 조건과 입력·출력 해시를 실행별로 고정·기록 | 크게 개선 가능 |
 | `OPT-03` | 이미지 Gate가 파일 정상 여부와 내용 정확성 중심이며 기준 사례 대비 미감·모바일 렌더링을 측정하지 않음 | 정상 파일이지만 조악하거나 반복적인 이미지가 통과할 수 있음 | 자동 검사, 기준 사례 비교, 실제 렌더링, 사람 검수를 결합 | 크게 개선 가능 |
 | `OPT-04` | 단계명·상태·필수 필드가 여러 MD와 Notion 설정에 중복됨 | 한 파일만 수정하면 계약 불일치 발생 | 실행 가능한 단일 JSON Schema를 기준 계약으로 사용 | 완전 해결 가능 |
@@ -74,8 +73,8 @@ topic-selector
 
 | 구성 요소 | 역할 | 필수 여부 |
 |---|---|---|
-| `schemas/workflow-contract.schema.json` | 단계·상태·시각 슬롯·이미지 생성 정보·승인 이벤트·manifest의 단일 계약 | 필수 |
-| 실행 검증기 1개 | Schema 검사, manifest 생성, SHA-256 계산, Gate A/B 검증, 실패 시 비정상 종료 | 필수 |
+| `schemas/workflow-contract.schema.json` | 단계·상태·시각 슬롯·이미지 생성 정보·manifest의 단일 계약 | 필수 |
+| 실행 검증기 1개 | Schema 검사, manifest 생성, SHA-256 계산, Notion·네이버 쓰기 선행 검증, 실패 시 비정상 종료 | 필수 |
 | Codex Hook | Notion·네이버 쓰기 도구 실행 전에 검증기를 호출하고 불일치 시 차단 | 필수 |
 | 이미지 생성 호출 계층 | 모델 스냅샷·품질·크기·참조 이미지를 명시적으로 전달하고 응답 메타데이터 기록 | 생성 이미지 사용 시 필수 |
 | 고정 뷰포트 시각검사 | 원본 이미지와 최종 모바일 렌더링 캡처·비교·Trace 저장 | 필수 |
@@ -125,8 +124,8 @@ topic-selector
 - 개별 파일 SHA-256은 파일의 실제 byte를 대상으로 계산한다.
 - 파일 목록 순서는 `role → order → path` 규칙으로 고정한다.
 - `artifact_digest`는 `artifact_digest` 필드 자체를 제외한 canonical JSON을 UTF-8, 정렬된 key, 불필요한 공백 없이 직렬화한 byte로 계산한다.
-- manifest 생성 후 파일 하나라도 바뀌면 기존 Gate A와 Gate B 승인을 모두 무효화한다.
-- Gate B는 같은 `artifact_digest`에 `notion_page_id`, `notion_verified_at`, `notion_roundtrip_digest`, `blog_id`를 추가로 결합한다.
+- manifest 생성 후 파일 하나라도 바뀌면 외부 쓰기 선행 검증을 실패시킨다.
+- 네이버 쓰기 선행 검증은 같은 `artifact_digest`에 `notion_page_id`, `notion_verified_at`, `notion_roundtrip_digest`, `blog_id`를 추가로 결합한다.
 
 ## 6. 이미지 품질 일관성 구현
 
@@ -224,7 +223,7 @@ provenance_status: "generated | official | licensed | captured"
 - 시각 슬롯 계약·이미지 정확성·이미지 품질
 - 세 최종 파일과 이미지의 canonical manifest
 
-Q1 실패 시 정식 모드는 Gate A 승인을 요청하지 않고, 베타 모드는 Notion 쓰기를 시작하지 않는다.
+Q1 실패 시 모든 모드에서 Notion 쓰기를 시작하지 않는다.
 
 ### Q2: Notion 저장 후 무결성 검사
 
@@ -237,13 +236,13 @@ Q1 실패 시 정식 모드는 Gate A 승인을 요청하지 않고, 베타 모�
 
 Q2 실패는 콘텐츠 품질 점수와 별개로 `storage_integrity=failed`로 기록한다.
 
-### Q3: 사람 검수
+### Q3: 선택적 사람 검수 기록
 
 담당: 사용자 또는 승인된 검수자
 
 - `evaluation-rubric.md`의 본문·근거·이미지 평가
 - 원본 이미지와 Notion 모바일 렌더링을 함께 확인
-- `사람 검수=통과` 전에는 Gate B를 요청하지 않음
+- Q3 결과는 다음 단계의 차단 조건으로 사용하지 않음
 
 ## 8. Notion 저장 안정화
 
@@ -266,7 +265,7 @@ Q2 실패는 콘텐츠 품질 점수와 별개로 `storage_integrity=failed`로 
 - `final/[키워드]-naver-layout.md`
 - `final/[키워드]-naver-copy.md`
 - 전용 썸네일과 이미지 순서
-- Gate B 이벤트와 canonical `artifact_digest`
+- 현재 canonical `artifact_digest`
 - Notion 페이지 ID와 마지막 검증 시각
 
 다음 조건이 모두 충족된 뒤 별도 구현한다.
@@ -274,9 +273,9 @@ Q2 실패는 콘텐츠 품질 점수와 별개로 `storage_integrity=failed`로 
 - 최적화 베타 10회에서 필수 산출물 누락·충돌 0건
 - 이미지 사람 검수 최종본 10/10 통과
 - Notion 저장·재조회 무결성 10/10 통과
-- 베타 manifest 해시 변조 차단과 정식 Gate A 해시 변조 차단 시험 100% 통과
+- 베타·정식 manifest 해시 변조 차단 시험 100% 통과
 
-후속 네이버 구현은 `기록·재생 가능한 안정 경로 → 모바일 뷰포트 확인 → 입력 구간별 화면 캡처 → Playwright Trace → Gate B → 임시저장 직전 사용자 확인` 순서로 구성한다. 공식 글쓰기 API가 없으므로 UI 변경과 로그인 상태 위험은 잔여 위험으로 남긴다. 예상 시간은 기본 구성 2~4시간, 캡처·Trace·오류 복구를 포함한 안정화 4~8시간, 반복 검증 1~2일이다.
+후속 네이버 구현은 `기록·재생 가능한 안정 경로 → 모바일 뷰포트 확인 → 입력 구간별 화면 캡처 → Playwright Trace → Q1·Q2 선행 검증 → 임시저장 직전 사용자 확인` 순서로 구성한다. 공식 글쓰기 API가 없으므로 UI 변경과 로그인 상태 위험은 잔여 위험으로 남긴다. 예상 시간은 기본 구성 2~4시간, 캡처·Trace·오류 복구를 포함한 안정화 4~8시간, 반복 검증 1~2일이다.
 
 ## 10. 구현 단계와 수정 대상
 
@@ -302,19 +301,19 @@ Q2 실패는 콘텐츠 품질 점수와 별개로 `storage_integrity=failed`로 
 | 대상 | 구현 내용 |
 |---|---|
 | `schemas/workflow-contract.schema.json` | 단계·이벤트·시각 슬롯·이미지 메타데이터·manifest Schema |
-| 실행 검증기 | Schema 검사, manifest 생성, digest 재계산, 베타 Notion 쓰기 조건과 Gate A/B 검증 |
+| 실행 검증기 | Schema 검사, manifest 생성, digest 재계산, Notion·네이버 쓰기 선행 검증 |
 | Codex Hook | 외부 쓰기 전에 검증기 실행, 실패 시 도구 호출 차단 |
 | `metrics-spec.md` | Schema를 기준으로 이벤트·해시 규칙 정의 |
-| `AGENTS.md` | canonical manifest와 Q1·Q2·Q3 경계 |
-| `BETA-AGENTS.md` | 베타의 Q1 → Notion → Q2 → Q3 고정 |
+| `AGENTS.md` | canonical manifest와 Q1·Q2 경계 |
+| `archive/legacy-beta/docs/BETA-AGENTS.md` | 당시 Q1 → Notion → Q2 흐름 기록 |
 | `content-assembler.md` | 세 최종 파일과 이미지 manifest 생성 책임 |
 
 통과 조건:
 
-- 필수 파일 하나를 변경한 변조 시험에서 기존 승인이 차단됨
+- 필수 파일 하나를 변경한 변조 시험에서 외부 쓰기가 차단됨
 - `naver-layout.md`와 `naver-copy.md` 변경도 차단됨
 - 잘못된 단계명·상태·시각 슬롯 필드가 Schema 검사에서 실패함
-- 베타는 Gate A 없이 지정 Notion 도구만 허용되고, 정식은 Gate A가 없으면 Notion 쓰기 도구가 호출되지 않음
+- 베타와 정식 모두 Q1·manifest·지정 데이터 소스 검증 후 지정 Notion 도구만 허용됨
 
 ### Phase 2: 이미지 품질 경로 구현
 
@@ -348,7 +347,7 @@ Q2 실패는 콘텐츠 품질 점수와 별개로 `storage_integrity=failed`로 
 | `notion-rider.md` | 업로드 완료, 비동기 완료, `run_id` 중복 방지, round-trip digest |
 | `evaluation-rubric.md` | 저장 무결성과 콘텐츠 품질 점수 분리 |
 
-베타 외부 저장은 Q1·manifest·지정 데이터 소스 검증 후 시험하고, 정식 외부 저장은 별도 Gate A 승인 후에만 시험한다.
+베타와 정식 외부 저장은 Q1·manifest·지정 데이터 소스 검증 후 시험한다.
 
 통과 조건:
 
@@ -368,9 +367,9 @@ Q2 실패는 콘텐츠 품질 점수와 별개로 `storage_integrity=failed`로 
 3. manifest 생성 후 이미지 byte 변경
 4. 이미지 생성 메타데이터 누락
 5. 이미지 품질 점수 미달
-6. 베타 Q1·manifest·대상·Notion 도구 불일치와 정식 Gate A 없음·거절·만료·대상 불일치
+6. 베타·정식 Q1·manifest·대상·Notion 도구 불일치
 7. 베타 모드에서 `naver-rider` 호출 시도
-8. Gate B의 Notion 페이지 ID·검증 시각 불일치
+8. 네이버 쓰기 선행 검증의 Notion 페이지 ID·검증 시각 불일치
 
 통과 조건은 8개 시험 모두 외부 상태를 변경하기 전에 차단되는 것이다.
 
@@ -380,9 +379,9 @@ Q2 실패는 콘텐츠 품질 점수와 별개로 `storage_integrity=failed`로 
 
 - 고유 `batch_id`, `run_id`, `topic_id`를 사용한다.
 - 실제 이미지 생성은 우선 직렬로 유지한다.
-- Gate A 승인 없이 Q1·manifest·지정 데이터 소스 검증 범위 안에서만 Notion에 저장한다.
+- Q1·manifest·지정 데이터 소스 검증 범위 안에서만 Notion에 저장한다.
 - 네이버는 호출하지 않는다.
-- Q1, Q2, Q3 결과와 단계별 시간·재시도·비용을 기록한다.
+- Q1, Q2와 선택적 Q3 결과, 단계별 시간·재시도·비용을 기록한다.
 
 운영 전 필수 통과 기준:
 
@@ -461,4 +460,4 @@ Q2 실패는 콘텐츠 품질 점수와 별개로 `storage_integrity=failed`로 
 
 Phase 0의 읽기 전용 기준선과 Phase 1~4의 로컬 구현을 완료했다. 기준선은 `baseline/phase0-2026-08-26.json`에 고정했고, 신규 계약·manifest·Gate 검증기·Codex Hook·이미지 메타데이터/Q3 검증기·dry-run 시험을 추가했다. 기존 산출물·로그·Notion 항목에는 쓰지 않았다.
 
-베타 Notion 쓰기는 별도 Gate A 승인 없이 Q1·manifest·지정 데이터 소스와 실제 연결·스키마·첨부 재조회 확인이 있을 때 Phase 5의 10회로 진행한다. 네이버 자동화는 Phase 5 통과와 별도 승인이 있기 전까지 실행·재구성하지 않는다.
+베타 Notion 쓰기는 Q1·manifest·지정 데이터 소스와 실제 연결·스키마·첨부 재조회 확인이 있을 때 Phase 5의 10회로 진행한다. 네이버 자동화는 Phase 5 통과와 별도 운영 결정이 있기 전까지 실행·재구성하지 않는다.

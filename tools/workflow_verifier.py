@@ -5,7 +5,9 @@ import json
 import sys
 from pathlib import Path
 
+from tools.gate import GateRequest
 from tools.image_quality import validate_image_metadata, validate_image_quality
+from tools.manifest import ManifestBuildInput
 from tools.workflow_contract import (
     ContractError,
     JSONMap,
@@ -61,14 +63,13 @@ def main(arguments: list[str]) -> int:
     values = _options(arguments[2:])
     root = _root(values)
     if command == "manifest":
-        manifest = build_manifest(
-            root=root,
-            keyword=_required(values, "keyword"),
-            run_id=_required(values, "run-id"),
-            topic_id=_required(values, "topic-id"),
-            mode=_required(values, "mode"),
-            created_at=_required(values, "created-at"),
-        )
+        manifest = build_manifest(ManifestBuildInput(
+            root,
+            _required(values, "keyword"),
+            _required(values, "run-id"),
+            _required(values, "topic-id"),
+            _required(values, "created-at"),
+        ))
         output = Path(_required(values, "output"))
         _write_json(output, manifest)
         print(
@@ -132,9 +133,7 @@ def main(arguments: list[str]) -> int:
         )
         return 0
     if command == "validate-image-metadata":
-        result = validate_image_metadata(
-            Path(_required(values, "metadata")), _required(values, "mode")
-        )
+        result = validate_image_metadata(Path(_required(values, "metadata")))
         print(json.dumps(result, ensure_ascii=False))
         return 0
     if command == "validate-image-quality":
@@ -142,7 +141,7 @@ def main(arguments: list[str]) -> int:
         print(json.dumps(result, ensure_ascii=False))
         return 0
     if command == "gate":
-        result = verify_gate(
+        result = verify_gate(GateRequest(
             root=root,
             manifest_path=Path(_required(values, "manifest")),
             run_log=Path(_required(values, "run-log")),
@@ -152,7 +151,7 @@ def main(arguments: list[str]) -> int:
             notion_page_id=values.get("notion-page-id"),
             notion_verified_at=values.get("notion-verified-at"),
             blog_id=values.get("blog-id"),
-        )
+        ))
         print(
             json.dumps(
                 {

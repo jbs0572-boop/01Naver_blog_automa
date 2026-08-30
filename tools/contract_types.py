@@ -30,7 +30,7 @@ STAGES: Final = frozenset(
     }
 )
 STATUSES: Final = frozenset(
-    {"pending", "running", "passed", "failed", "blocked", "skipped"}
+    {"pending", "running", "passed", "validated", "failed", "blocked", "skipped"}
 )
 STATUS_COMPATIBILITY: Final = {
     "success": "passed",

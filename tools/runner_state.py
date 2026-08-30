@@ -39,9 +39,8 @@ def _safe_now(now: datetime | None) -> datetime:
 
 def stable_run_id(request: RunnerRequest) -> str:
     now = _safe_now(request.now)
-    material = "|".join(
-        (request.job, request.mode, request.keyword or "", now.date().isoformat())
-    )
+    topic = "auto-topic" if request.auto_topic else request.keyword or ""
+    material = "|".join((request.job, topic, now.date().isoformat()))
     return "RUN-" + hashlib.sha256(material.encode("utf-8")).hexdigest()[:24]
 
 
@@ -55,7 +54,7 @@ def file_digest(path: Path) -> str:
 
 def input_fingerprint(request: RunnerRequest) -> str:
     records: list[JSONValue] = []
-    if request.keyword is not None:
+    if request.keyword is not None and not request.auto_topic:
         keyword_parts = Path(request.keyword).parts
         if (
             not request.keyword
@@ -84,7 +83,12 @@ def input_fingerprint(request: RunnerRequest) -> str:
             }
             records.append(record)
     else:
-        for directory in ("research", "drafts", "final", "assets", "runs"):
+        directories = (
+            ()
+            if request.auto_topic
+            else ("research", "drafts", "final", "assets", "runs")
+        )
+        for directory in directories:
             path = request.root / directory
             files = (
                 [item for item in sorted(path.rglob("*")) if item.is_file()]
@@ -98,10 +102,19 @@ def input_fingerprint(request: RunnerRequest) -> str:
                 }
                 for item in files
             )
+        if request.auto_topic:
+            for name in (
+                "AGENTS.md",
+                "notion-config.md",
+                "naver-config.md",
+                "schemas/workflow-contract.schema.json",
+            ):
+                path = request.root / name
+                if path.is_file():
+                    records.append({"path": name, "sha256": file_digest(path)})
     material: JSONMap = {
         "job": request.job,
-        "mode": request.mode,
-        "keyword": request.keyword,
+        "keyword": "auto-topic" if request.auto_topic else request.keyword,
         "inputs": records,
     }
     encoded = json.dumps(
@@ -130,8 +143,10 @@ def atomic_write_json(path: Path, value: JSONMap) -> None:
         if temporary is not None:
             try:
                 temporary.unlink(missing_ok=True)
-            except OSError:
-                pass
+            except OSError as error:
+                raise ContractError(
+                    f"could not remove temporary state: {temporary}"
+                ) from error
 
 
 def read_state(path: Path) -> JSONMap:
@@ -157,7 +172,9 @@ def result_from_state(state: JSONMap, state_path: Path, log_path: Path) -> Runne
     ):
         raise ContractError(f"runner state has invalid result fields: {state_path}")
     completed = tuple(
-        key for key, value in stages.items() if value == RunStatus.PASSED.value
+        key
+        for key, value in stages.items()
+        if value in {RunStatus.PASSED.value, RunStatus.VALIDATED.value}
     )
     try:
         parsed_status = RunStatus(status)
@@ -170,12 +187,10 @@ def request_from_state(
     state: JSONMap, root: Path, state_dir: Path | None = None
 ) -> RunnerRequest:
     job = state.get("job")
-    mode = state.get("mode")
     keyword = state.get("keyword")
     run_id = state.get("run_id")
     if (
         not isinstance(job, str)
-        or not isinstance(mode, str)
         or (keyword is not None and not isinstance(keyword, str))
         or not isinstance(run_id, str)
     ):
@@ -185,11 +200,13 @@ def request_from_state(
     return RunnerRequest(
         root=root,
         job=job,
-        mode=mode,
         keyword=keyword,
         run_id=run_id,
-        dry_run=True,
+        dry_run=state.get("dry_run") is True,
         state_dir=state_dir,
+        auto_topic=state.get("auto_topic") is True,
+        confirmed=state.get("confirmation") is not None,
+        resume=True,
     )
 
 

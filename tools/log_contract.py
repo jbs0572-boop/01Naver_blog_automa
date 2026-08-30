@@ -55,19 +55,15 @@ def read_events(path: Path) -> list[JSONMap]:
             if stage not in STAGES or mapped_status not in STATUSES:
                 raise ContractError(f"invalid stage event at {path}:{line_no}")
         elif event_type == "approval":
+            pass
+        elif event_type == "confirmation":
             if optimized_event:
                 try:
                     validate_instance(event, SCHEMA_PATH)
                 except SchemaError as error:
                     raise ContractError(
-                        f"invalid approval event schema at {path}:{line_no}: {error}"
+                        f"invalid confirmation event schema at {path}:{line_no}: {error}"
                     ) from error
-            if event.get("gate") not in {"notion_write", "naver_draft_save"}:
-                raise ContractError(f"invalid approval gate at {path}:{line_no}")
-            if event.get("decision") not in {"approved", "rejected", "expired"}:
-                raise ContractError(f"invalid approval decision at {path}:{line_no}")
-            if event.get("scope") not in {"per-run", "batch"}:
-                raise ContractError(f"invalid approval scope at {path}:{line_no}")
         elif event_type not in {
             "batch_preparation",
             "baseline",
