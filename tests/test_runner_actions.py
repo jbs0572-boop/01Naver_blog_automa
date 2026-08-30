@@ -9,9 +9,18 @@ from tools.runner_actions import naver_input_title
     ("body", "fallback", "expected"),
     [
         (
-            "[TITLE]\n비짓재팬 웹 등록 방법｜입국 전 준비 총정리\n[/TITLE]\n",
+            (
+                "[TITLE]\n"
+                "비짓재팬 웹 등록 방법｜입국 전 준비 총정리\n\n"
+                "[IMAGE file=\"thumbnail.png\" representative=true]\n"
+            ),
             "비짓재팬",
             "비짓재팬 웹 등록 방법｜입국 전 준비 총정리",
+        ),
+        (
+            "[TITLE]\n닫는 태그 호환 제목\n[/TITLE]\n",
+            "fallback",
+            "닫는 태그 호환 제목",
         ),
         ("# Markdown 제목\n\n본문", "fallback", "Markdown 제목"),
         ("본문만 있습니다", "fallback", "fallback"),

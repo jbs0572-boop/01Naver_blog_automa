@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Final
 
 from tools.contract_types import ContractError
 from tools.external_adapter import ExternalSystem, ExternalWriteRequest
@@ -22,21 +21,24 @@ from tools.runner_types import (
 )
 from tools.weekly_report import write_weekly_report
 
-_NAVER_TITLE_BLOCK: Final[re.Pattern[str]] = re.compile(
-    r"(?ms)^\[TITLE\][ \t]*\n(?P<title>.*?)^\[/TITLE\][ \t]*$"
-)
-
 
 def _topic_id(request: RunnerRequest, run_id: str) -> str:
     return f"TOPIC-{request.keyword}" if request.keyword else f"TOPIC-{run_id}"
 
 
 def naver_input_title(body: str, fallback: str) -> str:
-    title_block = _NAVER_TITLE_BLOCK.search(body)
-    if title_block is not None:
-        title = " ".join(title_block.group("title").splitlines()).strip()
-        if title:
+    lines = iter(body.splitlines())
+    for line in lines:
+        if line.strip() != "[TITLE]":
+            continue
+        for candidate_line in lines:
+            title = candidate_line.strip()
+            if not title:
+                continue
+            if title.startswith("[") and title.endswith("]"):
+                break
             return title
+        break
     return next(
         (
             line[2:].strip()
