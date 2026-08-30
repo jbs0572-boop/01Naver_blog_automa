@@ -85,6 +85,7 @@ def stage_action(context: StageRunContext) -> StageResult:
                 topic_id=_topic_id(request, run_id),
                 keyword=request.keyword,
                 work_dir=request.root / ".automation" / "work" / run_id / stage,
+                q1_feedback=context.q1_feedback,
             ))
             if stage == "content-assembler":
                 _ = _manifest_for(request, run_id, created_at)

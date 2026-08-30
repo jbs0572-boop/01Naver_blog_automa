@@ -1,14 +1,28 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+import re
+from collections.abc import Callable
+from dataclasses import dataclass, replace
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Protocol
+from typing import Final, Protocol
 
-from tools.contract_types import JSONMap
+from tools.contract_types import ContractError, JSONMap
 from tools.external_adapter import NotionAdapter
 from tools.naver_adapter import NaverBrowserAdapter
+
+Q1_MAX_ATTEMPTS: Final = 3
+_SENSITIVE_Q1_VALUE: Final = re.compile(
+    r"(?i)\b(api[_-]?key|token|secret|password|authorization|cookie)\b\s*(?:=|:)\s*[^\s,;]+"
+)
+_BEARER_Q1_VALUE: Final = re.compile(r"(?i)bearer\s+[^\s,;]+")
+
+
+def safe_q1_feedback(message: str | None) -> str:
+    normalized = " ".join(message.split()) if message else "Q1 validation failed"
+    redacted = _SENSITIVE_Q1_VALUE.sub(r"\1=[redacted]", normalized)
+    return _BEARER_Q1_VALUE.sub("Bearer [redacted]", redacted)[:500]
 
 
 class JobName(StrEnum):
@@ -62,6 +76,7 @@ class StageExecutionContext:
     topic_id: str
     keyword: str | None
     work_dir: Path
+    q1_feedback: str | None = None
 
 
 class StageExecutor(Protocol):
@@ -96,6 +111,32 @@ class RunnerRequest:
     naver_adapter: NaverBrowserAdapter | None = None
 
 
+def retry_q1_repair(
+    operation: Callable[[str | None], tuple[StageResult, int, RunnerRequest]],
+) -> tuple[StageResult, RunnerRequest, tuple[StageResult, ...]]:
+    feedback: str | None = None
+    attempts: list[StageResult] = []
+    active_request: RunnerRequest | None = None
+    for _ in range(Q1_MAX_ATTEMPTS):
+        result, _, active_request = operation(feedback)
+        if result.status is RunStatus.FAILED:
+            result = replace(result, message=safe_q1_feedback(result.message))
+        attempts.append(result)
+        if result.status is not RunStatus.FAILED:
+            return result, active_request, tuple(attempts)
+        feedback = safe_q1_feedback(result.message)
+    if active_request is None:
+        raise ContractError("Q1 repair loop did not attempt content assembly")
+    return (
+        replace(
+            attempts[-1],
+            message=f"Q1 failed after {Q1_MAX_ATTEMPTS} attempts: {feedback}",
+        ),
+        active_request,
+        tuple(attempts),
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class RunExecutionContext:
     request: RunnerRequest
@@ -114,6 +155,7 @@ class StageRunContext:
     stage: str
     run_id: str
     created_at: str
+    q1_feedback: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

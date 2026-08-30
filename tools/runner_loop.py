@@ -38,6 +38,7 @@ from tools.runner_types import (
     StageExecution,
     StageResult,
     StageRunContext,
+    retry_q1_repair,
 )
 
 
@@ -64,8 +65,7 @@ def execute_run(context: RunExecutionContext) -> RunnerResult:
         _reset_incomplete_stages(state)
     else:
         state = initial_state(request, run_id, input_hash, timestamp)
-    if state.get("job_key") is None:
-        state["job_key"] = job_key(request)
+    _ = state.setdefault("job_key", job_key(request))
     state.update(
         status=RunStatus.RUNNING.value,
         updated_at=timestamp,
@@ -83,9 +83,17 @@ def execute_run(context: RunExecutionContext) -> RunnerResult:
         set_stage_execution(state, stage, StageExecution.NOT_CALLED)
         state["updated_at"] = now(request).isoformat()
         atomic_write_json(state_path, state)
-        stage_result, attempt, active_request = _run_stage(
-            StageRunContext(active_request, job, stage, run_id, timestamp), state
-        )
+        stage_context = StageRunContext(active_request, job, stage, run_id, timestamp)
+        if stage == "content-assembler":
+            stage_result, active_request, stage_attempts = retry_q1_repair(
+                lambda feedback, stage_context=stage_context, state=state: _run_stage(
+                    replace(stage_context, q1_feedback=feedback), state
+                )
+            )
+            attempt = 1
+        else:
+            stage_result, attempt, active_request = _run_stage(stage_context, state)
+            stage_attempts = (stage_result,)
         if stage_result.run_status is not None and not (
             (
                 stage == "notion-rider"
@@ -110,16 +118,20 @@ def execute_run(context: RunExecutionContext) -> RunnerResult:
         message = stage_result.message or (
             "stage passed" if result is RunStatus.PASSED else result.value
         )
-        append_event(
-            log_path,
-            event(
-                StageEventContext(
-                    active_request, run_id, batch_id, stage, timestamp,
-                    now(request).isoformat(), attempt,
+        for current_attempt, attempt_result in enumerate(stage_attempts, attempt):
+            attempt_message = attempt_result.message or attempt_result.status.value
+            append_event(
+                log_path,
+                event(
+                    StageEventContext(
+                        active_request, run_id, batch_id, stage, timestamp,
+                        now(request).isoformat(), current_attempt,
+                    ),
+                    StageEventOutcome(
+                        attempt_result.status, attempt_result.execution, attempt_message
+                    ),
                 ),
-                StageEventOutcome(result, stage_result.execution, message),
-            ),
-        )
+            )
         set_stage(state, stage, result)
         set_stage_execution(state, stage, stage_result.execution)
         if result in {RunStatus.PASSED, RunStatus.VALIDATED}:
@@ -175,7 +187,10 @@ def _run_stage(
 ) -> tuple[StageResult, int, RunnerRequest]:
     request = context.request
     try:
-        result, attempt = with_retry(lambda: stage_action(context))
+        if context.stage == "content-assembler":
+            result, attempt = stage_action(context), 1
+        else:
+            result, attempt = with_retry(lambda: stage_action(context))
         active = request
         if result.resolved_keyword is not None:
             if (

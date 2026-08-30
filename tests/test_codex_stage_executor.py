@@ -12,7 +12,11 @@ from tools.runner_types import StageExecutionContext
 SubprocessValue = str | Path | list[str] | int | bool | None
 
 
-def _stage_context(root: Path, stage: str = "writer") -> StageExecutionContext:
+def _stage_context(
+    root: Path,
+    stage: str = "writer",
+    q1_feedback: str | None = None,
+) -> StageExecutionContext:
     return StageExecutionContext(
         root=root,
         stage=stage,
@@ -20,6 +24,7 @@ def _stage_context(root: Path, stage: str = "writer") -> StageExecutionContext:
         topic_id="TOPIC-test",
         keyword="test",
         work_dir=root / ".automation" / "work",
+        q1_feedback=q1_feedback,
     )
 
 
@@ -83,7 +88,9 @@ def test_stage_executor_builds_strict_structured_command(
     _ = draft.write_text("draft", encoding="utf-8")
     monkeypatch.setattr("tools.codex_process.subprocess.run", fake_run)
 
-    _ = CodexStageExecutor().execute(_stage_context(tmp_path), result_path)
+    _ = CodexStageExecutor().execute(
+        _stage_context(tmp_path, q1_feedback="api_key=super-secret-value"), result_path
+    )
 
     assert calls
     assert calls[0][:2] == ["codex", "exec"]
@@ -92,6 +99,8 @@ def test_stage_executor_builds_strict_structured_command(
     assert "--output-schema" in calls[0]
     assert "--output-last-message" in calls[0]
     assert "--cd" in calls[0]
+    assert all("super-secret-value" not in value for value in calls[0])
+    assert any("api_key=[redacted]" in value for value in calls[0])
 
 
 def test_stage_executor_normalizes_absolute_artifact_paths_inside_root(

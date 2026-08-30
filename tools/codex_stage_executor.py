@@ -13,6 +13,7 @@ from tools.runner_types import (
     StageExecution,
     StageExecutionContext,
     StageResult,
+    safe_q1_feedback,
 )
 
 STAGE_INSTRUCTIONS: Final[dict[str, str]] = {
@@ -215,6 +216,11 @@ class CodexStageExecutor:
                 " Do not spawn subagents. Execute the official and supporting-visual "
                 "research lanes serially in this process, starting the next lane only "
                 "after the previous lane completes."
+            )
+        if context.q1_feedback is not None:
+            prompt += (
+                " Repair the prior Q1 failure using this safe feedback: "
+                f"{safe_q1_feedback(context.q1_feedback)}"
             )
         command = [
             self.codex_binary,
