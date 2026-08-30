@@ -44,6 +44,11 @@ _READ_ACTIONS = frozenset(
         "query_database",
         "query_data_sources",
         "fetch_page",
+        "goto",
+        "extract",
+        "get_content",
+        "text",
+        "wait",
     }
 )
 _WRITE_ACTIONS = frozenset(

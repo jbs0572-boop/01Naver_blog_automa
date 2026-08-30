@@ -53,7 +53,15 @@ def test_registered_external_writes_are_gate_protected() -> None:
 
 
 def test_read_tools_are_allowed_without_gate() -> None:
-    assert classify_tool_call("browser.snapshot", {}).action is ToolAction.READ
+    for tool_name in (
+        "browser.snapshot",
+        "browser.goto",
+        "browser.extract",
+        "browser.get_content",
+        "browser.text",
+        "browser.wait",
+    ):
+        assert classify_tool_call(tool_name, {}).action is ToolAction.READ
     assert classify_tool_call("mcp__notion__get_page", {}).action is ToolAction.READ
 
 

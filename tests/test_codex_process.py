@@ -73,6 +73,8 @@ def test_researcher_command_requires_serial_lanes(
     prompt = calls[0][-1]
     assert "Do not spawn subagents" in prompt
     assert "serially" in prompt
+    assert "Read-only browser access is authorized" in prompt
+    assert "through Aside" in prompt
 
 
 def test_stage_executor_retries_429_and_preserves_attempt_logs(

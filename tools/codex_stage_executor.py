@@ -215,7 +215,13 @@ class CodexStageExecutor:
             prompt += (
                 " Do not spawn subagents. Execute the official and supporting-visual "
                 "research lanes serially in this process, starting the next lane only "
-                "after the previous lane completes."
+                "after the previous lane completes. Read-only browser access is "
+                "authorized for this stage through Aside; use it to open and inspect "
+                "the original pages, including JavaScript-rendered pages and the "
+                "user-supplied supporting URLs. Do not click, fill, submit, save, "
+                "download, or otherwise write through the browser. Record the URL, "
+                "access time, observed facts, and rights limitations in the research "
+                "artifact."
             )
         if context.q1_feedback is not None:
             prompt += (
