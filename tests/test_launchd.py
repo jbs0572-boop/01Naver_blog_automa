@@ -16,13 +16,16 @@ def test_plist_has_absolute_runner_contract(path: Path) -> None:
 
     assert data["Label"] == path.stem
     assert Path(args[0]).is_absolute()
-    assert args[1:3] == ["-m", "tools.automation_runner"]
+    assert args[1:3] == ["-m", "tools.preflight_runner"]
     assert "--mode" not in args
     assert "beta" not in args
     assert "formal" not in args
     assert data["WorkingDirectory"] == str(ROOT)
     assert Path(data["StandardOutPath"]).is_absolute()
     assert Path(data["StandardErrorPath"]).is_absolute()
+    environment = data["EnvironmentVariables"]
+    assert environment["CODEX_HOME"] == "/Users/beomseok/.codex"
+    assert "/opt/homebrew/bin" in environment["PATH"].split(":")
     assert "/.automation/logs/launchd/" in data["StandardOutPath"]
     assert "/.automation/logs/launchd/" in data["StandardErrorPath"]
     if path.stem == "com.naverblog.naver-publish":

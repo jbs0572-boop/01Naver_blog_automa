@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 from tools.contract_types import ContractError
-from tools.external_adapter import ExternalSystem, ExternalWriteRequest
 from tools.log_contract import read_events
 from tools.manifest import ManifestBuildInput, build_manifest, verify_manifest
+from tools.runner_naver_action import naver_input_title, naver_stage_action
+from tools.runner_notion_action import notion_stage_action
 from tools.runner_stages import now
-from tools.runner_state import atomic_write_json, state_paths
+from tools.runner_state import atomic_write_json
 from tools.runner_types import (
     JobName,
     RunnerBlocked,
@@ -24,29 +24,6 @@ from tools.weekly_report import write_weekly_report
 
 def _topic_id(request: RunnerRequest, run_id: str) -> str:
     return f"TOPIC-{request.keyword}" if request.keyword else f"TOPIC-{run_id}"
-
-
-def naver_input_title(body: str, fallback: str) -> str:
-    lines = iter(body.splitlines())
-    for line in lines:
-        if line.strip() != "[TITLE]":
-            continue
-        for candidate_line in lines:
-            title = candidate_line.strip()
-            if not title:
-                continue
-            if title.startswith("[") and title.endswith("]"):
-                break
-            return title
-        break
-    return next(
-        (
-            line[2:].strip()
-            for line in body.splitlines()
-            if line.startswith("# ")
-        ),
-        fallback,
-    )
 
 
 def _manifest_for(request: RunnerRequest, run_id: str, created_at: str) -> Path:
@@ -75,18 +52,6 @@ def _manifest_for(request: RunnerRequest, run_id: str, created_at: str) -> Path:
     return path
 
 
-def _notion_target(root: Path) -> str:
-    config = root / "notion-config.md"
-    if not config.is_file():
-        raise ContractError(f"Notion config is missing: {config}")
-    match = re.search(
-        r"데이터 소스 ID:\s*`([^`]+)`", config.read_text(encoding="utf-8")
-    )
-    if match is None:
-        raise ContractError("Notion data source ID is missing")
-    return match.group(1)
-
-
 def stage_action(context: StageRunContext) -> StageResult:
     request = context.request
     job = context.job
@@ -108,97 +73,36 @@ def stage_action(context: StageRunContext) -> StageResult:
                 topic_id=_topic_id(request, run_id),
                 keyword=request.keyword,
                 work_dir=request.root / ".automation" / "work" / run_id / stage,
+                selection_context=request.selection_context,
                 q1_feedback=context.q1_feedback,
             ))
             if stage == "content-assembler":
-                _ = _manifest_for(request, run_id, created_at)
+                manifest = verify_manifest(
+                    request.root, _manifest_for(request, run_id, created_at)
+                )
                 return StageResult(
                     RunStatus.PASSED,
                     StageExecution.PRODUCED,
                     result.message or "content assembled and Q1 manifest validated",
                     result.artifacts,
                     result.resolved_keyword,
+                    details={"artifact_digest": manifest.artifact_digest},
                 )
             return result
         if stage == "content-assembler":
-            _ = _manifest_for(request, run_id, created_at)
+            manifest = verify_manifest(
+                request.root, _manifest_for(request, run_id, created_at)
+            )
             return StageResult(
                 RunStatus.VALIDATED,
                 StageExecution.VALIDATED,
                 "canonical manifest validated; producer remains local",
+                details={"artifact_digest": manifest.artifact_digest},
             )
         if stage == "notion-rider" and request.notion_adapter is not None:
-            manifest_path = (
-                request.root / "manifests" / f"{run_id}-workflow-manifest.json"
-            )
-            result = request.notion_adapter.write_and_verify(
-                ExternalWriteRequest(
-                    root=request.root,
-                    manifest_path=manifest_path,
-                    run_log=state_paths(request.root, run_id, request.state_dir)[1],
-                    system=ExternalSystem.NOTION,
-                    gate="notion_write",
-                    run_id=run_id,
-                    target_id=_notion_target(request.root),
-                    dry_run=request.dry_run,
-                )
-            )
-            page_id = result.get("notion_page_id")
-            verified_at = result.get("notion_last_verified_at")
-            roundtrip = result.get("notion_roundtrip_digest")
-            if not all(
-                isinstance(value, str) for value in (page_id, verified_at, roundtrip)
-            ):
-                raise ContractError("Notion adapter did not return Q2 identity")
-            return StageResult(
-                RunStatus.PASSED,
-                StageExecution.PRODUCED,
-                "Notion Q2 round-trip passed",
-                (),
-                None,
-                RunStatus.READY_FOR_NAVER,
-                result,
-            )
+            return notion_stage_action(context)
         if stage == "naver-rider" and request.naver_adapter is not None:
-            if request.keyword is None:
-                raise ContractError("Naver input requires a resolved keyword")
-            input_path = request.root / "final" / f"{request.keyword}-naver-input.md"
-            if not input_path.is_file():
-                raise ContractError(f"Naver input is missing: {input_path}")
-            body = input_path.read_text(encoding="utf-8")
-            title = naver_input_title(body, request.keyword)
-            manifest_path = (
-                request.root / "manifests" / f"{run_id}-workflow-manifest.json"
-            )
-            manifest = verify_manifest(request.root, manifest_path)
-            if not request.confirmed:
-                preview = request.naver_adapter.prepare(
-                    title, body, manifest.artifact_digest
-                )
-                details = dict(preview)
-                details["confirmation_requested_at"] = now(request).isoformat()
-                details["naver_title"] = title
-                return StageResult(
-                    RunStatus.PASSED,
-                    StageExecution.PRODUCED,
-                    "awaiting_user_confirmation",
-                    (),
-                    None,
-                    RunStatus.AWAITING_USER_CONFIRMATION,
-                    details,
-                )
-            saved = request.naver_adapter.save(title, manifest.artifact_digest)
-            if saved.get("draft_status") != "saved":
-                raise ContractError("Naver adapter did not confirm draft save")
-            return StageResult(
-                RunStatus.PASSED,
-                StageExecution.PRODUCED,
-                "draft_saved",
-                (),
-                None,
-                RunStatus.DRAFT_SAVED,
-                saved,
-            )
+            return naver_stage_action(context)
         if stage in {"notion-rider", "naver-rider"}:
             return StageResult(
                 RunStatus.SKIPPED,
@@ -249,3 +153,6 @@ def stage_action(context: StageRunContext) -> StageResult:
     raise RunnerBlocked(
         "Naver write requires Q1/Q2 verification and final user confirmation; dry-run made no external call"
     )
+
+
+__all__ = ["naver_input_title", "stage_action"]

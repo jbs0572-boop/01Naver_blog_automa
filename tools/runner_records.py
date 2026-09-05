@@ -51,6 +51,12 @@ def initial_state(
         "dry_run": request.dry_run,
         "keyword": request.keyword,
         "auto_topic": request.auto_topic,
+        "selection_context": (
+            request.selection_context.as_json()
+            if request.selection_context is not None
+            else None
+        ),
+        "notion_target_id": request.notion_target_id,
         "job_key": None,
         "confirmation": None,
         "topic_id": topic_id,

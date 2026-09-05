@@ -25,6 +25,10 @@ class FixtureNotionAdapter:
 
 
 class FixtureNaverAdapter:
+    @property
+    def target_blog_id(self) -> str:
+        return "blog-fixture"
+
     def prepare(self, title: str, body: str, artifact_digest: str) -> JSONMap:
         _ = (title, body, artifact_digest)
         raise AssertionError("unexpected Naver preparation")
@@ -66,7 +70,7 @@ def test_dashboard_runs_workflow_then_exposes_external_storage_button(
     try:
         start_request = Request(
             f"{base_url}/api/manual-run",
-            data=json.dumps({"keyword": "HTTP 테스트"}).encode(),
+            data=json.dumps({"keyword": "HTTP 테스트", "as_of_date": "2026-09-01"}).encode(),
             headers={"Content-Type": "application/json"},
             method="POST",
         )
@@ -97,7 +101,7 @@ def test_dashboard_runs_workflow_then_exposes_external_storage_button(
 @pytest.mark.parametrize(
     ("notion_adapter", "naver_adapter", "expected_dry_run"),
     [
-        (FixtureNotionAdapter(), None, True),
+        (FixtureNotionAdapter(), None, False),
         (FixtureNotionAdapter(), FixtureNaverAdapter(), False),
     ],
 )
@@ -107,6 +111,9 @@ def test_dashboard_live_writes_requires_a_complete_adapter_pair(
     naver_adapter: FixtureNaverAdapter | None,
     expected_dry_run: bool,
 ) -> None:
+    _ = (tmp_path / "notion-config.md").write_text(
+        "- 데이터 소스 ID: `fixture-target`\n", encoding="utf-8"
+    )
     completed = Event()
     dry_runs: list[bool] = []
 
@@ -133,7 +140,7 @@ def test_dashboard_live_writes_requires_a_complete_adapter_pair(
 
     try:
         _ = server.manual_runs.start(
-            parse_manual_run_payload({"keyword": "one-sided-adapter"})
+            parse_manual_run_payload({"keyword": "one-sided-adapter", "as_of_date": "2026-09-01"})
         )
         assert completed.wait(timeout=1)
         assert dry_runs == [expected_dry_run]

@@ -7,6 +7,7 @@ from pathlib import Path
 
 from tools.codex_stage_executor import CodexStageExecutor
 from tools.contract_types import ContractError, JSONMap
+from tools.notion_keychain import NotionCredentialsUnavailable, load_notion_api_token
 from tools.runner_job import (
     codex_project_is_configured,
     find_duplicate_job,
@@ -16,6 +17,7 @@ from tools.runner_job import (
 from tools.runner_job import job_key as _job_key
 from tools.runner_lock import acquire_lock
 from tools.runner_loop import execute_run
+from tools.runner_notion_action import configured_notion_target
 from tools.runner_records import blocked_result
 from tools.runner_stages import (
     append_event,
@@ -47,7 +49,10 @@ def job_key(request: RunnerRequest) -> str:
 
 
 def _run(request: RunnerRequest, allow_existing: bool = False) -> RunnerResult:
+    if request.dry_run:
+        request = replace(request, notion_adapter=None, naver_adapter=None)
     job = validate_job_request(request)
+    request = _pin_notion_target(request, job)
     run_id = request.run_id or new_run_id(request)
     state_path, log_path, lock_path = state_paths(
         request.root, run_id, request.state_dir
@@ -78,7 +83,20 @@ def _run(request: RunnerRequest, allow_existing: bool = False) -> RunnerResult:
     if duplicate is not None and duplicate[0] != run_id:
         return result_from_state(duplicate[1], duplicate[2], duplicate[3])
     if request.executor is None and codex_project_is_configured(request.root):
-        request = replace(request, executor=CodexStageExecutor())
+        sensitive_values: tuple[str, ...] = ()
+        if (
+            job is JobName.DAILY_GENERATE
+            and not request.dry_run
+            and request.notion_adapter is not None
+        ):
+            try:
+                sensitive_values = (str(load_notion_api_token()),)
+            except NotionCredentialsUnavailable:
+                raise ContractError("notion_credentials_unavailable") from None
+        request = replace(
+            request,
+            executor=CodexStageExecutor(sensitive_values=sensitive_values),
+        )
     metadata: JSONMap = {
         "pid": os.getpid(),
         "run_id": run_id,
@@ -89,6 +107,23 @@ def _run(request: RunnerRequest, allow_existing: bool = False) -> RunnerResult:
         return execute_run(RunExecutionContext(
             request, job, run_id, state_path, log_path, input_hash, allow_existing
         ))
+
+
+def _pin_notion_target(request: RunnerRequest, job: JobName) -> RunnerRequest:
+    if (
+        job is not JobName.DAILY_GENERATE
+        or request.dry_run
+        or request.notion_adapter is None
+    ):
+        return request
+    configured_target = configured_notion_target(request.root)
+    if request.notion_target_id is None:
+        if request.resume:
+            raise ContractError("live resume requires a pinned Notion target")
+        return replace(request, notion_target_id=configured_target)
+    if request.notion_target_id != configured_target:
+        raise ContractError("pinned Notion target changed in notion-config.md")
+    return request
 
 
 def run_job(request: RunnerRequest) -> RunnerResult:
@@ -117,7 +152,19 @@ def recover_job(request: RunnerRequest) -> RunnerResult:
         return blocked_result(
             request.run_id, state_path, log_path, "input hash changed; recovery refused"
         )
-    return _run(recovered, allow_existing=True)
+    effective_dry_run = recovered.dry_run or request.dry_run
+    return _run(
+        replace(
+            recovered,
+            dry_run=effective_dry_run,
+            executor=request.executor,
+            notion_adapter=(
+                None if effective_dry_run else request.notion_adapter
+            ),
+            naver_adapter=None if effective_dry_run else request.naver_adapter,
+        ),
+        allow_existing=True,
+    )
 
 
 def get_status(root: Path, run_id: str, state_dir: Path | None = None) -> JSONMap:
@@ -136,13 +183,17 @@ def resume_job(request: RunnerRequest) -> RunnerResult:
     state_path, _, _ = state_paths(request.root, request.run_id, request.state_dir)
     state = read_state(state_path)
     recovered = request_from_state(state, request.root, request.state_dir)
+    effective_dry_run = recovered.dry_run or request.dry_run
     return _run(
         replace(
             recovered,
             resume=True,
+            dry_run=effective_dry_run,
             executor=request.executor,
-            notion_adapter=request.notion_adapter,
-            naver_adapter=request.naver_adapter,
+            notion_adapter=(
+                None if effective_dry_run else request.notion_adapter
+            ),
+            naver_adapter=None if effective_dry_run else request.naver_adapter,
         ),
         allow_existing=True,
     )

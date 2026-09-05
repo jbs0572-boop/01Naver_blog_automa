@@ -20,6 +20,8 @@ topic-selector.md → researcher.md → writer.md → image-maker.md
 1. 사용자가 주제 또는 키워드를 제공한다. `topic-selector`는 이를 바꾸지 않고 유효성·중복·검색 의도·조사 가능성을 확인한다.
 2. 사용자가 자동 선정을 요청한다. `topic-selector`가 확인 가능한 근거로 주제를 선택한다.
 
+두 모드 모두 실행 시 KST 기준일(`as_of_date`, `YYYY-MM-DD`)을 사람에게 받는다. 새 입력에는 분야·주요 독자·발행목적을 받지 않는다. 자동 선정의 후보 원천은 네이버 Creator Advisor 화면이며 Aside Browser 읽기 전용 접근과 원시 스냅샷을 사용한다.
+
 두 선택은 모두 같은 `research/topic-selection-[키워드].md`를 만들고, 이후 단계·품질 Gate·외부 저장 경로는 동일하다. 모드는 사용자 입력, 라우팅, 권한 판단 또는 단계 생략 조건이 아니다.
 
 ```mermaid
@@ -98,11 +100,11 @@ Notion 쓰기는 Q1, 현재 manifest, 실행 로그, 설정과 실제 조회 결
 
 ## 7. 공통 시각 계약과 안전
 
-모든 시각 슬롯은 `visual_slot_id`, `visual_intent`, `asset_type`, `required_by`, `source_policy`, `subject_scope`, `section`, `fallback`을 주제 선정부터 최종 연결표까지 유지한다. 결정 우선순위는 `제목 약속 > 독자 질문 > 정확한 근거 > 독창적 구성 > 장식`이다. 공식·허가 자산을 우선 사용하며, 제품·공식 화면·문서·로고 정체성은 생성 이미지로 대체하지 않는다.
+모든 시각 슬롯은 `visual_slot_id`, `visual_intent`, `asset_type`, `required_by`, `source_policy`, `subject_scope`, `section`, `fallback`을 주제 선정부터 최종 연결표까지 유지한다. 결정 우선순위는 `제목 약속 > 독자 질문 > 정확한 근거 > 독창적 구성 > 장식`이다. 공식 원본 자산을 우선 사용한다. 사용자가 공식 원본 URL과 공식 출처, 편집 가능 여부를 확인한 경우 AI 보조 편집을 허용하고 `origin=official`과 원본 URL을 기록한다. 순수 생성 자산은 `origin=generated`로 구분하며, 공식 원본에 없는 티켓·예약 화면·승인 문서를 새로 만들거나 공식 발표물처럼 오인시키지 않는다.
 
 researcher의 `research-official`과 `research-supporting-visual` Lane은 별도 하위 에이전트를 만들지 않고 동일 프로세스에서 직렬로 실행한다. 앞 Lane이 끝난 뒤 다음 Lane을 시작하며, 실패 시 통과한 이전 파이프라인 단계는 유지하고 researcher 단계만 재시도한다.
 
-권리·개인정보·광고 표기·공식 화면 여부가 불분명하거나 대상 데이터베이스·인증·블로그 ID가 확인되지 않으면 해당 단계에서 중단한다. 기존 파일과 Notion 항목을 임의로 덮어쓰거나 삭제하지 않는다.
+공식 원본 URL·공식/생성 출처·사용자 확인 사실·개인정보·광고 표기·대상 데이터베이스·인증·블로그 ID가 확인되지 않으면 해당 단계에서 중단한다. 기존 파일과 Notion 항목을 임의로 덮어쓰거나 삭제하지 않는다.
 
 ## 8. 보고
 

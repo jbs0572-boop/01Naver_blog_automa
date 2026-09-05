@@ -83,40 +83,52 @@ class NaverGateContractTests(unittest.TestCase):
         )
         notion_page_id = "page-fixture"
         verified_at = "2026-08-26T12:03:00+09:00"
+        content_digest = "sha256:" + "1" * 64
+        artifact_digest = self.manifest["artifact_digest"]
+        assert isinstance(artifact_digest, str)
         run_log = self.root / "run.jsonl"
         events = [
             {
                 "event_type": "stage",
                 "pipeline_version": PIPELINE_VERSION,
+                "telemetry_version": 2,
                 "run_id": self.run_id,
                 "batch_id": "BATCH-fixture",
                 "topic_id": self.topic_id,
                 "stage": "content-assembler",
                 "started_at": "2026-08-26T11:59:00+09:00",
                 "ended_at": "2026-08-26T12:00:00+09:00",
+                "duration_ms": 60_000,
+                "depends_on": ["image-maker"],
                 "status": "passed",
                 "attempt": 1,
                 "quality": {
-                    "notion_page_id": "page-fixture",
-                    "notion_last_verified_at": verified_at,
-                    "notion_roundtrip_digest": self.manifest["artifact_digest"],
+                    "artifact_digest": self.manifest["artifact_digest"],
                 },
             },
             {
                 "event_type": "stage",
                 "pipeline_version": PIPELINE_VERSION,
+                "telemetry_version": 2,
                 "run_id": self.run_id,
                 "batch_id": "BATCH-fixture",
                 "topic_id": self.topic_id,
                 "stage": "notion-rider",
                 "started_at": "2026-08-26T12:02:00+09:00",
                 "ended_at": verified_at,
+                "duration_ms": 60_000,
+                "depends_on": ["content-assembler"],
                 "status": "passed",
                 "attempt": 1,
                 "quality": {
+                    "storage_integrity": "passed",
                     "notion_page_id": notion_page_id,
                     "notion_last_verified_at": verified_at,
-                    "notion_roundtrip_digest": self.manifest["artifact_digest"],
+                    "expected_notion_content_digest": content_digest,
+                    "notion_content_digest": content_digest,
+                    "notion_roundtrip_digest": content_digest,
+                    "artifact_digest": artifact_digest,
+                    "notion_target_id": "datasource-fixture",
                 },
             },
         ]
@@ -134,6 +146,10 @@ class NaverGateContractTests(unittest.TestCase):
             target_id="blog-fixture",
             notion_page_id=notion_page_id,
             notion_verified_at=verified_at,
+            expected_notion_content_digest=content_digest,
+            notion_content_digest=content_digest,
+            notion_roundtrip_digest=content_digest,
+            q2_artifact_digest=artifact_digest,
             blog_id="blog-fixture",
         ))
 
@@ -151,26 +167,42 @@ class NaverGateContractTests(unittest.TestCase):
             {
                 "event_type": "stage",
                 "pipeline_version": PIPELINE_VERSION,
+                "telemetry_version": 2,
                 "run_id": self.run_id,
                 "batch_id": "BATCH-fixture",
                 "topic_id": self.topic_id,
                 "stage": "content-assembler",
                 "started_at": "2026-08-26T11:59:00+09:00",
                 "ended_at": "2026-08-26T12:00:00+09:00",
+                "duration_ms": 60_000,
+                "depends_on": ["image-maker"],
                 "status": "passed",
                 "attempt": 1,
+                "quality": {
+                    "artifact_digest": self.manifest["artifact_digest"],
+                },
             },
             {
                 "event_type": "stage",
                 "pipeline_version": PIPELINE_VERSION,
+                "telemetry_version": 2,
                 "run_id": self.run_id,
                 "batch_id": "BATCH-fixture",
                 "topic_id": self.topic_id,
                 "stage": "notion-rider",
                 "started_at": "2026-08-26T12:02:00+09:00",
                 "ended_at": verified_at,
+                "duration_ms": 60_000,
+                "depends_on": ["content-assembler"],
                 "status": "passed",
                 "attempt": 1,
+                "quality": {
+                    "storage_integrity": "passed",
+                    "notion_page_id": "page-fixture",
+                    "notion_last_verified_at": verified_at,
+                    "notion_roundtrip_digest": self.manifest["artifact_digest"],
+                    "notion_target_id": "datasource-fixture",
+                },
             },
         ]
         _ = run_log.write_text(

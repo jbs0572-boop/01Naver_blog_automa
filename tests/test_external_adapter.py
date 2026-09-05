@@ -5,11 +5,13 @@ from pathlib import Path
 
 import pytest
 
-from tools.contract_types import PIPELINE_VERSION, ContractError
+from tools.contract_types import PIPELINE_VERSION, ContractError, JSONMap
 from tools.external_adapter import (
     ExternalSystem,
     ExternalWriteRequest,
+    notion_content_digest,
     plan_external_write,
+    verify_notion_round_trip,
 )
 from tools.manifest import ManifestBuildInput, build_manifest
 
@@ -46,14 +48,18 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str, str]:
         {
             "event_type": "stage",
             "pipeline_version": PIPELINE_VERSION,
+            "telemetry_version": 2,
             "batch_id": "BATCH-adapter",
             "run_id": run_id,
             "topic_id": "TOPIC-adapter",
             "stage": "content-assembler",
             "started_at": "2026-08-27T00:00:00+00:00",
             "ended_at": "2026-08-27T00:01:00+00:00",
+            "duration_ms": 60_000,
+            "depends_on": ["image-maker"],
             "status": "passed",
             "attempt": 1,
+            "quality": {"artifact_digest": manifest["artifact_digest"]},
         }
     ]
     _ = run_log.write_text(
@@ -116,4 +122,63 @@ def test_naver_adapter_requires_gate_b_contract(tmp_path: Path) -> None:
                 target_id="blog-adapter",
                 dry_run=True,
             )
+        )
+
+
+def test_round_trip_digest_is_the_normalized_stored_content_digest() -> None:
+    # Given
+    expected: JSONMap = {
+        "title": "title",
+        "properties": {},
+        "blocks": [
+            {"type": "image", "image": {"artifact_role": "thumbnail"}},
+            {"type": "paragraph", "plain_text": "body"},
+        ],
+    }
+    artifact_digest = "sha256:" + "a" * 64
+
+    # When
+    result = verify_notion_round_trip(
+        expected,
+        expected,
+        "page",
+        "2026-09-01T00:00:00+09:00",
+        artifact_digest,
+    )
+
+    # Then
+    content_digest = notion_content_digest(expected)
+    assert result["expected_notion_content_digest"] == content_digest
+    assert result["notion_content_digest"] == content_digest
+    assert result["notion_roundtrip_digest"] == content_digest
+    assert result["artifact_digest"] == artifact_digest
+
+
+def test_round_trip_rejects_mutated_stored_content() -> None:
+    # Given
+    expected: JSONMap = {
+        "title": "title",
+        "properties": {},
+        "blocks": [
+            {"type": "image", "image": {"artifact_role": "thumbnail"}},
+            {"type": "paragraph", "plain_text": "expected"},
+        ],
+    }
+    actual: JSONMap = {
+        "title": "title",
+        "properties": {},
+        "blocks": [
+            {"type": "image", "image": {"artifact_role": "thumbnail"}},
+            {"type": "paragraph", "plain_text": "mutated"},
+        ],
+    }
+
+    # When / Then
+    with pytest.raises(ContractError, match="content digest"):
+        _ = verify_notion_round_trip(
+            expected,
+            actual,
+            "page",
+            "2026-09-01T00:00:00+09:00",
+            "sha256:" + "a" * 64,
         )

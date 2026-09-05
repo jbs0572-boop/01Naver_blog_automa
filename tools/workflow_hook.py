@@ -48,6 +48,14 @@ def _emit(permission: str, reason: str) -> int:
     return 0
 
 
+def _string_input(tool_input: JSONMap, *keys: str) -> str | None:
+    for key in keys:
+        value = tool_input.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return None
+
+
 def run_hook() -> int:
     try:
         raw_value: JSONValue = json.loads(sys.stdin.read())
@@ -61,14 +69,21 @@ def run_hook() -> int:
         if not isinstance(tool_input, dict):
             raise ContractError("hook tool_input must be an object")
         decision = classify_tool_call(tool_name, tool_input)
-        if decision.action in {ToolAction.INTERNAL, ToolAction.READ}:
+        gate = os.environ.get("WORKFLOW_GATE")
+        if decision.action is ToolAction.INTERNAL:
             return 0
         if decision.action is ToolAction.DENY:
             return _emit("deny", decision.reason)
+        if decision.action is ToolAction.READ and gate != "naver_draft_save":
+            return 0
         lock_value = os.environ.get("WORKFLOW_LOCK")
         if lock_value and Path(lock_value).is_file():
             raise ContractError("workflow execution lock is active")
         root = _workspace_from_cwd(str(raw.get("cwd", os.getcwd())))
+        target_id = _required_env("WORKFLOW_TARGET_ID")
+        resource_id = notion_resource_id(decision.operation, tool_input)
+        if decision.operation == "create_attachment":
+            resource_id = target_id
         result = authorize_external_write(
             GateRequest(
                 root=root,
@@ -76,13 +91,27 @@ def run_hook() -> int:
                 run_log=Path(_required_env("WORKFLOW_RUN_LOG")),
                 gate=_required_env("WORKFLOW_GATE"),
                 run_id=_required_env("WORKFLOW_RUN_ID"),
-                target_id=_required_env("WORKFLOW_TARGET_ID"),
+                target_id=target_id,
                 notion_connector=is_notion_connector(tool_name),
                 notion_operation=decision.operation,
-                notion_resource_id=notion_resource_id(decision.operation, tool_input),
+                notion_resource_id=resource_id,
                 notion_page_id=os.environ.get("WORKFLOW_NOTION_PAGE_ID"),
                 notion_verified_at=os.environ.get("WORKFLOW_NOTION_VERIFIED_AT"),
+                expected_notion_content_digest=os.environ.get(
+                    "WORKFLOW_EXPECTED_NOTION_CONTENT_DIGEST"
+                ),
+                notion_content_digest=os.environ.get("WORKFLOW_NOTION_CONTENT_DIGEST"),
+                notion_roundtrip_digest=os.environ.get(
+                    "WORKFLOW_NOTION_ROUNDTRIP_DIGEST"
+                ),
+                q2_artifact_digest=os.environ.get("WORKFLOW_Q2_ARTIFACT_DIGEST"),
                 blog_id=os.environ.get("WORKFLOW_BLOG_ID"),
+                naver_connector=decision.connector,
+                naver_operation=decision.operation,
+                naver_url=_string_input(tool_input, "url", "target_url"),
+                naver_locator=_string_input(tool_input, "selector", "locator"),
+                naver_value=_string_input(tool_input, "value", "text"),
+                naver_phase=os.environ.get("WORKFLOW_NAVER_PHASE"),
             )
         )
         return _emit("allow", f"verified {result['verified_artifact_digest']}")

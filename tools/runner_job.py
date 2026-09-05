@@ -13,8 +13,8 @@ from tools.runner_types import JobName, RunnerRequest, RunStatus
 
 
 def validate_job_request(request: RunnerRequest) -> JobName:
-    if (request.notion_adapter is None) != (request.naver_adapter is None):
-        raise ContractError("Notion and Naver adapters must be configured together")
+    if request.naver_adapter is not None and request.notion_adapter is None:
+        raise ContractError("Naver adapter requires a Notion adapter")
     job = validated_job(request)
     match job:
         case JobName.DAILY_GENERATE:
@@ -43,6 +43,9 @@ def job_key(request: RunnerRequest) -> str:
             request.job,
             timestamp,
             request.keyword or "auto-topic",
+            request.selection_context.as_of_date
+            if request.selection_context is not None
+            else "",
             "workflow-optimized-v1",
         )
     )

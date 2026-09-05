@@ -119,3 +119,41 @@ class WorkflowContractTests(unittest.TestCase):
         )
         with self.assertRaises(ContractError):
             _ = verify_manifest(self.root, self.manifest_path)
+
+
+def test_manifest_includes_body_image_path_with_spaces(tmp_path: Path) -> None:
+    keyword = "서울 불꽃축제"
+    final_dir = tmp_path / "final"
+    asset_dir = tmp_path / "assets" / keyword
+    final_dir.mkdir(parents=True)
+    asset_dir.mkdir(parents=True)
+    body = asset_dir / "body image.png"
+    _ = body.write_bytes(b"body-image")
+    _ = (asset_dir / "thumbnail.png").write_bytes(b"thumbnail")
+    _ = (asset_dir / "image-map.md").write_text("# image map\n", encoding="utf-8")
+    _ = (final_dir / f"{keyword}.md").write_text(
+        f"# Fixture\n\n![body](../assets/{keyword}/body image.png)\n",
+        encoding="utf-8",
+    )
+    _ = (final_dir / f"{keyword}-naver-layout.md").write_text("# Layout\n", encoding="utf-8")
+    _ = (final_dir / f"{keyword}-naver-copy.md").write_text("# Copy\n", encoding="utf-8")
+    _ = (final_dir / f"{keyword}-naver-input.md").write_text("# Input\n", encoding="utf-8")
+
+    manifest = build_manifest(
+        ManifestBuildInput(
+            tmp_path,
+            keyword,
+            "RUN-space-image",
+            "TOPIC-space-image",
+            "2026-09-05T08:00:00+09:00",
+        )
+    )
+
+    files = manifest["files"]
+    assert isinstance(files, list)
+    assert any(
+        isinstance(entry, dict)
+        and entry.get("role") == "body_image"
+        and entry.get("path") == f"assets/{keyword}/body image.png"
+        for entry in files
+    )

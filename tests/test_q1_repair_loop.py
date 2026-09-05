@@ -111,14 +111,23 @@ class CountingQ1Notion:
 
         self.calls += 1
         digest = verify_manifest(request.root, request.manifest_path).artifact_digest
+        content_digest = "sha256:" + "1" * 64
         return {
+            "storage_integrity": "passed",
             "notion_page_id": "page-fixture",
             "notion_last_verified_at": NOW.isoformat(),
-            "notion_roundtrip_digest": digest,
+            "expected_notion_content_digest": content_digest,
+            "notion_content_digest": content_digest,
+            "notion_roundtrip_digest": content_digest,
+            "artifact_digest": digest,
         }
 
 
 class FixtureNaver:
+    @property
+    def target_blog_id(self) -> str:
+        return "blog-fixture"
+
     def prepare(self, title: str, body: str, artifact_digest: str) -> JSONMap:
         _ = body
         return {

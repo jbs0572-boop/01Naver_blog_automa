@@ -67,6 +67,7 @@ function setManualBusy(busy) {
   document.querySelector("#manual-submit").disabled = busy;
   document.querySelector("#manual-topic-source").disabled = busy;
   document.querySelector("#manual-keyword").disabled = busy || document.querySelector("#manual-topic-source").value !== "user_defined";
+  document.querySelector("#manual-as-of").disabled = busy;
 }
 
 function confirmationPreview(task) {
@@ -88,7 +89,7 @@ function showConfirmationAction(task) {
 }
 
 function showExternalRetryAction(task, detail = null) {
-  if (!task || !task.task_id || !task.run_id) return false;
+  if (!task || !task.task_id || !task.run_id || !task.retryable) return false;
   setManualStatus(`외부 저장 실패 · ${detail || task.message || task.error || "원인 미상"}`, "error", {
     label: "외부 저장 재시도",
     handler: () => continueExternal(task.task_id),
@@ -103,12 +104,14 @@ async function pollManualRun(taskId) {
   state.manualTask = task;
   if (task.status === "queued" || task.status === "running") {
     setManualStatus(`${task.status === "queued" ? "대기 중" : "파이프라인 실행 중"} · ${task.task_id}`, "warning");
-    window.setTimeout(() => pollManualRun(taskId).catch((error) => setManualStatus(`상태를 읽지 못했습니다. ${error.message}`, "error")), 800);
+    window.setTimeout(() => pollManualRun(taskId).catch((error) => { setManualBusy(false); setManualStatus(`상태를 읽지 못했습니다. ${error.message}`, "error"); }), 800);
     return;
   }
   setManualBusy(false);
-  if (task.result_status === "failed" && task.run_id) {
+  if (task.result_status === "failed" && task.run_id && task.retryable) {
     showExternalRetryAction(task);
+  } else if (task.result_status === "failed") {
+    setManualStatus(`실행 실패 · ${task.message || task.error || "원인 미상"}`, "error");
   } else if (task.status === "failed") {
     setManualStatus(`실행 차단 · ${task.message || task.error || "원인 미상"}`, "error");
   } else if (task.result_status === "awaiting_user_confirmation") {
@@ -131,8 +134,10 @@ async function continueExternal(taskId) {
     const task = await response.json();
     if (!response.ok) throw new Error(task.error || `HTTP ${response.status}`);
     state.manualTask = task;
-    if (task.result_status === "failed" && task.run_id) {
+    if (task.result_status === "failed" && task.run_id && task.retryable) {
       showExternalRetryAction(task);
+    } else if (task.result_status === "failed") {
+      setManualStatus(`외부 저장 실패 · ${task.message || task.error || "원인 미상"}`, "error");
     } else if (task.result_status === "awaiting_user_confirmation") {
       showConfirmationAction(task);
     } else if (task.result_status === "local-only") {
@@ -195,8 +200,13 @@ async function startManualRun(event) {
   event.preventDefault();
   const topicSource = document.querySelector("#manual-topic-source").value;
   const keyword = document.querySelector("#manual-keyword").value.trim();
+  const asOfDate = document.querySelector("#manual-as-of").value;
   if (topicSource === "user_defined" && !keyword) {
     setManualStatus("사용자 주제는 키워드를 입력해야 합니다.", "error");
+    return;
+  }
+  if (!asOfDate) {
+    setManualStatus("정보 기준일(KST)을 입력해야 합니다.", "error");
     return;
   }
   const topicDescription = topicSource === "auto_selected" ? "자동 주제 선정" : `사용자 주제: ${keyword}`;
@@ -207,7 +217,7 @@ async function startManualRun(event) {
     const response = await fetch("/api/manual-run", {
       method:"POST",
       headers:{"Content-Type":"application/json"},
-      body:JSON.stringify(topicSource === "auto_selected" ? {auto_topic:true} : {keyword}),
+      body:JSON.stringify(topicSource === "auto_selected" ? {auto_topic:true, as_of_date:asOfDate} : {keyword, as_of_date:asOfDate}),
     });
     const task = await response.json();
     if (!response.ok) throw new Error(task.error || `HTTP ${response.status}`);

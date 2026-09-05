@@ -41,18 +41,22 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, JSONMap, str]:
     return tmp_path, manifest_path, manifest, run_id
 
 
-def _stage(run_id: str, status: str = "passed") -> JSONMap:
+def _stage(run_id: str, artifact_digest: str, status: str = "passed") -> JSONMap:
     return {
         "event_type": "stage",
         "pipeline_version": PIPELINE_VERSION,
+        "telemetry_version": 2,
         "batch_id": "BATCH-fixture",
         "run_id": run_id,
         "topic_id": "TOPIC-fixture",
         "stage": "content-assembler",
         "started_at": "2026-08-27T00:00:00+00:00",
         "ended_at": "2026-08-27T00:01:00+00:00",
+        "duration_ms": 60_000,
+        "depends_on": ["image-maker"],
         "status": status,
         "attempt": 1,
+        "quality": {"artifact_digest": artifact_digest},
     }
 
 
@@ -63,9 +67,11 @@ def _write_log(path: Path, events: list[JSONMap]) -> None:
 
 
 def test_validated_stage_does_not_satisfy_q1(tmp_path: Path) -> None:
-    root, manifest_path, _, run_id = _fixture(tmp_path)
+    root, manifest_path, manifest, run_id = _fixture(tmp_path)
     run_log = root / "run.jsonl"
-    _write_log(run_log, [_stage(run_id, status="validated")])
+    digest = manifest["artifact_digest"]
+    assert isinstance(digest, str)
+    _write_log(run_log, [_stage(run_id, digest, status="validated")])
 
     with pytest.raises(ContractError, match="Q1"):
         _ = verify_gate(GateRequest(
@@ -90,7 +96,9 @@ def test_legacy_approval_event_does_not_control_notion_preflight(
         "requested_at": "2026-08-27T00:02:00+00:00",
         "decided_at": "2026-08-27T00:03:00+00:00",
     }
-    _write_log(run_log, [_stage(run_id), approval])
+    digest = manifest["artifact_digest"]
+    assert isinstance(digest, str)
+    _write_log(run_log, [_stage(run_id, digest), approval])
 
     assert len(read_events(run_log)) == 2
     result = verify_gate(GateRequest(

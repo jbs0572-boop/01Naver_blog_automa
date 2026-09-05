@@ -4,6 +4,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
+from urllib.parse import parse_qs, urlsplit
 
 from tools.contract_types import ContractError, JSONMap
 
@@ -11,6 +12,7 @@ from tools.contract_types import ContractError, JSONMap
 @dataclass(frozen=True, slots=True)
 class NaverConfig:
     blog_id: str
+    browser_connector: str
     write_url: str
     drafts_url: str
     viewport: str
@@ -35,6 +37,9 @@ class PlaywrightSession(Protocol):
 
 
 class NaverBrowserAdapter(Protocol):
+    @property
+    def target_blog_id(self) -> str: ...
+
     def prepare(self, title: str, body: str, artifact_digest: str) -> JSONMap: ...
 
     def save(self, title: str, artifact_digest: str) -> JSONMap: ...
@@ -52,6 +57,7 @@ def load_naver_config(path: Path) -> NaverConfig:
         values[key] = value
     required = (
         "blog_id",
+        "browser_connector",
         "write_url",
         "drafts_url",
         "viewport",
@@ -66,8 +72,31 @@ def load_naver_config(path: Path) -> NaverConfig:
         raise ContractError("Naver config is incomplete")
     if values["viewport"] != "390x844":
         raise ContractError("Naver viewport must be 390x844")
+    if values["browser_connector"] != "browser":
+        raise ContractError("Naver browser connector must be browser")
     if values["selector_status"] != "verified":
         raise ContractError("Naver selectors require a supervised canary")
+    blog_id = values["blog_id"]
+    if re.fullmatch(r"[A-Za-z0-9._-]+", blog_id) is None:
+        raise ContractError("Naver blog ID is invalid")
+    for key in ("write_url", "drafts_url"):
+        try:
+            parsed = urlsplit(values[key])
+            port = parsed.port
+        except ValueError as error:
+            raise ContractError(f"Naver {key} is invalid") from error
+        query_blog_ids = parse_qs(parsed.query).get("blogId", [])
+        path_parts = tuple(part for part in parsed.path.split("/") if part)
+        if (
+            parsed.scheme != "https"
+            or parsed.hostname != "blog.naver.com"
+            or parsed.username is not None
+            or parsed.password is not None
+            or port is not None
+            or parsed.fragment
+            or (blog_id not in path_parts and blog_id not in query_blog_ids)
+        ):
+            raise ContractError(f"Naver {key} is not bound to the configured blog")
     return NaverConfig(*(values[key] for key in required))
 
 
@@ -75,6 +104,10 @@ def load_naver_config(path: Path) -> NaverConfig:
 class PlaywrightNaverAdapter:
     session: PlaywrightSession
     config: NaverConfig
+
+    @property
+    def target_blog_id(self) -> str:
+        return self.config.blog_id
 
     def prepare(self, title: str, body: str, artifact_digest: str) -> JSONMap:
         if not title or not body or not artifact_digest.startswith("sha256:"):

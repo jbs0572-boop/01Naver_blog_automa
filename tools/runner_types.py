@@ -45,6 +45,27 @@ class RunStatus(StrEnum):
     DRAFT_SAVED = "draft_saved"
 
 
+@dataclass(frozen=True, slots=True)
+class TopicSelectionContext:
+    category: str
+    audience: str
+    publish_purpose: str
+    as_of_date: str
+    timezone: str = "Asia/Seoul"
+
+    def as_json(self) -> JSONMap:
+        value: JSONMap = {"as_of_date": self.as_of_date, "timezone": self.timezone}
+        if self.category or self.audience or self.publish_purpose:
+            value.update(
+                {
+                    "category": self.category,
+                    "audience": self.audience,
+                    "publish_purpose": self.publish_purpose,
+                }
+            )
+        return value
+
+
 class StageExecution(StrEnum):
     NOT_CALLED = "not_called"
     ATTEMPTED = "attempted"
@@ -76,6 +97,7 @@ class StageExecutionContext:
     topic_id: str
     keyword: str | None
     work_dir: Path
+    selection_context: TopicSelectionContext | None = None
     q1_feedback: str | None = None
 
 
@@ -104,9 +126,11 @@ class RunnerRequest:
     state_dir: Path | None = None
     now: datetime | None = None
     auto_topic: bool = False
+    selection_context: TopicSelectionContext | None = None
     confirmed: bool = False
     executor: StageExecutor | None = None
     resume: bool = False
+    notion_target_id: str | None = None
     notion_adapter: NotionAdapter | None = None
     naver_adapter: NaverBrowserAdapter | None = None
 
@@ -167,6 +191,8 @@ class StageEventContext:
     started_at: str
     ended_at: str
     attempt: int
+    duration_ms: float
+    depends_on: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,6 +200,7 @@ class StageEventOutcome:
     status: RunStatus
     execution: StageExecution
     message: str | None
+    details: JSONMap | None = None
 
 
 @dataclass(frozen=True, slots=True)

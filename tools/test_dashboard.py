@@ -10,6 +10,7 @@ from typing import override
 from urllib.parse import urlparse
 
 from tools.contract_types import ContractError, JSONValue
+from tools.dashboard_adapters import load_dashboard_external_adapters
 from tools.dashboard_data import snapshot
 from tools.dashboard_manual_models import (
     ManualRunContext,
@@ -193,10 +194,27 @@ def main() -> None:
         action="store_true",
         help="show in-memory fixture runs when no logs exist",
     )
+    _ = parser.add_argument(
+        "--live-writes",
+        action="store_true",
+        help="enable Notion writes and supervised Naver draft saving",
+    )
     args = parser.parse_args()
     root = args.root.resolve()
+    dependencies: DashboardServerDependencies | None = None
+    if args.live_writes:
+        try:
+            adapters = load_dashboard_external_adapters(root)
+        except ContractError as error:
+            _ = print(f"dashboard: {error}")
+            return
+        dependencies = DashboardServerDependencies(
+            notion_adapter=adapters.notion,
+            naver_adapter=adapters.naver,
+        )
     with DashboardServer(
-        DashboardServerConfig((args.host, args.port), root, args.demo)
+        DashboardServerConfig((args.host, args.port), root, args.demo),
+        dependencies,
     ) as server:
         _ = print(f"QA dashboard: http://{args.host}:{args.port}")
         _ = print(

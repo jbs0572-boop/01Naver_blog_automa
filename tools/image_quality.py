@@ -102,25 +102,22 @@ def _check_metadata(record: JSONMap, index: int, metadata_path: Path) -> str:
         raise ContractError(
             f"image metadata record {index} is missing: {', '.join(missing)}"
         )
-    if (
-        _text(record, "generation_provider") != "openai"
-        or _text(record, "generation_model") != "gpt-image-2"
-    ):
-        raise ContractError(
-            f"image metadata record {index} has unsupported provider or model"
-        )
-    if _text(record, "generation_snapshot") != SNAPSHOT:
-        raise ContractError(
-            f"image metadata record {index} has unsupported model snapshot"
-        )
     control = _text(record, "generation_control")
-    if control not in {"locked", "unlocked"}:
+    if control not in {"locked", "unlocked", "unavailable"}:
         raise ContractError(
             f"image metadata record {index} has invalid generation_control"
         )
-    if control != "locked":
+    if control == "unlocked":
         raise ContractError(
             f"image metadata record {index} is not generation_control=locked"
+        )
+    if control == "locked" and (
+        _text(record, "generation_provider") != "openai"
+        or _text(record, "generation_model") != "gpt-image-2"
+        or _text(record, "generation_snapshot") != SNAPSHOT
+    ):
+        raise ContractError(
+            f"image metadata record {index} has unsupported locked provider/model"
         )
     if _text(record, "quality") != "high" or not SIZE_RE.fullmatch(
         _text(record, "size")

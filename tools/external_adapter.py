@@ -5,7 +5,7 @@ import json
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Protocol
+from typing import Literal, Protocol
 
 from tools.contract_types import ContractError, JSONMap, JSONValue
 from tools.gate import GateRequest, authorize_external_write
@@ -22,6 +22,9 @@ class ExternalAction(StrEnum):
     NAVER_DRAFT_SAVE = "naver_draft_save"
 
 
+type NotionWriteOperation = Literal["create_attachment", "create_page"]
+
+
 @dataclass(frozen=True, slots=True)
 class ExternalWriteRequest:
     root: Path
@@ -32,6 +35,8 @@ class ExternalWriteRequest:
     run_id: str
     target_id: str
     dry_run: bool
+    checkpoint_path: Path | None = None
+    notion_timeout_seconds: float = 15 * 60
     notion_page_id: str | None = None
     notion_verified_at: str | None = None
     blog_id: str | None = None
@@ -65,6 +70,26 @@ class ExternalWritePlan:
         }
 
 
+def authorize_notion_operation(
+    request: ExternalWriteRequest, operation: NotionWriteOperation
+) -> JSONMap:
+    if request.system is not ExternalSystem.NOTION:
+        raise ContractError("Notion operation authorization requires Notion system")
+    return authorize_external_write(
+        GateRequest(
+            root=request.root,
+            manifest_path=request.manifest_path,
+            run_log=request.run_log,
+            gate=request.gate,
+            run_id=request.run_id,
+            target_id=request.target_id,
+            notion_connector=True,
+            notion_operation=operation,
+            notion_resource_id=request.target_id,
+        )
+    )
+
+
 def normalize_notion_page(page: JSONMap) -> JSONMap:
     blocks = page.get("blocks")
     if not isinstance(blocks, list):
@@ -81,6 +106,12 @@ def normalize_notion_page(page: JSONMap) -> JSONMap:
             item = value.get(key)
             if isinstance(item, (str, int)):
                 normalized[key] = item
+        rich_text = value.get("rich_text")
+        if isinstance(rich_text, list):
+            normalized["rich_text"] = rich_text
+        table_rich_text = value.get("table_rich_text")
+        if isinstance(table_rich_text, list):
+            normalized["table_rich_text"] = table_rich_text
         table_cells = value.get("table_cells")
         if isinstance(table_cells, list) and all(
             isinstance(cell, str) for cell in table_cells
@@ -89,10 +120,18 @@ def normalize_notion_page(page: JSONMap) -> JSONMap:
         image = value.get("image")
         if isinstance(image, dict):
             image_data: JSONMap = {}
-            for key in ("artifact_role", "original_sha256", "caption", "order"):
+            for key in (
+                "artifact_role",
+                "original_sha256",
+                "caption",
+                "order",
+            ):
                 item = image.get(key)
                 if isinstance(item, (str, int)):
                     image_data[key] = item
+            caption_rich_text = image.get("caption_rich_text")
+            if isinstance(caption_rich_text, list):
+                image_data["caption_rich_text"] = caption_rich_text
             normalized["image"] = image_data
         normalized_blocks.append(normalized)
     title = page.get("title")
@@ -144,12 +183,13 @@ def verify_notion_round_trip(
         "notion_last_verified_at": verified_at,
         "expected_notion_content_digest": expected_digest,
         "notion_content_digest": actual_digest,
-        "notion_roundtrip_digest": artifact_digest,
+        "notion_roundtrip_digest": actual_digest,
+        "artifact_digest": artifact_digest,
         "first_image_block": "thumbnail",
     }
 
 
-def plan_external_write(request: ExternalWriteRequest) -> ExternalWritePlan:
+def prepare_external_write(request: ExternalWriteRequest) -> ExternalWritePlan:
     expected_gate = (
         ExternalAction.NOTION_WRITE
         if request.system is ExternalSystem.NOTION
@@ -176,13 +216,13 @@ def plan_external_write(request: ExternalWriteRequest) -> ExternalWritePlan:
         )
     )
     manifest = verify_manifest(request.root, request.manifest_path)
-    if not request.dry_run:
-        raise ContractError("external writes are not implemented; use dry-run")
     action = expected_gate
     paths = tuple(entry.path for entry in manifest.files)
     digest = verified.get("verified_artifact_digest")
     if not isinstance(digest, str):
         raise ContractError("verified gate did not return an artifact digest")
+    if digest != manifest.artifact_digest:
+        raise ContractError("verified gate artifact digest does not match manifest")
     return ExternalWritePlan(
         request.system,
         action,
@@ -190,9 +230,16 @@ def plan_external_write(request: ExternalWriteRequest) -> ExternalWritePlan:
         request.target_id,
         digest,
         paths,
-        True,
-        False,
+        request.dry_run,
+        not request.dry_run,
     )
+
+
+def plan_external_write(request: ExternalWriteRequest) -> ExternalWritePlan:
+    plan = prepare_external_write(request)
+    if not request.dry_run:
+        raise ContractError("external writes are not implemented; use dry-run")
+    return plan
 
 
 __all__ = [
@@ -201,8 +248,11 @@ __all__ = [
     "ExternalWritePlan",
     "ExternalWriteRequest",
     "NotionAdapter",
+    "NotionWriteOperation",
+    "authorize_notion_operation",
     "normalize_notion_page",
     "notion_content_digest",
     "plan_external_write",
+    "prepare_external_write",
     "verify_notion_round_trip",
 ]

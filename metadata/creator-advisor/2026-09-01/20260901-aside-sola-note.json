@@ -1,0 +1,648 @@
+{
+  "access_status": "read_only_success",
+  "as_of_date": "2026-09-01",
+  "candidates": [
+    {
+      "average_exposure_rank": null,
+      "channel_inflow": null,
+      "competition_index": null,
+      "duplicate_key": null,
+      "exposure": null,
+      "keyword": "맘스터치 귀멸의칼날",
+      "missing_fields": [
+        "trend_index",
+        "channel_inflow",
+        "exposure",
+        "average_exposure_rank",
+        "competition_index"
+      ],
+      "rank": 1,
+      "raw_observation": {
+        "category": "맛집",
+        "movement": "new"
+      },
+      "trend_index": null
+    },
+    {
+      "average_exposure_rank": null,
+      "channel_inflow": null,
+      "competition_index": null,
+      "duplicate_key": null,
+      "exposure": null,
+      "keyword": "맘스터치 귀칼",
+      "missing_fields": [
+        "trend_index",
+        "channel_inflow",
+        "exposure",
+        "average_exposure_rank",
+        "competition_index"
+      ],
+      "rank": 2,
+      "raw_observation": {
+        "category": "맛집",
+        "movement": "new"
+      },
+      "trend_index": null
+    },
+    {
+      "average_exposure_rank": null,
+      "channel_inflow": null,
+      "competition_index": null,
+      "duplicate_key": null,
+      "exposure": null,
+      "keyword": "치폴레 강남",
+      "missing_fields": [
+        "trend_index",
+        "channel_inflow",
+        "exposure",
+        "average_exposure_rank",
+        "competition_index"
+      ],
+      "rank": 3,
+      "raw_observation": {
+        "category": "맛집",
+        "movement": "down 2"
+      },
+      "trend_index": null
+    },
+    {
+      "average_exposure_rank": null,
+      "channel_inflow": null,
+      "competition_index": null,
+      "duplicate_key": null,
+      "exposure": null,
+      "keyword": "한정선",
+      "missing_fields": [
+        "trend_index",
+        "channel_inflow",
+        "exposure",
+        "average_exposure_rank",
+        "competition_index"
+      ],
+      "rank": 4,
+      "raw_observation": {
+        "category": "맛집",
+        "movement": "-"
+      },
+      "trend_index": null
+    },
+    {
+      "average_exposure_rank": null,
+      "channel_inflow": null,
+      "competition_index": null,
+      "duplicate_key": null,
+      "exposure": null,
+      "keyword": "한정선 찹쌀떡",
+      "missing_fields": [
+        "trend_index",
+        "channel_inflow",
+        "exposure",
+        "average_exposure_rank",
+        "competition_index"
+      ],
+      "rank": 5,
+      "raw_observation": {
+        "category": "맛집",
+        "movement": "down 3"
+      },
+      "trend_index": null
+    },
+    {
+      "average_exposure_rank": null,
+      "channel_inflow": null,
+      "competition_index": null,
+      "duplicate_key": null,
+      "exposure": null,
+      "keyword": "치폴레",
+      "missing_fields": [
+        "trend_index",
+        "channel_inflow",
+        "exposure",
+        "average_exposure_rank",
+        "competition_index"
+      ],
+      "rank": 6,
+      "raw_observation": {
+        "category": "맛집",
+        "movement": "up 30"
+      },
+      "trend_index": null
+    },
+    {
+      "average_exposure_rank": null,
+      "channel_inflow": null,
+      "competition_index": null,
+      "duplicate_key": null,
+      "exposure": null,
+      "keyword": "피자설기",
+      "missing_fields": [
+        "trend_index",
+        "channel_inflow",
+        "exposure",
+        "average_exposure_rank",
+        "competition_index"
+      ],
+      "rank": 7,
+      "raw_observation": {
+        "category": "맛집",
+        "movement": "down 1"
+      },
+      "trend_index": null
+    },
+    {
+      "average_exposure_rank": null,
+      "channel_inflow": null,
+      "competition_index": null,
+      "duplicate_key": null,
+      "exposure": null,
+      "keyword": "성심당 빵 추천",
+      "missing_fields": [
+        "trend_index",
+        "channel_inflow",
+        "exposure",
+        "average_exposure_rank",
+        "competition_index"
+      ],
+      "rank": 8,
+      "raw_observation": {
+        "category": "맛집",
+        "movement": "down 3"
+      },
+      "trend_index": null
+    },
+    {
+      "average_exposure_rank": null,
+      "channel_inflow": null,
+      "competition_index": null,
+      "duplicate_key": null,
+      "exposure": null,
+      "keyword": "상암동 이모카세",
+      "missing_fields": [
+        "trend_index",
+        "channel_inflow",
+        "exposure",
+        "average_exposure_rank",
+        "competition_index"
+      ],
+      "rank": 9,
+      "raw_observation": {
+        "category": "맛집",
+        "movement": "new"
+      },
+      "trend_index": null
+    },
+    {
+      "average_exposure_rank": null,
+      "channel_inflow": null,
+      "competition_index": null,
+      "duplicate_key": null,
+      "exposure": null,
+      "keyword": "크리스피도넛 1+1",
+      "missing_fields": [
+        "trend_index",
+        "channel_inflow",
+        "exposure",
+        "average_exposure_rank",
+        "competition_index"
+      ],
+      "rank": 10,
+      "raw_observation": {
+        "category": "맛집",
+        "movement": "up 73"
+      },
+      "trend_index": null
+    },
+    {
+      "average_exposure_rank": null,
+      "channel_inflow": null,
+      "competition_index": null,
+      "duplicate_key": null,
+      "exposure": null,
+      "keyword": "10만원대 디올 대체, 지수 백팩 품절 대란",
+      "missing_fields": [
+        "trend_index",
+        "channel_inflow",
+        "exposure",
+        "average_exposure_rank",
+        "competition_index"
+      ],
+      "rank": 1,
+      "raw_observation": {
+        "category": "패션·미용",
+        "movement": "new"
+      },
+      "trend_index": null
+    },
+    {
+      "average_exposure_rank": null,
+      "channel_inflow": null,
+      "competition_index": null,
+      "duplicate_key": null,
+      "exposure": null,
+      "keyword": "루이비통 퇴사자 선정 최악의 가방 3가지",
+      "missing_fields": [
+        "trend_index",
+        "channel_inflow",
+        "exposure",
+        "average_exposure_rank",
+        "competition_index"
+      ],
+      "rank": 2,
+      "raw_observation": {
+        "category": "패션·미용",
+        "movement": "new"
+      },
+      "trend_index": null
+    },
+    {
+      "average_exposure_rank": null,
+      "channel_inflow": null,
+      "competition_index": null,
+      "duplicate_key": null,
+      "exposure": null,
+      "keyword": "수지 현실 가방, 셀린느 듀오백",
+      "missing_fields": [
+        "trend_index",
+        "channel_inflow",
+        "exposure",
+        "average_exposure_rank",
+        "competition_index"
+      ],
+      "rank": 3,
+      "raw_observation": {
+        "category": "패션·미용",
+        "movement": "new"
+      },
+      "trend_index": null
+    },
+    {
+      "average_exposure_rank": null,
+      "channel_inflow": null,
+      "competition_index": null,
+      "duplicate_key": null,
+      "exposure": null,
+      "keyword": "px 화장품",
+      "missing_fields": [
+        "trend_index",
+        "channel_inflow",
+        "exposure",
+        "average_exposure_rank",
+        "competition_index"
+      ],
+      "rank": 4,
+      "raw_observation": {
+        "category": "패션·미용",
+        "movement": "up 4"
+      },
+      "trend_index": null
+    },
+    {
+      "average_exposure_rank": null,
+      "channel_inflow": null,
+      "competition_index": null,
+      "duplicate_key": null,
+      "exposure": null,
+      "keyword": "김혜수, 헤어스타일보다 중요한 것",
+      "missing_fields": [
+        "trend_index",
+        "channel_inflow",
+        "exposure",
+        "average_exposure_rank",
+        "competition_index"
+      ],
+      "rank": 5,
+      "raw_observation": {
+        "category": "패션·미용",
+        "movement": "new"
+      },
+      "trend_index": null
+    },
+    {
+      "average_exposure_rank": null,
+      "channel_inflow": null,
+      "competition_index": null,
+      "duplicate_key": null,
+      "exposure": null,
+      "keyword": "600만원대 샤넬 가방 본전 뽑는 김소현",
+      "missing_fields": [
+        "trend_index",
+        "channel_inflow",
+        "exposure",
+        "average_exposure_rank",
+        "competition_index"
+      ],
+      "rank": 6,
+      "raw_observation": {
+        "category": "패션·미용",
+        "movement": "new"
+      },
+      "trend_index": null
+    },
+    {
+      "average_exposure_rank": null,
+      "channel_inflow": null,
+      "competition_index": null,
+      "duplicate_key": null,
+      "exposure": null,
+      "keyword": "바이린샵 패밀리세일",
+      "missing_fields": [
+        "trend_index",
+        "channel_inflow",
+        "exposure",
+        "average_exposure_rank",
+        "competition_index"
+      ],
+      "rank": 7,
+      "raw_observation": {
+        "category": "패션·미용",
+        "movement": "up 7"
+      },
+      "trend_index": null
+    },
+    {
+      "average_exposure_rank": null,
+      "channel_inflow": null,
+      "competition_index": null,
+      "duplicate_key": null,
+      "exposure": null,
+      "keyword": "박하선 사복패션, 디올 백과 롤렉스 정보",
+      "missing_fields": [
+        "trend_index",
+        "channel_inflow",
+        "exposure",
+        "average_exposure_rank",
+        "competition_index"
+      ],
+      "rank": 8,
+      "raw_observation": {
+        "category": "패션·미용",
+        "movement": "new"
+      },
+      "trend_index": null
+    },
+    {
+      "average_exposure_rank": null,
+      "channel_inflow": null,
+      "competition_index": null,
+      "duplicate_key": null,
+      "exposure": null,
+      "keyword": "노스페이스 벤투스",
+      "missing_fields": [
+        "trend_index",
+        "channel_inflow",
+        "exposure",
+        "average_exposure_rank",
+        "competition_index"
+      ],
+      "rank": 9,
+      "raw_observation": {
+        "category": "패션·미용",
+        "movement": "up 19"
+      },
+      "trend_index": null
+    },
+    {
+      "average_exposure_rank": null,
+      "channel_inflow": null,
+      "competition_index": null,
+      "duplicate_key": null,
+      "exposure": null,
+      "keyword": "디올 대신 선택한 10만원대 지수백팩",
+      "missing_fields": [
+        "trend_index",
+        "channel_inflow",
+        "exposure",
+        "average_exposure_rank",
+        "competition_index"
+      ],
+      "rank": 10,
+      "raw_observation": {
+        "category": "패션·미용",
+        "movement": "new"
+      },
+      "trend_index": null
+    },
+    {
+      "average_exposure_rank": null,
+      "channel_inflow": null,
+      "competition_index": null,
+      "duplicate_key": null,
+      "exposure": null,
+      "keyword": "여의도 불꽃축제",
+      "missing_fields": [
+        "trend_index",
+        "channel_inflow",
+        "exposure",
+        "average_exposure_rank",
+        "competition_index"
+      ],
+      "rank": 1,
+      "raw_observation": {
+        "category": "국내여행",
+        "movement": "up 1"
+      },
+      "trend_index": null
+    },
+    {
+      "average_exposure_rank": null,
+      "channel_inflow": null,
+      "competition_index": null,
+      "duplicate_key": null,
+      "exposure": null,
+      "keyword": "불꽃축제",
+      "missing_fields": [
+        "trend_index",
+        "channel_inflow",
+        "exposure",
+        "average_exposure_rank",
+        "competition_index"
+      ],
+      "rank": 2,
+      "raw_observation": {
+        "category": "국내여행",
+        "movement": "up 1"
+      },
+      "trend_index": null
+    },
+    {
+      "average_exposure_rank": null,
+      "channel_inflow": null,
+      "competition_index": null,
+      "duplicate_key": null,
+      "exposure": null,
+      "keyword": "속초 가볼만한곳",
+      "missing_fields": [
+        "trend_index",
+        "channel_inflow",
+        "exposure",
+        "average_exposure_rank",
+        "competition_index"
+      ],
+      "rank": 3,
+      "raw_observation": {
+        "category": "국내여행",
+        "movement": "up 2"
+      },
+      "trend_index": null
+    },
+    {
+      "average_exposure_rank": null,
+      "channel_inflow": null,
+      "competition_index": null,
+      "duplicate_key": null,
+      "exposure": null,
+      "keyword": "강릉 가볼만한곳",
+      "missing_fields": [
+        "trend_index",
+        "channel_inflow",
+        "exposure",
+        "average_exposure_rank",
+        "competition_index"
+      ],
+      "rank": 4,
+      "raw_observation": {
+        "category": "국내여행",
+        "movement": "up 14"
+      },
+      "trend_index": null
+    },
+    {
+      "average_exposure_rank": null,
+      "channel_inflow": null,
+      "competition_index": null,
+      "duplicate_key": null,
+      "exposure": null,
+      "keyword": "성심당",
+      "missing_fields": [
+        "trend_index",
+        "channel_inflow",
+        "exposure",
+        "average_exposure_rank",
+        "competition_index"
+      ],
+      "rank": 5,
+      "raw_observation": {
+        "category": "국내여행",
+        "movement": "up 5"
+      },
+      "trend_index": null
+    },
+    {
+      "average_exposure_rank": null,
+      "channel_inflow": null,
+      "competition_index": null,
+      "duplicate_key": null,
+      "exposure": null,
+      "keyword": "서울 불꽃축제 2026",
+      "missing_fields": [
+        "trend_index",
+        "channel_inflow",
+        "exposure",
+        "average_exposure_rank",
+        "competition_index"
+      ],
+      "rank": 6,
+      "raw_observation": {
+        "category": "국내여행",
+        "movement": "up 2"
+      },
+      "trend_index": null
+    },
+    {
+      "average_exposure_rank": null,
+      "channel_inflow": null,
+      "competition_index": null,
+      "duplicate_key": null,
+      "exposure": null,
+      "keyword": "여수 가볼만한곳",
+      "missing_fields": [
+        "trend_index",
+        "channel_inflow",
+        "exposure",
+        "average_exposure_rank",
+        "competition_index"
+      ],
+      "rank": 7,
+      "raw_observation": {
+        "category": "국내여행",
+        "movement": "-"
+      },
+      "trend_index": null
+    },
+    {
+      "average_exposure_rank": null,
+      "channel_inflow": null,
+      "competition_index": null,
+      "duplicate_key": null,
+      "exposure": null,
+      "keyword": "추석 기차표 예매",
+      "missing_fields": [
+        "trend_index",
+        "channel_inflow",
+        "exposure",
+        "average_exposure_rank",
+        "competition_index"
+      ],
+      "rank": 8,
+      "raw_observation": {
+        "category": "국내여행",
+        "movement": "down 2"
+      },
+      "trend_index": null
+    },
+    {
+      "average_exposure_rank": null,
+      "channel_inflow": null,
+      "competition_index": null,
+      "duplicate_key": null,
+      "exposure": null,
+      "keyword": "반값여행",
+      "missing_fields": [
+        "trend_index",
+        "channel_inflow",
+        "exposure",
+        "average_exposure_rank",
+        "competition_index"
+      ],
+      "rank": 9,
+      "raw_observation": {
+        "category": "국내여행",
+        "movement": "up 10"
+      },
+      "trend_index": null
+    },
+    {
+      "average_exposure_rank": null,
+      "channel_inflow": null,
+      "competition_index": null,
+      "duplicate_key": null,
+      "exposure": null,
+      "keyword": "무주 반딧불축제",
+      "missing_fields": [
+        "trend_index",
+        "channel_inflow",
+        "exposure",
+        "average_exposure_rank",
+        "competition_index"
+      ],
+      "rank": 10,
+      "raw_observation": {
+        "category": "국내여행",
+        "movement": "up 5"
+      },
+      "trend_index": null
+    }
+  ],
+  "capture_id": "20260901-aside-sola-note",
+  "captured_at": "2026-09-05T18:14:56.160351+09:00",
+  "channel_id": "naver_blog",
+  "limitations": [
+    "Only 맛집, 패션·미용, 국내여행 groups were populated during verification; other groups remained loading.",
+    "Creator Advisor states that the terms represent blog-post search inflow and exclude Clip inflow.",
+    "Displayed movement labels were preserved as raw observations; numeric trend indices were not exposed."
+  ],
+  "query_period": "2026-09-01 daily",
+  "schema_version": "creator-advisor-snapshot-v1",
+  "source_url": "https://creator-advisor.naver.com/naver_blog/sola_note",
+  "timezone": "Asia/Seoul"
+}

@@ -8,7 +8,12 @@ from typing import Literal
 from tools.contract_types import JSONMap
 from tools.external_adapter import NotionAdapter
 from tools.naver_adapter import NaverBrowserAdapter
-from tools.runner_types import RunnerRequest, RunnerResult, StageExecutor
+from tools.runner_types import (
+    RunnerRequest,
+    RunnerResult,
+    StageExecutor,
+    TopicSelectionContext,
+)
 
 type ManualStatus = Literal["queued", "running", "completed", "failed"]
 Runner = Callable[[RunnerRequest], RunnerResult]
@@ -36,6 +41,7 @@ class ConfirmationPreview:
 class ManualRunInput:
     keyword: str | None
     auto_topic: bool
+    selection_context: TopicSelectionContext | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,6 +54,7 @@ class ManualRunView:
     result_status: str | None = None
     message: str | None = None
     error: str | None = None
+    retryable: bool = False
     confirmation_preview: ConfirmationPreview | None = None
 
     def as_json(self) -> JSONMap:
@@ -60,6 +67,7 @@ class ManualRunView:
             "result_status": self.result_status,
             "message": self.message,
             "error": self.error,
+            "retryable": self.retryable,
             "confirmation_preview": (
                 self.confirmation_preview.as_json()
                 if self.confirmation_preview is not None
@@ -90,4 +98,5 @@ class ManualRunUpdate:
     result_status: str | None = None
     message: str | None = None
     error: str | None = None
+    retryable: bool | None = None
     confirmation_preview: ConfirmationPreview | None = None

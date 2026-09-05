@@ -8,7 +8,12 @@ from datetime import datetime
 from pathlib import Path
 
 from tools.contract_types import ContractError, JSONMap, JSONValue
-from tools.runner_types import RunnerRequest, RunnerResult, RunStatus
+from tools.runner_types import (
+    RunnerRequest,
+    RunnerResult,
+    RunStatus,
+    TopicSelectionContext,
+)
 
 
 def state_paths(
@@ -115,6 +120,12 @@ def input_fingerprint(request: RunnerRequest) -> str:
     material: JSONMap = {
         "job": request.job,
         "keyword": "auto-topic" if request.auto_topic else request.keyword,
+        "notion_target_id": request.notion_target_id,
+        "selection_context": (
+            request.selection_context.as_json()
+            if request.selection_context is not None
+            else None
+        ),
         "inputs": records,
     }
     encoded = json.dumps(
@@ -137,6 +148,14 @@ def atomic_write_json(path: Path, value: JSONMap) -> None:
             os.fsync(handle.fileno())
         os.replace(temporary, path)
         temporary = None
+        directory_fd = os.open(
+            path.parent,
+            os.O_RDONLY | getattr(os, "O_DIRECTORY", 0),
+        )
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
     except OSError as error:
         raise ContractError(f"could not atomically write state: {path}") from error
     finally:
@@ -189,14 +208,33 @@ def request_from_state(
     job = state.get("job")
     keyword = state.get("keyword")
     run_id = state.get("run_id")
+    notion_target_id = state.get("notion_target_id")
     if (
         not isinstance(job, str)
         or (keyword is not None and not isinstance(keyword, str))
         or not isinstance(run_id, str)
+        or (notion_target_id is not None and not isinstance(notion_target_id, str))
     ):
         raise ContractError(
             "runner state cannot be recovered: request fields are invalid"
         )
+    context_value = state.get("selection_context")
+    selection_context = None
+    if isinstance(context_value, dict):
+        fields: dict[str, str] = {}
+        for key in ("category", "audience", "publish_purpose", "as_of_date", "timezone"):
+            value = context_value.get(key)
+            if not isinstance(value, str):
+                break
+            fields[key] = value
+        else:
+            selection_context = TopicSelectionContext(
+                fields["category"],
+                fields["audience"],
+                fields["publish_purpose"],
+                fields["as_of_date"],
+                fields["timezone"],
+            )
     return RunnerRequest(
         root=root,
         job=job,
@@ -205,8 +243,10 @@ def request_from_state(
         dry_run=state.get("dry_run") is True,
         state_dir=state_dir,
         auto_topic=state.get("auto_topic") is True,
+        selection_context=selection_context,
         confirmed=state.get("confirmation") is not None,
         resume=True,
+        notion_target_id=notion_target_id,
     )
 
 

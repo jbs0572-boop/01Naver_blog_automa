@@ -47,22 +47,28 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str]:
     manifest_path = tmp_path / "manifest.json"
     _ = manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     run_log = tmp_path / "run.jsonl"
-    _ = run_log.write_text(json.dumps(_stage(run_id)) + "\n", encoding="utf-8")
+    digest = manifest["artifact_digest"]
+    assert isinstance(digest, str)
+    _ = run_log.write_text(json.dumps(_stage(run_id, digest)) + "\n", encoding="utf-8")
     return tmp_path, manifest_path, run_log, run_id
 
 
-def _stage(run_id: str) -> JSONMap:
+def _stage(run_id: str, artifact_digest: str) -> JSONMap:
     return {
         "event_type": "stage",
         "pipeline_version": PIPELINE_VERSION,
+        "telemetry_version": 2,
         "batch_id": "BATCH-notion-hook",
         "run_id": run_id,
         "topic_id": "TOPIC-notion-hook",
         "stage": "content-assembler",
         "started_at": "2026-08-27T00:00:00+00:00",
         "ended_at": "2026-08-27T00:01:00+00:00",
+        "duration_ms": 60_000,
+        "depends_on": ["image-maker"],
         "status": "passed",
         "attempt": 1,
+        "quality": {"artifact_digest": artifact_digest},
     }
 
 
@@ -179,7 +185,9 @@ def test_approval_free_write_denies_unbound_notion_targets(
 
 def test_hook_binds_manifest_and_q1_to_same_run(tmp_path: Path) -> None:
     root, manifest_path, run_log, _ = _fixture(tmp_path)
-    _ = run_log.write_text(json.dumps(_stage("RUN-other")) + "\n", encoding="utf-8")
+    digest = json.loads(manifest_path.read_text(encoding="utf-8"))["artifact_digest"]
+    assert isinstance(digest, str)
+    _ = run_log.write_text(json.dumps(_stage("RUN-other", digest)) + "\n", encoding="utf-8")
 
     result = _hook(
         root,

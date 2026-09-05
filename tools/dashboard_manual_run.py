@@ -5,11 +5,9 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import UTC, datetime
 from threading import Lock
-from typing import Final
 
-from tools.contract_types import ContractError, JSONMap
+from tools.contract_types import ContractError
 from tools.dashboard_manual_models import (
-    ConfirmationPreview,
     ManualRunContext,
     ManualRunDependencies,
     ManualRunInput,
@@ -17,68 +15,18 @@ from tools.dashboard_manual_models import (
     ManualRunView,
     Runner,
 )
+from tools.dashboard_manual_request import (
+    confirmation_preview,
+    demo_runner,
+    parse_manual_run_payload,
+)
 from tools.runner_execution import confirm_job, resume_job
-from tools.runner_state import read_state
+from tools.runner_notion_action import configured_notion_target
 from tools.runner_types import (
     ConfirmationInput,
     RunnerRequest,
-    RunnerResult,
     RunStatus,
 )
-
-MANUAL_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset({"keyword", "auto_topic"})
-IMAGE_SUFFIXES: Final[tuple[str, ...]] = (".gif", ".jpeg", ".jpg", ".png", ".webp")
-
-
-def _demo_runner(request: RunnerRequest) -> RunnerResult:
-    return RunnerResult(
-        "RUN-demo-manual",
-        RunStatus.LOCAL_ONLY,
-        request.root / ".automation" / "state" / "RUN-demo-manual.json",
-        request.root / ".automation" / "logs" / "RUN-demo-manual.jsonl",
-        (),
-        "프로젝트 파일과 외부 저장소를 변경하지 않은 데모 실행입니다",
-    )
-
-
-def parse_manual_run_payload(payload: JSONMap) -> ManualRunInput:
-    unknown_keys = set(payload) - MANUAL_PAYLOAD_KEYS
-    if unknown_keys:
-        raise ContractError("manual daily-generate payload has unknown keys")
-    if set(payload) == {"keyword"}:
-        keyword = payload["keyword"]
-        if isinstance(keyword, str) and keyword.strip():
-            return ManualRunInput(keyword.strip(), False)
-    if set(payload) == {"auto_topic"} and payload["auto_topic"] is True:
-        return ManualRunInput(None, True)
-    raise ContractError("manual daily-generate requires exactly one topic source")
-
-
-def _confirmation_preview(result: RunnerResult) -> ConfirmationPreview | None:
-    if result.status is not RunStatus.AWAITING_USER_CONFIRMATION:
-        return None
-    state = read_state(result.state_path)
-    target_blog_id = state.get("target_blog_id")
-    title = state.get("naver_title")
-    artifact_digest = state.get("artifact_digest")
-    artifact_paths = state.get("artifact_paths")
-    if (
-        not isinstance(target_blog_id, str)
-        or not isinstance(title, str)
-        or not isinstance(artifact_digest, str)
-        or not isinstance(artifact_paths, list)
-    ):
-        raise ContractError("Naver confirmation preview is incomplete")
-    images = tuple(
-        value
-        for value in artifact_paths
-        if isinstance(value, str) and value.lower().endswith(IMAGE_SUFFIXES)
-    )
-    if not images:
-        raise ContractError("Naver confirmation preview has no images")
-    return ConfirmationPreview(
-        "naver-draft-save", target_blog_id, title, images, artifact_digest
-    )
 
 
 class ManualRunManager:
@@ -89,7 +37,7 @@ class ManualRunManager:
     ) -> None:
         self._context: ManualRunContext = context
         self._dependencies: ManualRunDependencies = dependencies
-        self._runner: Runner = _demo_runner if context.demo else dependencies.runner
+        self._runner: Runner = demo_runner if context.demo else dependencies.runner
         self._lock: Lock = Lock()
         self._tasks: dict[str, ManualRunView] = {}
         self._pool: ThreadPoolExecutor = ThreadPoolExecutor(
@@ -134,7 +82,7 @@ class ManualRunManager:
                 )
             )
         except (ContractError, OSError, TimeoutError, ValueError) as error:
-            self._update(task_id, ManualRunUpdate(status="failed", error=type(error).__name__))
+            self._update(task_id, ManualRunUpdate(status="failed", error=type(error).__name__, retryable=True))
             raise
         self._update(
             task_id,
@@ -143,6 +91,7 @@ class ManualRunManager:
                 run_id=result.run_id,
                 result_status=result.status.value,
                 message=result.message,
+                retryable=result.status is RunStatus.FAILED,
             ),
         )
         updated = self.get(task_id)
@@ -176,14 +125,22 @@ class ManualRunManager:
                     run_id=view.run_id,
                     dry_run=not self._context.live_writes,
                     executor=self._dependencies.executor,
-                    notion_adapter=self._dependencies.notion_adapter,
-                    naver_adapter=self._dependencies.naver_adapter,
+                    notion_adapter=(
+                        self._dependencies.notion_adapter
+                        if self._context.live_writes
+                        else None
+                    ),
+                    naver_adapter=(
+                        self._dependencies.naver_adapter
+                        if self._context.live_writes
+                        else None
+                    ),
                     resume=True,
                 )
             )
-            preview = _confirmation_preview(result)
+            preview = confirmation_preview(result)
         except (ContractError, OSError, TimeoutError, ValueError) as error:
-            self._update(task_id, ManualRunUpdate(status="failed", error=type(error).__name__))
+            self._update(task_id, ManualRunUpdate(status="failed", error=type(error).__name__, retryable=True))
             raise
         self._update(
             task_id,
@@ -192,6 +149,7 @@ class ManualRunManager:
                 run_id=result.run_id,
                 result_status=result.status.value,
                 message=result.message,
+                retryable=result.status is RunStatus.FAILED,
                 confirmation_preview=preview,
             ),
         )
@@ -209,15 +167,24 @@ class ManualRunManager:
                     job="daily-generate",
                     keyword=manual.keyword,
                     auto_topic=manual.auto_topic,
-                    dry_run=not self._context.live_writes,
+                    selection_context=manual.selection_context,
+                    dry_run=False,
                     executor=self._dependencies.executor,
-                    notion_adapter=self._dependencies.notion_adapter,
-                    naver_adapter=self._dependencies.naver_adapter,
+                    notion_target_id=(
+                        configured_notion_target(self._context.root)
+                        if (
+                            self._context.live_writes
+                            and self._dependencies.notion_adapter is not None
+                        )
+                        else None
+                    ),
+                    notion_adapter=None,
+                    naver_adapter=None,
                 )
             )
-            preview = _confirmation_preview(result)
+            preview = confirmation_preview(result)
         except (ContractError, OSError, TimeoutError, ValueError) as error:
-            self._update(task_id, ManualRunUpdate(status="failed", error=type(error).__name__))
+            self._update(task_id, ManualRunUpdate(status="failed", error=type(error).__name__, retryable=False))
             return
         self._update(
             task_id,
@@ -226,6 +193,7 @@ class ManualRunManager:
                 run_id=result.run_id,
                 result_status=result.status.value,
                 message=result.message,
+                retryable=False,
                 confirmation_preview=preview,
             ),
         )
@@ -248,6 +216,11 @@ class ManualRunManager:
                 result_status=update.result_status or current.result_status,
                 message=update.message or current.message,
                 error=update.error or current.error,
+                retryable=(
+                    update.retryable
+                    if update.retryable is not None
+                    else current.retryable
+                ),
                 confirmation_preview=(
                     update.confirmation_preview or current.confirmation_preview
                 ),

@@ -34,7 +34,10 @@ ROLE_ORDER: Final = {
     "body_image": 6,
     "thumbnail": 7,
 }
-IMAGE_RE: Final = re.compile(r"!\[[^\]]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
+IMAGE_RE: Final = re.compile(
+    r'!\[[^\]]*\]\(\s*(?:<(?P<angle>[^>\n]+)>|(?P<plain>[^)\n]*?\S))'
+    + r'(?:\s+"[^"]*")?\s*\)'
+)
 SHA256_RE: Final = re.compile(r"^[0-9a-f]{64}$")
 DIGEST_RE: Final = re.compile(r"^sha256:[0-9a-f]{64}$")
 
@@ -168,7 +171,8 @@ def _body_paths(root: Path, final_path: Path, thumbnail: Path) -> list[Path]:
     if not final_path.is_file():
         raise ContractError(f"required artifact is missing: {final_path}")
     paths: list[Path] = []
-    for reference in IMAGE_RE.findall(final_path.read_text(encoding="utf-8")):
+    for match in IMAGE_RE.finditer(final_path.read_text(encoding="utf-8")):
+        reference = match.group("angle") or match.group("plain")
         if reference.startswith(("http://", "https://", "data:", "file://", "/")):
             raise ContractError(
                 f"external image reference is not canonical: {reference}"

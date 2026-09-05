@@ -20,7 +20,7 @@
         </section>
         <section class="manual-panel" aria-labelledby="manual-title">
           <div><p class="overline">MANUAL RUN</p><h2 id="manual-title">워크플로우 직접 실행</h2><p>사용자 주제와 자동 주제 선정은 같은 파이프라인을 시작합니다. 콘텐츠 생성 후 ‘외부 저장 실행’을 눌러 Notion·네이버 단계를 이어갑니다.</p></div>
-          <form id="manual-run-form" class="manual-form"><label><span>주제 선택 방식</span><select id="manual-topic-source"><option value="user_defined">사용자 주제</option><option value="auto_selected">자동 주제 선정</option></select></label><label id="manual-keyword-field"><span>키워드</span><input id="manual-keyword" type="text" placeholder="작성할 주제를 입력하세요" required></label><button class="button button-primary" id="manual-submit" type="submit">워크플로우 실행</button></form>
+          <form id="manual-run-form" class="manual-form"><label><span>주제 선택 방식</span><select id="manual-topic-source"><option value="user_defined">사용자 주제</option><option value="auto_selected">자동 주제 선정</option></select></label><label id="manual-keyword-field"><span>키워드</span><input id="manual-keyword" type="text" placeholder="작성할 주제를 입력하세요" required></label><label><span>정보 기준일 (KST)</span><input id="manual-as-of" type="date" required></label><button class="button button-primary" id="manual-submit" type="submit">워크플로우 실행</button></form>
           <p class="manual-status info" id="manual-status" role="status">연결 상태 확인 후 실행할 수 있습니다.</p>
         </section>
         <section class="summary-grid" id="summary" aria-label="실행 요약"><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div></section>

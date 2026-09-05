@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import UTC, datetime, timedelta
+from math import isfinite
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -35,6 +36,23 @@ def _events(root: Path, start: datetime, end: datetime) -> list[JSONMap]:
     return selected
 
 
+def _duration_seconds(event: JSONMap) -> float:
+    if event.get("telemetry_version") == 2:
+        value = event.get("duration_ms")
+        if (
+            not isinstance(value, int | float)
+            or isinstance(value, bool)
+            or not isfinite(value)
+            or value < 0
+        ):
+            raise ContractError("invalid telemetry-v2 duration_ms")
+        return float(value) / 1000.0
+    return (
+        datetime.fromisoformat(str(event["ended_at"]))
+        - datetime.fromisoformat(str(event["started_at"]))
+    ).total_seconds()
+
+
 def write_weekly_report(root: Path, as_of: datetime) -> Path:
     start, end = _window(as_of)
     events = _events(root, start, end)
@@ -48,16 +66,17 @@ def write_weekly_report(root: Path, as_of: datetime) -> Path:
         and isinstance(event.get("stage"), str)
     )
     retries = sum(
-        max(attempt - 1, 0)
+        (
+            int(attempt > 1)
+            if event.get("telemetry_version") == 2
+            else max(attempt - 1, 0)
+        )
         for event in events
         for attempt in [event.get("attempt")]
-        if isinstance(attempt, int)
+        if isinstance(attempt, int) and not isinstance(attempt, bool)
     )
     durations = [
-        (
-            datetime.fromisoformat(str(event["ended_at"]))
-            - datetime.fromisoformat(str(event["started_at"]))
-        ).total_seconds()
+        _duration_seconds(event)
         for event in events
         if isinstance(event.get("started_at"), str)
         and isinstance(event.get("ended_at"), str)

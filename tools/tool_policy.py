@@ -19,6 +19,7 @@ class ToolDecision:
     reason: str
     external: bool
     operation: str | None
+    connector: str | None
 
 
 _READ_ACTIONS = frozenset(
@@ -86,6 +87,20 @@ _WRITE_ACTIONS = frozenset(
     }
 )
 _EXTERNAL_PREFIXES = ("mcp__", "browser.", "chrome.", "computer.")
+_BROWSER_PREFIXES = ("browser.", "chrome.", "computer.")
+_BROWSER_DENY_ACTIONS = frozenset(
+    {
+        "archive",
+        "delete",
+        "evaluate",
+        "execute_script",
+        "javascript",
+        "publish",
+        "reserve",
+        "schedule",
+        "settings",
+    }
+)
 
 
 def _explicit_action(tool_input: JSONMap) -> str | None:
@@ -110,26 +125,50 @@ def _action_name(tool_name: str) -> str | None:
     return None
 
 
+def _connector_name(tool_name: str) -> str | None:
+    if tool_name.startswith("mcp__"):
+        parts = tool_name.split("__")
+        return parts[1] if len(parts) >= 3 and parts[1] else None
+    for prefix in _BROWSER_PREFIXES:
+        if tool_name.startswith(prefix):
+            return prefix.removesuffix(".")
+    return None
+
+
 def classify_tool_call(
     tool_name: str, tool_input: JSONMap | None = None
 ) -> ToolDecision:
     normalized_name = tool_name.strip().lower()
     if not normalized_name:
-        return ToolDecision(ToolAction.DENY, "tool name is missing", True, None)
+        return ToolDecision(ToolAction.DENY, "tool name is missing", True, None, None)
     if not normalized_name.startswith(_EXTERNAL_PREFIXES):
         return ToolDecision(
             ToolAction.INTERNAL,
             "local tool is outside external-write policy",
             False,
             None,
+            None,
         )
+    connector = _connector_name(normalized_name)
     raw_action = _action_name(normalized_name)
     action = raw_action.replace("-", "_") if raw_action is not None else None
     if action is None:
         action = _explicit_action(tool_input or {})
+    if normalized_name.startswith(_BROWSER_PREFIXES) and action in _BROWSER_DENY_ACTIONS:
+        return ToolDecision(
+            ToolAction.DENY,
+            f"browser action is always denied: {action}",
+            True,
+            action,
+            connector,
+        )
     if action in _READ_ACTIONS:
         return ToolDecision(
-            ToolAction.READ, f"registered read action: {action}", True, action
+            ToolAction.READ,
+            f"registered read action: {action}",
+            True,
+            action,
+            connector,
         )
     if action in _WRITE_ACTIONS:
         return ToolDecision(
@@ -137,9 +176,14 @@ def classify_tool_call(
             f"registered external write action: {action}",
             True,
             action,
+            connector,
         )
     return ToolDecision(
-        ToolAction.DENY, "external tool/action is not registered", True, action
+        ToolAction.DENY,
+        "external tool/action is not registered",
+        True,
+        action,
+        connector,
     )
 
 

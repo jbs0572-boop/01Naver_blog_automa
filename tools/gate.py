@@ -1,41 +1,20 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
-from datetime import UTC, datetime
 from pathlib import Path
 
-from tools.contract_types import ContractError, JSONMap, JSONValue
+from tools.contract_types import ContractError, JSONMap
+from tools.gate_models import GateRequest, parse_aware_datetime
 from tools.log_contract import read_events
 from tools.manifest import Manifest, verify_manifest
-
-
-@dataclass(frozen=True, slots=True)
-class GateRequest:
-    root: Path
-    manifest_path: Path
-    run_log: Path
-    gate: str
-    run_id: str
-    target_id: str
-    notion_connector: bool = False
-    notion_operation: str | None = None
-    notion_resource_id: str | None = None
-    notion_page_id: str | None = None
-    notion_verified_at: str | None = None
-    blog_id: str | None = None
-
-
-def parse_aware_datetime(value: JSONValue, field: str) -> datetime:
-    if not isinstance(value, str):
-        raise ContractError(f"{field} must be an ISO-8601 string")
-    try:
-        parsed = datetime.fromisoformat(value)
-    except ValueError as error:
-        raise ContractError(f"{field} is not a valid ISO-8601 timestamp") from error
-    if parsed.tzinfo is None or parsed.utcoffset() is None:
-        raise ContractError(f"{field} must include a timezone")
-    return parsed.astimezone(UTC)
+from tools.naver_adapter import load_naver_config
+from tools.naver_gate import (
+    NaverToolRequest,
+    authorize_naver_target,
+    canonical_naver_input,
+    verify_naver_confirmation,
+    verify_q2_identity,
+)
 
 
 def _passed(event: JSONMap) -> bool:
@@ -47,14 +26,25 @@ def _ensure_manifest_run(manifest: Manifest, run_id: str) -> None:
         raise ContractError("manifest run_id does not match workflow run_id")
 
 
-def _has_q1_pass(events: list[JSONMap], manifest: Manifest) -> bool:
-    return any(
-        event.get("run_id") == manifest.run_id
-        and event.get("topic_id") == manifest.topic_id
-        and event.get("stage") == "content-assembler"
-        and _passed(event)
-        for event in events
-    )
+def _verify_latest_q1(events: list[JSONMap], manifest: Manifest) -> None:
+    for event in reversed(events):
+        if (
+            event.get("run_id") != manifest.run_id
+            or event.get("topic_id") != manifest.topic_id
+            or event.get("stage") != "content-assembler"
+        ):
+            continue
+        quality = event.get("quality")
+        if event.get("telemetry_version") != 2 or not _passed(event):
+            raise ContractError("latest content-assembler Q1 result did not pass")
+        if not isinstance(quality, dict):
+            raise ContractError("latest content-assembler Q1 identity is missing")
+        if quality.get("artifact_digest") != manifest.artifact_digest:
+            raise ContractError(
+                "latest content-assembler Q1 artifact digest does not match manifest"
+            )
+        return
+    raise ContractError("latest content-assembler Q1 result is missing")
 
 
 def _configured_data_source_id(root: Path) -> str:
@@ -69,61 +59,6 @@ def _configured_data_source_id(root: Path) -> str:
     return match.group(1)
 
 
-def _q2_quality(events: list[JSONMap], manifest: Manifest) -> JSONMap:
-    for event in reversed(events):
-        if (
-            event.get("run_id") == manifest.run_id
-            and event.get("topic_id") == manifest.topic_id
-            and event.get("stage") == "notion-rider"
-            and _passed(event)
-        ):
-            quality = event.get("quality")
-            if isinstance(quality, dict):
-                return quality
-    raise ContractError("Notion Q2 identity details are missing")
-
-
-def _verify_q2_identity(
-    events: list[JSONMap],
-    manifest: Manifest,
-    request: GateRequest,
-) -> None:
-    notion_page_id = request.notion_page_id
-    notion_verified_at = request.notion_verified_at
-    blog_id = request.blog_id
-    if not isinstance(notion_page_id, str):
-        raise ContractError("Notion page ID is missing before Naver write")
-    if not isinstance(notion_verified_at, str):
-        raise ContractError(
-            "Notion verification timestamp is missing before Naver write"
-        )
-    if not isinstance(blog_id, str):
-        raise ContractError("Naver blog ID is missing before Naver write")
-    quality = _q2_quality(events, manifest)
-    expected_page_id = quality.get("notion_page_id")
-    expected_verified_at = quality.get("notion_last_verified_at")
-    expected_digest = quality.get("notion_roundtrip_digest")
-    if not isinstance(expected_page_id, str) or not isinstance(
-        expected_verified_at, str
-    ):
-        raise ContractError("Notion Q2 identity details are incomplete")
-    if not isinstance(expected_digest, str):
-        raise ContractError("Notion Q2 round-trip digest is missing")
-    verified_at = parse_aware_datetime(notion_verified_at, "notion_verified_at")
-    expected_verified = parse_aware_datetime(
-        expected_verified_at, "notion_last_verified_at"
-    )
-    if (
-        request.target_id != blog_id
-        or notion_page_id != expected_page_id
-        or verified_at < expected_verified
-        or expected_digest != manifest.artifact_digest
-    ):
-        raise ContractError(
-            "Notion Q2 page, verification time, blog id, or round-trip digest does not match"
-        )
-
-
 def verify_gate(request: GateRequest) -> JSONMap:
     manifest = verify_manifest(request.root, request.manifest_path)
     _ensure_manifest_run(manifest, request.run_id)
@@ -134,17 +69,11 @@ def verify_gate(request: GateRequest) -> JSONMap:
             "Notion target_id does not match notion-config.md data source ID"
         )
     events = read_events(request.run_log)
-    if not _has_q1_pass(events, manifest):
-        raise ContractError("content-assembler Q1 pass is missing")
-    if request.gate == "naver_draft_save" and not any(
-        event.get("run_id") == request.run_id
-        and event.get("stage") == "notion-rider"
-        and _passed(event)
-        for event in events
-    ):
-        raise ContractError("Notion Q2 pass is missing before Naver draft save")
+    _verify_latest_q1(events, manifest)
     if request.gate == "naver_draft_save":
-        _verify_q2_identity(events, manifest, request)
+        verify_q2_identity(
+            events, manifest, request, _configured_data_source_id(request.root)
+        )
         return {
             "gate": request.gate,
             "decision": "not_required",
@@ -167,6 +96,29 @@ def verify_gate(request: GateRequest) -> JSONMap:
 def authorize_external_write(request: GateRequest) -> JSONMap:
     manifest = verify_manifest(request.root, request.manifest_path)
     _ensure_manifest_run(manifest, request.run_id)
+    if request.gate == "naver_draft_save":
+        config = load_naver_config(request.root / "naver-config.md")
+        canonical = canonical_naver_input(manifest, request.root)
+        authorize_naver_target(
+            NaverToolRequest(
+                request.target_id,
+                request.blog_id,
+                request.naver_connector,
+                request.naver_operation,
+                request.naver_url,
+                request.naver_locator,
+                request.naver_value,
+                request.naver_phase,
+            ),
+            config,
+            canonical,
+        )
+        result = verify_gate(request)
+        if request.naver_phase == "save":
+            verify_naver_confirmation(
+                read_events(request.run_log), manifest, request.blog_id, canonical.title
+            )
+        return result
     if request.gate != "notion_write":
         return verify_gate(request)
     if not request.notion_connector:
@@ -177,10 +129,7 @@ def authorize_external_write(request: GateRequest) -> JSONMap:
         "create_pages",
     }:
         raise ContractError("Notion operation is not allowed")
-    if (
-        request.notion_operation != "create_attachment"
-        and request.notion_resource_id != request.target_id
-    ):
+    if request.notion_resource_id != request.target_id:
         raise ContractError("Notion write target does not match target_id")
     return verify_gate(request)
 

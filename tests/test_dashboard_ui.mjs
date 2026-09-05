@@ -40,11 +40,11 @@ test("failed external result keeps a retry action for the same task", async () =
     },
   };
   const responses = [
-    {task_id: "TASK-1", status: "completed", run_id: "RUN-1", result_status: "failed", message: "adapter unavailable"},
+    {task_id: "TASK-1", status: "completed", run_id: "RUN-1", result_status: "failed", retryable: true, message: "adapter unavailable"},
     {generated_at: null, summary: {total: 0, by_status: {}}, runs: []},
-    {task_id: "TASK-1", status: "completed", run_id: "RUN-1", result_status: "failed", message: "adapter unavailable"},
+    {task_id: "TASK-1", status: "completed", run_id: "RUN-1", result_status: "failed", retryable: true, message: "adapter unavailable"},
     {generated_at: null, summary: {total: 0, by_status: {}}, runs: []},
-    {task_id: "TASK-1", status: "completed", run_id: "RUN-1", result_status: "failed", message: "adapter unavailable"},
+    {task_id: "TASK-1", status: "completed", run_id: "RUN-1", result_status: "failed", retryable: true, message: "adapter unavailable"},
     {generated_at: null, summary: {total: 0, by_status: {}}, runs: []},
   ];
   const requests = [];

@@ -8,13 +8,20 @@
 	<array>
 		<string>/Users/beomseok/00_AI/01_ NAVER_BLOG_AUTOMATE/.venv/bin/python</string>
 		<string>-m</string>
-		<string>tools.automation_runner</string>
+		<string>tools.preflight_runner</string>
 		<string>run</string>
 		<string>daily-generate</string>
 		<string>--auto-topic</string>
 	</array>
 	<key>WorkingDirectory</key>
 	<string>/Users/beomseok/00_AI/01_ NAVER_BLOG_AUTOMATE</string>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>CODEX_HOME</key>
+		<string>/Users/beomseok/.codex</string>
+		<key>PATH</key>
+		<string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+	</dict>
 	<key>StandardOutPath</key>
 	<string>/Users/beomseok/00_AI/01_ NAVER_BLOG_AUTOMATE/.automation/logs/launchd/daily-generate.stdout.log</string>
 	<key>StandardErrorPath</key>

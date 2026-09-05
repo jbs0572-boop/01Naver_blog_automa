@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import json
 import sys
+from collections.abc import Callable
+from datetime import date
 from pathlib import Path
 
 from tools.contract_types import ContractError
+from tools.external_adapter import NotionAdapter
 from tools.runner_execution import (
     confirm_job,
     get_status,
@@ -12,7 +15,33 @@ from tools.runner_execution import (
     resume_job,
     run_job,
 )
-from tools.runner_types import ConfirmationInput, RunnerRequest, RunStatus
+from tools.runner_types import (
+    ConfirmationInput,
+    RunnerRequest,
+    RunStatus,
+    TopicSelectionContext,
+)
+
+type NotionAdapterFactory = Callable[[Path], NotionAdapter]
+
+
+def _default_notion_adapter_factory(_root: Path) -> NotionAdapter:
+    from tools.notion_api import NotionApiAdapter
+
+    return NotionApiAdapter()
+
+
+def _live_notion_adapter(
+    root: Path,
+    dry_run: bool,
+    factory: NotionAdapterFactory | None,
+) -> NotionAdapter | None:
+    if dry_run:
+        return None
+    active_factory = (
+        _default_notion_adapter_factory if factory is None else factory
+    )
+    return active_factory(root)
 
 
 def _options(
@@ -61,7 +90,10 @@ def _state_option(values: dict[str, str | bool], root: Path) -> Path | None:
     )
 
 
-def _cli(arguments: list[str]) -> int:
+def _cli(
+    arguments: list[str],
+    notion_adapter_factory: NotionAdapterFactory | None = None,
+) -> int:
     if len(arguments) < 2:
         raise ContractError(
             "command required: run, status, recover, resume, or confirm"
@@ -74,21 +106,37 @@ def _cli(arguments: list[str]) -> int:
             arguments[3:],
             frozenset({
                 "root", "run-id", "dry-run", "state-dir", "state-root",
-                "keyword", "auto-topic",
+                "keyword", "auto-topic", "as-of-date",
             }),
         )
         root = _path_option(values, "root", ".")
         keyword_value = values.get("keyword")
         run_id_value = values.get("run-id")
         auto_topic = values.get("auto-topic") is True
+        as_of_date = values.get("as-of-date")
+        selection_context = None
+        if isinstance(as_of_date, str):
+            try:
+                normalized_date = date.fromisoformat(as_of_date.strip()).isoformat()
+            except ValueError as error:
+                raise ContractError("invalid option: --as-of-date") from error
+            selection_context = TopicSelectionContext("", "", "", normalized_date)
+        dry_run = values.get("dry-run") is True
+        notion_adapter = _live_notion_adapter(
+            root,
+            dry_run or arguments[2] != "daily-generate",
+            notion_adapter_factory,
+        )
         request = RunnerRequest(
             root=root,
             job=arguments[2],
             keyword=keyword_value if isinstance(keyword_value, str) else None,
             run_id=run_id_value if isinstance(run_id_value, str) else None,
-            dry_run=values.get("dry-run") is True,
+            dry_run=dry_run,
             state_dir=_state_option(values, root),
             auto_topic=auto_topic,
+            selection_context=selection_context,
+            notion_adapter=notion_adapter,
         )
         result = run_job(request)
     elif command == "status":
@@ -114,6 +162,11 @@ def _cli(arguments: list[str]) -> int:
                 run_id=_required(values, "run-id"),
                 dry_run=values.get("dry-run") is True,
                 state_dir=_state_option(values, root),
+                notion_adapter=_live_notion_adapter(
+                    root,
+                    values.get("dry-run") is True,
+                    notion_adapter_factory,
+                ),
             )
         )
     elif command == "resume":
@@ -127,6 +180,11 @@ def _cli(arguments: list[str]) -> int:
                 job="",
                 run_id=_required(values, "run-id"),
                 state_dir=_state_option(values, root),
+                notion_adapter=_live_notion_adapter(
+                    root,
+                    False,
+                    notion_adapter_factory,
+                ),
             )
         )
     elif command == "confirm":
@@ -156,14 +214,24 @@ def _cli(arguments: list[str]) -> int:
             RunStatus.VALIDATED,
             RunStatus.LOCAL_ONLY,
             RunStatus.SKIPPED,
+            RunStatus.READY_FOR_NAVER,
+            RunStatus.AWAITING_USER_CONFIRMATION,
+            RunStatus.DRAFT_SAVED,
         }
         else 2
     )
 
 
-def main(arguments: list[str] | None = None) -> int:
+def main(
+    arguments: list[str] | None = None,
+    *,
+    notion_adapter_factory: NotionAdapterFactory | None = None,
+) -> int:
     try:
-        return _cli(sys.argv if arguments is None else arguments)
+        return _cli(
+            sys.argv if arguments is None else arguments,
+            notion_adapter_factory,
+        )
     except ContractError as error:
         print(f"automation-runner: {error}", file=sys.stderr)
         return 2

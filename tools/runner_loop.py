@@ -2,22 +2,20 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from tools.contract_types import ContractError, JSONMap
-from tools.runner_actions import stage_action
+from tools import runner_stages
+from tools.contract_types import JSONMap
+from tools.runner_attempt import AttemptContext, AttemptRuntime, execute_attempts
 from tools.runner_job import job_key
 from tools.runner_records import (
     blocked_result,
     initial_state,
-    record_manifest,
     set_stage,
     set_stage_execution,
     state_output_hash,
 )
 from tools.runner_stages import (
-    append_event,
-    event,
+    monotonic_ns,
     now,
-    with_retry,
 )
 from tools.runner_state import (
     atomic_write_json,
@@ -29,16 +27,10 @@ from tools.runner_types import (
     STAGE_ORDER,
     JobName,
     RunExecutionContext,
-    RunnerBlocked,
-    RunnerRequest,
     RunnerResult,
     RunStatus,
-    StageEventContext,
-    StageEventOutcome,
     StageExecution,
-    StageResult,
     StageRunContext,
-    retry_q1_repair,
 )
 
 
@@ -84,16 +76,13 @@ def execute_run(context: RunExecutionContext) -> RunnerResult:
         state["updated_at"] = now(request).isoformat()
         atomic_write_json(state_path, state)
         stage_context = StageRunContext(active_request, job, stage, run_id, timestamp)
-        if stage == "content-assembler":
-            stage_result, active_request, stage_attempts = retry_q1_repair(
-                lambda feedback, stage_context=stage_context, state=state: _run_stage(
-                    replace(stage_context, q1_feedback=feedback), state
-                )
-            )
-            attempt = 1
-        else:
-            stage_result, attempt, active_request = _run_stage(stage_context, state)
-            stage_attempts = (stage_result,)
+        depends_on = () if index == 0 else (STAGE_ORDER[index - 1],)
+        attempt_outcome = execute_attempts(
+            AttemptContext(stage_context, state, log_path, batch_id, depends_on),
+            AttemptRuntime(now, monotonic_ns, runner_stages.sleep),
+        )
+        stage_result = attempt_outcome.result
+        active_request = attempt_outcome.request
         if stage_result.run_status is not None and not (
             (
                 stage == "notion-rider"
@@ -118,20 +107,6 @@ def execute_run(context: RunExecutionContext) -> RunnerResult:
         message = stage_result.message or (
             "stage passed" if result is RunStatus.PASSED else result.value
         )
-        for current_attempt, attempt_result in enumerate(stage_attempts, attempt):
-            attempt_message = attempt_result.message or attempt_result.status.value
-            append_event(
-                log_path,
-                event(
-                    StageEventContext(
-                        active_request, run_id, batch_id, stage, timestamp,
-                        now(request).isoformat(), current_attempt,
-                    ),
-                    StageEventOutcome(
-                        attempt_result.status, attempt_result.execution, attempt_message
-                    ),
-                ),
-            )
         set_stage(state, stage, result)
         set_stage_execution(state, stage, stage_result.execution)
         if result in {RunStatus.PASSED, RunStatus.VALIDATED}:
@@ -179,49 +154,6 @@ def _reset_incomplete_stages(state: JSONMap) -> None:
         if stages.get(stage) not in {RunStatus.PASSED.value, RunStatus.VALIDATED.value}:
             stages[stage] = RunStatus.PENDING.value
             executions[stage] = StageExecution.NOT_CALLED.value
-
-
-def _run_stage(
-    context: StageRunContext,
-    state: JSONMap,
-) -> tuple[StageResult, int, RunnerRequest]:
-    request = context.request
-    try:
-        if context.stage == "content-assembler":
-            result, attempt = stage_action(context), 1
-        else:
-            result, attempt = with_retry(lambda: stage_action(context))
-        active = request
-        if result.resolved_keyword is not None:
-            if (
-                not request.auto_topic
-                and request.keyword is not None
-                and result.resolved_keyword != request.keyword
-            ):
-                raise ContractError(
-                    "topic-selector cannot replace a user-defined keyword"
-                )
-            active = replace(request, keyword=result.resolved_keyword)
-            state["keyword"] = result.resolved_keyword
-            state["topic_id"] = f"TOPIC-{result.resolved_keyword}"
-        if result.details is not None:
-            state.update(result.details)
-        record_manifest(state, active, context.run_id)
-        return result, attempt, active
-    except RunnerBlocked as error:
-        return StageResult(
-            RunStatus.BLOCKED, StageExecution.ATTEMPTED, str(error)
-        ), 1, request
-    except ContractError as error:
-        return StageResult(
-            RunStatus.FAILED, StageExecution.ATTEMPTED, str(error)
-        ), 1, request
-    except (OSError, TimeoutError) as error:
-        return StageResult(
-            RunStatus.FAILED,
-            StageExecution.ATTEMPTED,
-            f"transient local error: {error}",
-        ), 2, request
 
 
 def _finish_run(

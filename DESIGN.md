@@ -91,9 +91,9 @@ The page uses a sticky top bar and a two-column run-list/detail workspace on des
 
 ### Manual run form
 - **Structure**: `주제 선택 방식` selector (`사용자 주제` / `자동 주제 선정`), conditional keyword field, one neutral primary workflow button, live task status.
-- **States**: ready, queued, running, external storage pending, Q2 confirmation, draft saved, failed.
-- **Accessibility**: labels remain visible, keyword is enabled and required only for `사용자 주제`, status uses `role=status`, and external/confirmation actions are real buttons.
-- **Contract**: the manual endpoint accepts exactly one topic-source payload: `{ "keyword": "..." }` for a user-defined topic or `{ "auto_topic": true }` for automatic topic selection. The selected source changes only the topic-selector input; Q1, Q2, external storage, and Naver confirmation remain the same workflow.
+- **States**: ready, queued, running, external storage pending, Q2 confirmation, draft saved, failed. The initial run never receives external adapters; the external action resumes the completed local run with them.
+- **Accessibility**: labels remain visible, keyword is enabled and required only for `사용자 주제`, KST 기준일 is always required, status uses `role=status`, and external/confirmation actions are real buttons.
+- **Contract**: the manual endpoint accepts exactly one topic-source payload plus `as_of_date`: `{ "keyword": "...", "as_of_date": "YYYY-MM-DD" }` or `{ "auto_topic": true, "as_of_date": "YYYY-MM-DD" }`. 분야·독자·발행목적은 입력받지 않는다. The selected source changes only the topic-selector input; Q1, Q2, external storage, and Naver confirmation remain the same workflow.
 - **Safety**: the UI starts the existing `daily-generate` runner; external writes require their adapters and remain behind the existing Q1/Q2 gates. Before the final Naver request, the UI must show the target blog, title, image list, and exact “draft save, do not publish” action in a fresh confirmation dialog. Missing preview data blocks the request.
 
 ## 6. Motion & Interaction

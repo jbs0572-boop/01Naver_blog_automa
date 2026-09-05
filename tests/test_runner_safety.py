@@ -11,7 +11,9 @@ import pytest
 from tools.contract_types import ContractError, JSONMap
 from tools.external_adapter import ExternalWriteRequest
 from tools.runner_execution import run_job
+from tools.runner_job import validate_job_request
 from tools.runner_types import (
+    JobName,
     RunnerRequest,
     RunStatus,
     StageExecution,
@@ -125,6 +127,10 @@ class CountingNaver:
         self.prepare_calls: int = 0
         self.save_calls: int = 0
 
+    @property
+    def target_blog_id(self) -> str:
+        return "blog-fixture"
+
     def prepare(self, title: str, body: str, artifact_digest: str) -> JSONMap:
         _ = (title, body, artifact_digest)
         self.prepare_calls += 1
@@ -162,26 +168,38 @@ def test_producer_terminal_run_status_fails_without_promoting_global_status(
     assert "writer cannot set run_status" in result.message
 
 
-@pytest.mark.parametrize("adapter", ["notion", "naver"])
-def test_daily_generate_rejects_one_sided_external_adapter_before_execution(
+def test_daily_generate_rejects_naver_without_verified_notion_before_execution(
     tmp_path: Path,
-    adapter: str,
 ) -> None:
-    notion = CountingNotion() if adapter == "notion" else None
-    naver = CountingNaver() if adapter == "naver" else None
+    naver = CountingNaver()
 
-    with pytest.raises(ContractError, match="configured together"):
+    with pytest.raises(ContractError, match="requires a Notion adapter"):
         _ = run_job(RunnerRequest(
             root=tmp_path,
             job="daily-generate",
             auto_topic=True,
             now=NOW,
             executor=UnsafeProducerExecutor(RunStatus.DRAFT_SAVED),
-            notion_adapter=notion,
             naver_adapter=naver,
         ))
 
     assert not (tmp_path / ".automation").exists()
-    assert notion is None or notion.calls == 0
-    assert naver is None or naver.prepare_calls == 0
-    assert naver is None or naver.save_calls == 0
+    assert naver.prepare_calls == 0
+    assert naver.save_calls == 0
+
+
+def test_daily_generate_accepts_notion_without_naver_draft_adapter(
+    tmp_path: Path,
+) -> None:
+    notion = CountingNotion()
+
+    job = validate_job_request(RunnerRequest(
+        root=tmp_path,
+        job="daily-generate",
+        auto_topic=True,
+        now=NOW,
+        notion_adapter=notion,
+    ))
+
+    assert job is JobName.DAILY_GENERATE
+    assert notion.calls == 0
