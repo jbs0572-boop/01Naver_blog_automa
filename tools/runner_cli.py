@@ -19,6 +19,7 @@ from tools.runner_execution import (
     resume_job,
     run_job,
 )
+from tools.runner_state import read_state, state_paths
 from tools.runner_types import (
     ConfirmationInput,
     RunnerRequest,
@@ -203,19 +204,40 @@ def _cli(
             arguments[2:], frozenset({"root", "run-id", "state-dir", "state-root"})
         )
         root = _path_option(values, "root", ".")
-        result = resume_job(
-            RunnerRequest(
+        run_id = _required(values, "run-id")
+        state_path, _, _ = state_paths(root, run_id, _state_option(values, root))
+        state = read_state(state_path)
+        stages = state.get("stages")
+        requires_naver = (
+            state.get("job") == "daily-generate"
+            and isinstance(stages, dict)
+            and stages.get("notion-rider") in {"passed", "validated"}
+            and stages.get("naver-rider") not in {"passed", "validated"}
+            and state.get("status") != RunStatus.DRAFT_SAVED.value
+        )
+        resume_naver_adapter: NaverBrowserAdapter | None = None
+        cleanup_naver = lambda: None
+        if requires_naver:
+            resume_naver_adapter, cleanup_naver = _live_naver_adapter(
+                root, naver_adapter_factory
+            )
+        try:
+            result = resume_job(
+                RunnerRequest(
                 root=root,
                 job="",
-                run_id=_required(values, "run-id"),
+                run_id=run_id,
                 state_dir=_state_option(values, root),
                 notion_adapter=_live_notion_adapter(
                     root,
                     False,
                     notion_adapter_factory,
                 ),
+                naver_adapter=resume_naver_adapter,
+                )
             )
-        )
+        finally:
+            cleanup_naver()
     elif command == "confirm":
         values = _options(
             arguments[2:],

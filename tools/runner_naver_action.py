@@ -179,6 +179,10 @@ def invalidate_naver_preparation(root: Path, run_id: str) -> None:
     state = read_state(state_path)
     if state.get("status") == RunStatus.DRAFT_SAVED.value:
         raise ContractError("saved Naver draft preparation cannot be invalidated")
+    if state.get("naver_save_outcome_uncertain") is True:
+        raise ContractError(
+            "Naver save outcome is uncertain; reconcile the existing draft before retrying"
+        )
     stages = state.get("stages")
     executions = state.get("stage_execution")
     if not isinstance(stages, dict) or not isinstance(executions, dict):

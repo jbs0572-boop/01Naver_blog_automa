@@ -15,7 +15,6 @@ from tools.contract_types import ContractError, JSONMap, JSONValue
 from tools.external_adapter import ExternalWriteRequest
 from tools.manifest import verify_manifest
 from tools.model_presets import default_stage_settings, model_config_snapshot
-from tools.naver_gate import verify_naver_confirmation
 from tools.notion_resume import NotionQ2Failure
 from tools.runner_cli import main as runner_main
 from tools.runner_execution import (
@@ -27,6 +26,7 @@ from tools.runner_execution import (
     run_job,
 )
 from tools.runner_job import validate_job_request
+from tools.runner_state import atomic_write_json, state_paths
 from tools.runner_types import (
     STAGE_ORDER,
     ConfirmationInput,
@@ -577,6 +577,17 @@ def test_cli_reinjects_deferred_notion_adapter_for_resumable_live_runs(
     extra: tuple[str, ...],
     expected_calls: int,
 ) -> None:
+    if command == "resume":
+        state_path, _, _ = state_paths(tmp_path, "RUN-cli-resume")
+        atomic_write_json(
+            state_path,
+            {
+                "run_id": "RUN-cli-resume",
+                "job": "daily-generate",
+                "status": RunStatus.RUNNING.value,
+                "stages": {"notion-rider": "pending", "naver-rider": "pending"},
+            },
+        )
     notion = FixtureNotion()
     created: list[Path] = []
     captured: list[RunnerRequest] = []
@@ -653,6 +664,52 @@ def test_cli_forwards_naver_confirmation_nonce_and_adapter(
 
     assert result == 0
     assert captured[0].confirmation_nonce == "nonce-from-current-preview"
+    assert captured[0].naver_adapter is adapter
+
+
+def test_cli_resume_reinjects_naver_adapter_after_q3(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state_path, _, _ = state_paths(tmp_path, "RUN-cli-q3")
+    atomic_write_json(
+        state_path,
+        {
+            "run_id": "RUN-cli-q3",
+            "job": "daily-generate",
+            "status": RunStatus.READY_FOR_NAVER.value,
+            "stages": {"notion-rider": "passed", "naver-rider": "pending"},
+        },
+    )
+    adapter = FixtureNaver()
+    captured: list[RunnerRequest] = []
+
+    def capture(request: RunnerRequest) -> RunnerResult:
+        captured.append(request)
+        return RunnerResult(
+            "RUN-cli-q3",
+            RunStatus.AWAITING_USER_CONFIRMATION,
+            state_path,
+            tmp_path / "run.jsonl",
+            (),
+            "confirmation required",
+        )
+
+    monkeypatch.setattr("tools.runner_cli.resume_job", capture)
+    result = runner_main(
+        [
+            "automation-runner",
+            "resume",
+            "--root",
+            str(tmp_path),
+            "--run-id",
+            "RUN-cli-q3",
+        ],
+        notion_adapter_factory=lambda _root: FixtureNotion(),
+        naver_adapter_factory=lambda _root: adapter,
+    )
+
+    assert result == 0
     assert captured[0].naver_adapter is adapter
 
 
@@ -976,10 +1033,10 @@ def test_explicit_confirmation_saves_after_blocked_auto_save_flag(
     assert naver.save_calls == 1
 
 
-def test_renewed_naver_preparation_requires_fresh_confirmation(
+def test_uncertain_naver_save_blocks_preparation_renewal(
     tmp_path: Path,
 ) -> None:
-    # Given: confirmation was recorded, but its save was interrupted and preparation renewed.
+    # Given: confirmation was recorded, but the save outcome is unknown.
     _ = (tmp_path / "notion-config.md").write_text(
         "- 데이터 소스 ID: `datasource-fixture`\n", encoding="utf-8"
     )
@@ -1012,50 +1069,14 @@ def test_renewed_naver_preparation_requires_fresh_confirmation(
     assert interrupted.status is RunStatus.FAILED
     assert naver.save_calls == 0
 
-    invalidate_naver_preparation(tmp_path, first.run_id)
-    second = resume_job(
-        RunnerRequest(
-            root=tmp_path,
-            job="",
-            run_id=first.run_id,
-            executor=FixtureExecutor(),
-            notion_adapter=FixtureNotion(),
-            naver_adapter=naver,
-        )
+    state_after_interruption = json.loads(
+        interrupted.state_path.read_text(encoding="utf-8")
     )
-    second_state = json.loads(second.state_path.read_text(encoding="utf-8"))
-    manifest = verify_manifest(
-        tmp_path,
-        tmp_path / "manifests" / f"{first.run_id}-workflow-manifest.json",
-    )
-
-    # When/Then: the historical confirmation cannot authorize the renewed preparation.
-    assert second.status is RunStatus.AWAITING_USER_CONFIRMATION
-    with pytest.raises(ContractError, match="Naver confirmation does not match"):
-        verify_naver_confirmation(
-            [
-                json.loads(line)
-                for line in second.log_path.read_text(encoding="utf-8").splitlines()
-            ],
-            manifest,
-            naver.target_blog_id,
-            str(second_state["naver_title"]),
-        )
+    assert state_after_interruption["naver_save_outcome_uncertain"] is True
+    with pytest.raises(ContractError, match="outcome is uncertain"):
+        invalidate_naver_preparation(tmp_path, first.run_id)
+    assert naver.save_attempts == 1
     assert naver.save_calls == 0
-
-    saved = confirm_job(
-        ConfirmationInput(
-            tmp_path,
-            second.run_id,
-            "naver-draft-save",
-            executor=FixtureExecutor(),
-            notion_adapter=FixtureNotion(),
-            naver_adapter=naver,
-            confirmation_nonce=str(second_state["confirmation_nonce"]),
-        )
-    )
-    assert saved.status is RunStatus.DRAFT_SAVED
-    assert naver.save_calls == 1
 
 
 def test_q2_failure_is_recorded_and_blocks_naver(tmp_path: Path) -> None:
