@@ -70,6 +70,32 @@ class ImageQualityTests(unittest.TestCase):
         )
         self.assertEqual(result["body_images"], 2)
 
+        invalid_order_rows = (
+            (
+                "| 2 | VIS-01 | [IMAGE: slot 1] | `image-01.png` |\n"
+                + "| 2 | VIS-02 | [IMAGE: slot 2] | `copy-image-01.png` |\n"
+            ),
+            (
+                "| second | VIS-01 | [IMAGE: slot 1] | `image-01.png` |\n"
+                + "| 2 | VIS-02 | [IMAGE: slot 2] | `copy-image-01.png` |\n"
+            ),
+            (
+                "| 2 | VIS-01 | [IMAGE: slot 1] | `image-01.png` |\n"
+                + "| 1 | VIS-02 | [IMAGE: slot 2] | `copy-image-01.png` |\n"
+            ),
+        )
+        for rows in invalid_order_rows:
+            _ = image_map.write_text(
+                rows + "| [THUMBNAIL] | `[THUMBNAIL]` | `thumbnail.png` |\n",
+                encoding="utf-8",
+            )
+            with self.subTest(rows=rows), self.assertRaises(ContractError):
+                _ = validate_image_map(
+                    image_map,
+                    ["image-01.png", "copy-image-01.png"],
+                    "thumbnail.png",
+                )
+
         _ = image_map.write_text(
             "| 1 | VIS-01 | [IMAGE: slot 1] | `missing.png` |\n"
             + "| 2 | VIS-02 | [IMAGE: slot 2] | `copy-image-01.png` | `image-01.png` |\n"

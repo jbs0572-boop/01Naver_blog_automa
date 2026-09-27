@@ -306,6 +306,8 @@ def validate_image_map(
         ):
             if len(body_entries) >= len(body_paths):
                 raise ContractError("image map has an invalid body image row")
+            if values[0] != str(len(body_entries) + 1):
+                raise ContractError("image map body image order is not consecutive")
             file_path = values[3]
             if file_path not in body_paths:
                 raise ContractError("image map has an unexpected body image path")
