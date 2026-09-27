@@ -116,6 +116,20 @@ class NaverGateContractTests(unittest.TestCase):
         path = assessment_path(self.root, self.run_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         _ = path.write_text(json.dumps(report), encoding="utf-8")
+        image_quality_path = (
+            self.root / "assets" / self.keyword / "image-quality.jsonl"
+        )
+        image_records = [
+            json.loads(line)
+            for line in image_quality_path.read_text(encoding="utf-8").splitlines()
+        ]
+        for image_record in image_records:
+            image_record["article_quality_report_digest"] = report["report_digest"]
+            image_record["reviewed_at"] = "2026-08-26T12:03:01+09:00"
+        _ = image_quality_path.write_text(
+            "".join(json.dumps(record) + "\n" for record in image_records),
+            encoding="utf-8",
+        )
 
     def test_naver_preflight_does_not_require_approval(self) -> None:
         self.manifest = build_manifest(self._manifest_input())

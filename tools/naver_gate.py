@@ -152,6 +152,21 @@ def verify_article_quality(
     string_image_digests = {
         digest for digest in image_digests if isinstance(digest, str)
     }
+    for record in image_records:
+        reviewed_at = record.get("reviewed_at")
+        if (
+            record.get("run_id") != manifest.run_id
+            or record.get("article_quality_report_digest")
+            != assessment.report_digest
+            or not isinstance(reviewed_at, str)
+        ):
+            raise ContractError(
+                "Q3 image assessments are not bound to the current run review"
+            )
+        if parse_aware_datetime(reviewed_at, "Q3 reviewed_at") <= parse_aware_datetime(
+            q2_verified_at, "notion_last_verified_at"
+        ):
+            raise ContractError("Q3 image review must occur after Notion Q2")
     if (
         any(not isinstance(digest, str) for digest in image_digests)
         or len(image_digests) != len(expected_images)

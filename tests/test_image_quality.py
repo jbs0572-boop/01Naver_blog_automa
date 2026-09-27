@@ -115,6 +115,9 @@ class ImageQualityTests(unittest.TestCase):
             "image-quality.jsonl",
             {
                 "image_sha256": "sha256:" + "f" * 64,
+                "run_id": "RUN-image-quality",
+                "article_quality_report_digest": "sha256:" + "a" * 64,
+                "reviewed_at": "2026-08-27T10:01:00+00:00",
                 "automated_checks": {
                     "decode_check": "passed",
                     "duplicate_check": "passed",
@@ -146,6 +149,10 @@ class ImageQualityTests(unittest.TestCase):
         quality = self._write_jsonl(
             "low-quality.jsonl",
             {
+                "image_sha256": "sha256:" + "f" * 64,
+                "run_id": "RUN-image-quality",
+                "article_quality_report_digest": "sha256:" + "a" * 64,
+                "reviewed_at": "2026-08-27T10:01:00+00:00",
                 "automated_checks": {
                     key: "passed"
                     for key in (

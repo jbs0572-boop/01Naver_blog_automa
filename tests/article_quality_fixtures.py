@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from tools.article_quality import (
@@ -44,7 +45,11 @@ def install_passing_quality_review(
         "failure_stage": None,
         "next_action": "none",
     }
-    payload["report_digest"] = assessment_digest(payload)
+    report_digest = assessment_digest(payload)
+    payload["report_digest"] = report_digest
+    q3_reviewed_at = (
+        datetime.fromisoformat(reviewed_at) + timedelta(seconds=1)
+    ).isoformat()
     path = assessment_path(root, run_id)
     path.parent.mkdir(parents=True, exist_ok=True)
     _ = path.write_text(json.dumps(payload), encoding="utf-8")
@@ -64,6 +69,9 @@ def install_passing_quality_review(
                 continue
             image_records.append({
                 "image_sha256": "sha256:" + image_sha,
+                "run_id": run_id,
+                "article_quality_report_digest": report_digest,
+                "reviewed_at": q3_reviewed_at,
                 "automated_checks": {key: "passed" for key in (
                     "decode_check", "duplicate_check", "ocr_check",
                     "visual_contract_check", "mobile_render_check",

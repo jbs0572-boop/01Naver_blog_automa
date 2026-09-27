@@ -151,6 +151,18 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str]:
     quality_path = assessment_path(tmp_path, run_id)
     quality_path.parent.mkdir(parents=True, exist_ok=True)
     _ = quality_path.write_text(json.dumps(quality_report), encoding="utf-8")
+    image_quality_path = asset_dir / "image-quality.jsonl"
+    image_records = [
+        json.loads(line)
+        for line in image_quality_path.read_text(encoding="utf-8").splitlines()
+    ]
+    for image_record in image_records:
+        image_record["article_quality_report_digest"] = quality_report["report_digest"]
+        image_record["reviewed_at"] = "2026-08-31T00:03:01+00:00"
+    _ = image_quality_path.write_text(
+        "".join(json.dumps(record) + "\n" for record in image_records),
+        encoding="utf-8",
+    )
     run_log = tmp_path / "run.jsonl"
     confirmation_request_digest = "f" * 64
     events = [

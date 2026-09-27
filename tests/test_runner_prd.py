@@ -1412,6 +1412,48 @@ def test_naver_preparation_requires_image_quality_records_for_current_images(
     assert naver.save_calls == 0
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("run_id", "RUN-other"),
+        ("article_quality_report_digest", "sha256:" + "0" * 64),
+        ("reviewed_at", NOW.isoformat()),
+    ),
+)
+def test_naver_preparation_rejects_unbound_or_pre_q2_image_review(
+    tmp_path: Path,
+    field: str,
+    value: str,
+) -> None:
+    _ = (tmp_path / "notion-config.md").write_text(
+        "- 데이터 소스 ID: `datasource-fixture`\n", encoding="utf-8"
+    )
+    naver = CountingNaver()
+    request = RunnerRequest(
+        root=tmp_path,
+        job="daily-generate",
+        keyword="fixture",
+        now=NOW,
+        selection_context=DATE_CONTEXT,
+        executor=FixtureExecutor(),
+        notion_adapter=FixtureNotion(),
+        naver_adapter=naver,
+    )
+    ready = run_job(request)
+    quality_path = tmp_path / "assets" / "fixture" / "image-quality.jsonl"
+    records = [json.loads(line) for line in quality_path.read_text().splitlines()]
+    records[0][field] = value
+    _ = quality_path.write_text(
+        "".join(json.dumps(record) + "\n" for record in records), encoding="utf-8"
+    )
+
+    result = resume_job(replace(request, run_id=ready.run_id, resume=True))
+
+    assert result.status in {RunStatus.BLOCKED, RunStatus.FAILED}
+    assert naver.prepare_calls == 0
+    assert naver.save_calls == 0
+
+
 def test_user_defined_topic_cannot_be_replaced_by_selector(tmp_path: Path) -> None:
 
     result = _run_through_q3_fixture(
