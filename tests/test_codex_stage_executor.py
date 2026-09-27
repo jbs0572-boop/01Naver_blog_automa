@@ -1289,6 +1289,38 @@ def test_stage_executor_omits_browser_evidence_tag_when_not_supplied(
     assert "<browser-evidence>" not in prompts[0]
 
 
+def test_image_stage_does_not_reuse_partial_existing_assets(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A failed stage may leave these files behind; their presence alone is not proof of success.
+    _ = (tmp_path / "image-maker.md").write_text("instruction", encoding="utf-8")
+    schema_dir = tmp_path / "schemas"
+    schema_dir.mkdir()
+    _ = (schema_dir / "stage-result.schema.json").write_text(
+        (Path(__file__).parents[1] / "schemas" / "stage-result.schema.json").read_text(
+            encoding="utf-8"
+        ),
+        encoding="utf-8",
+    )
+    asset_dir = tmp_path / "assets" / "test"
+    asset_dir.mkdir(parents=True)
+    _ = (asset_dir / "image-map.md").write_text("partial", encoding="utf-8")
+    _ = (asset_dir / "thumbnail.png").write_bytes(b"partial image")
+    _ = (asset_dir / "image-01.png").write_bytes(b"partial image")
+    calls: list[str] = []
+
+    def fail_stage(*_args: object, **_kwargs: object) -> None:
+        calls.append("image-maker")
+        raise StageExecutionError("image-maker", "expected fixture failure")
+
+    monkeypatch.setattr("tools.codex_stage_executor.run_codex", fail_stage)
+
+    with pytest.raises(StageExecutionError, match="expected fixture failure"):
+        _ = CodexStageExecutor().execute(_stage_context(tmp_path, stage="image-maker"))
+
+    assert calls == ["image-maker"]
+
+
 @pytest.mark.parametrize(
     ("stage", "keyword", "expected_paths"),
     [

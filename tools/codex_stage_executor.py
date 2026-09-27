@@ -278,22 +278,6 @@ class CodexStageExecutor:
             elif stage == "researcher":
                 existing_artifact = root / "research" / f"{keyword}.md"
                 reuse_message = "기존 자료조사 산출물 재사용"
-            elif stage == "image-maker":
-                asset_dir = root / "assets" / keyword
-                image_map = asset_dir / "image-map.md"
-                thumbnail = asset_dir / "thumbnail.png"
-                if (
-                    image_map.is_file()
-                    and thumbnail.is_file()
-                    and any(asset_dir.glob("*.png"))
-                ):
-                    return StageResult(
-                        RunStatus.PASSED,
-                        StageExecution.PRODUCED,
-                        "기존 이미지 자산 재사용",
-                        (),
-                        keyword,
-                    )
             if existing_artifact is not None and existing_artifact.is_file():
                 if stage == "researcher":
                     selection = context.selection_context
