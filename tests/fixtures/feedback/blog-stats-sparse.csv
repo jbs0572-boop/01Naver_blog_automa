@@ -1,0 +1,2 @@
+mapping_version,capture_id,blog_id,blog_post_id,coverage_start,coverage_end,captured_at,status,views,search_inflow,exposure,average_exposure_rank,demographics_json
+blog-stats-columns-v1,WEEK1-SPARSE,owner-blog,POST-001,2026-09-01,2026-09-07,2026-09-08T09:00:00+09:00,mature,120,45,,,"[{""dimension"":""gender"",""bucket"":""female"",""count"":3}]"

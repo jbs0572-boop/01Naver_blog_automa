@@ -1,0 +1,38 @@
+{
+  "access_status": "read_only_success",
+  "as_of_date": "2026-09-13",
+  "candidates": [
+    {
+      "aliases": [],
+      "candidate_id": "food-3",
+      "category_key": "맛집",
+      "category_rank": 3,
+      "keyword": "한정선 찹쌀떡-",
+      "keyword_text": "한정선 찹쌀떡-",
+      "missing_fields": [],
+      "rank": 3,
+      "raw_observation": {"badge": "new", "keyword_text": "한정선 찹쌀떡-"},
+      "trend_index": null
+    },
+    {
+      "aliases": [],
+      "candidate_id": "travel-1",
+      "category_key": "국내여행",
+      "category_rank": 1,
+      "keyword": "서울 2026",
+      "keyword_text": "서울 2026",
+      "missing_fields": [],
+      "rank": 1,
+      "raw_observation": {"badge": "-", "keyword_text": "서울 2026"},
+      "trend_index": null
+    }
+  ],
+  "capture_id": "CAP-fixture",
+  "captured_at": "2026-09-13T08:00:00+09:00",
+  "channel_id": "naver_blog",
+  "limitations": [],
+  "query_period": null,
+  "schema_version": "creator-advisor-snapshot-v1",
+  "source_url": "https://creator-advisor.naver.com/naver_blog/sola_note",
+  "timezone": "Asia/Seoul"
+}

@@ -1,0 +1,21 @@
+{
+  "schema_version": "topic-feedback-rollout-v1",
+  "feedback_enabled": true,
+  "active_score_version": "topic-feedback-v1",
+  "shadow_score_version": "topic-feedback-v1",
+  "minimum_mature_samples": 30,
+  "rollout_tier": "canary",
+  "previous_stable_version": "topic-baseline-v1",
+  "source_modes": {
+    "naver-datalab": {"enabled": true, "access_mode": "official_api", "automatic_candidate_provider": false},
+    "naver-search-ads-keyword-tool": {"enabled": false, "access_mode": "official_api", "automatic_candidate_provider": false},
+    "blackkiwi": {"enabled": false, "access_mode": "manual_import", "automatic_candidate_provider": false},
+    "ecommerce-ai-extension": {"enabled": false, "access_mode": "disabled", "automatic_candidate_provider": false},
+    "datalab-tools-helper": {"enabled": false, "access_mode": "disabled", "automatic_candidate_provider": false},
+    "n-supporter": {"enabled": false, "access_mode": "disabled", "automatic_candidate_provider": false},
+    "daglo": {"enabled": false, "access_mode": "manual_import", "automatic_candidate_provider": false},
+    "chatgpt-codex-structuring": {"enabled": false, "access_mode": "disabled", "automatic_candidate_provider": false},
+    "naver-blog-statistics": {"enabled": true, "access_mode": "manual_import", "automatic_candidate_provider": false},
+    "missing-tenth-tool": {"enabled": false, "access_mode": "disabled", "automatic_candidate_provider": false}
+  }
+}

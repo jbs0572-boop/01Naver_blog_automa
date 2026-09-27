@@ -1,0 +1,326 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.naver-blog/schemas/topic-feedback.schema.json",
+  "title": "Topic feedback artifact",
+  "oneOf": [
+    { "$ref": "#/$defs/topic-signal-snapshot-v1" },
+    { "$ref": "#/$defs/blog-stat-snapshot-v1" },
+    { "$ref": "#/$defs/blog-stat-snapshot-v2" },
+    { "$ref": "#/$defs/publication-link-v1" },
+    { "$ref": "#/$defs/weekly-feedback-v1" }
+  ],
+  "$defs": {
+    "status": { "enum": ["mature", "pending", "missing", "delayed", "invalid"] },
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "kstTimestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "(?:\\+09:00)$"
+    },
+    "date": { "type": "string", "format": "date" },
+    "strings": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "digests": { "type": "array", "items": { "$ref": "#/$defs/digest" }, "uniqueItems": true },
+    "metric": { "type": ["number", "null"], "minimum": 0 },
+    "topic-signal-snapshot-v1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "captured_at", "as_of_date", "timezone", "limitations", "input_digests", "missing_fields", "status", "digest", "source_id", "source_confidence", "access_mode", "query_period", "terms_checked_at", "raw_payload", "derived"],
+      "properties": {
+        "schema_version": { "const": "topic-signal-snapshot-v1" },
+        "captured_at": { "$ref": "#/$defs/kstTimestamp" },
+        "as_of_date": { "$ref": "#/$defs/date" },
+        "timezone": { "const": "Asia/Seoul" },
+        "limitations": { "$ref": "#/$defs/strings" },
+        "input_digests": { "$ref": "#/$defs/digests" },
+        "missing_fields": { "$ref": "#/$defs/strings" },
+        "status": { "$ref": "#/$defs/status" },
+        "digest": { "$ref": "#/$defs/digest" },
+        "source_id": { "type": "string", "minLength": 1 },
+        "source_confidence": { "enum": ["A", "B", "C", "D"] },
+        "access_mode": { "enum": ["official_api", "manual_import", "authenticated_read_only", "disabled"] },
+        "query_period": { "type": ["string", "null"] },
+        "terms_checked_at": { "anyOf": [{ "$ref": "#/$defs/kstTimestamp" }, { "type": "null" }] },
+        "raw_payload": { "type": "object" },
+        "derived": { "type": "object" }
+      }
+    },
+    "blog-stat-snapshot-v1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "captured_at", "as_of_date", "timezone", "limitations", "input_digests", "missing_fields", "status", "digest", "blog_post_id", "search_inflow", "views", "exposure", "average_exposure_rank"],
+      "properties": {
+        "schema_version": { "const": "blog-stat-snapshot-v1" },
+        "captured_at": { "$ref": "#/$defs/kstTimestamp" },
+        "as_of_date": { "$ref": "#/$defs/date" },
+        "timezone": { "const": "Asia/Seoul" },
+        "limitations": { "$ref": "#/$defs/strings" },
+        "input_digests": { "$ref": "#/$defs/digests" },
+        "missing_fields": { "$ref": "#/$defs/strings" },
+        "status": { "$ref": "#/$defs/status" },
+        "digest": { "$ref": "#/$defs/digest" },
+        "blog_post_id": { "type": "string", "minLength": 1 },
+        "search_inflow": { "$ref": "#/$defs/metric" },
+        "views": { "$ref": "#/$defs/metric" },
+        "exposure": { "$ref": "#/$defs/metric" },
+        "average_exposure_rank": { "$ref": "#/$defs/metric" }
+      }
+    },
+    "blog-stat-snapshot-v2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "captured_at", "as_of_date", "timezone", "limitations", "input_digests", "missing_fields", "status", "digest", "mapping_version", "capture_id", "blog_id", "blog_post_id", "publication_run_id", "publication_link_digest", "coverage_start", "coverage_end", "search_inflow", "views", "exposure", "average_exposure_rank", "demographics"],
+      "properties": {
+        "schema_version": { "const": "blog-stat-snapshot-v2" },
+        "captured_at": { "$ref": "#/$defs/kstTimestamp" },
+        "as_of_date": { "$ref": "#/$defs/date" },
+        "timezone": { "const": "Asia/Seoul" },
+        "limitations": { "$ref": "#/$defs/strings" },
+        "input_digests": { "$ref": "#/$defs/digests" },
+        "missing_fields": { "$ref": "#/$defs/strings" },
+        "status": { "enum": ["mature", "delayed"] },
+        "digest": { "$ref": "#/$defs/digest" },
+        "mapping_version": { "const": "blog-stats-columns-v1" },
+        "capture_id": { "type": "string", "minLength": 1 },
+        "blog_id": { "type": "string", "minLength": 1 },
+        "blog_post_id": { "type": "string", "minLength": 1 },
+        "publication_run_id": { "type": "string", "minLength": 1 },
+        "publication_link_digest": { "$ref": "#/$defs/digest" },
+        "coverage_start": { "$ref": "#/$defs/date" },
+        "coverage_end": { "$ref": "#/$defs/date" },
+        "search_inflow": { "$ref": "#/$defs/metric" },
+        "views": { "$ref": "#/$defs/metric" },
+        "exposure": { "$ref": "#/$defs/metric" },
+        "average_exposure_rank": { "$ref": "#/$defs/metric" },
+        "demographics": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["dimension", "bucket", "count"],
+            "properties": {
+              "dimension": { "enum": ["age", "gender"] },
+              "bucket": { "type": "string", "minLength": 1 },
+              "count": { "type": "integer", "minimum": 5 }
+            }
+          }
+        }
+      }
+    },
+    "publication-link-v1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "captured_at", "as_of_date", "timezone", "limitations", "input_digests", "missing_fields", "status", "digest", "run_id", "topic_id", "keyword", "blog_post_id", "published_at", "artifact_digest", "score_version", "source_identity", "legacy_identity"],
+      "properties": {
+        "schema_version": { "const": "publication-link-v1" },
+        "captured_at": { "$ref": "#/$defs/kstTimestamp" },
+        "as_of_date": { "$ref": "#/$defs/date" },
+        "timezone": { "const": "Asia/Seoul" },
+        "limitations": { "$ref": "#/$defs/strings" },
+        "input_digests": { "$ref": "#/$defs/digests" },
+        "missing_fields": { "$ref": "#/$defs/strings" },
+        "status": { "$ref": "#/$defs/status" },
+        "digest": { "$ref": "#/$defs/digest" },
+        "run_id": { "type": "string", "minLength": 1 },
+        "topic_id": { "type": "string", "minLength": 1 },
+        "keyword": { "type": "string", "minLength": 1 },
+        "blog_post_id": { "type": ["string", "null"], "minLength": 1 },
+        "published_at": { "anyOf": [{ "$ref": "#/$defs/kstTimestamp" }, { "type": "null" }] },
+        "artifact_digest": { "$ref": "#/$defs/digest" },
+        "score_version": { "type": "string", "minLength": 1 },
+        "source_identity": { "type": "string", "minLength": 1 },
+        "legacy_identity": { "type": ["string", "null"], "minLength": 1 }
+      }
+    },
+    "cohortMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["views", "search_inflow", "exposure", "average_exposure_rank"],
+      "properties": {
+        "views": { "$ref": "#/$defs/metric" },
+        "search_inflow": { "$ref": "#/$defs/metric" },
+        "exposure": { "$ref": "#/$defs/metric" },
+        "average_exposure_rank": { "$ref": "#/$defs/metric" }
+      }
+    },
+    "cohortWindowDelta": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "views": { "type": "number" },
+        "search_inflow": { "type": "number" },
+        "exposure": { "type": "number" }
+      }
+    },
+    "cohortHorizon": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cutoff", "grace_end", "status", "invalid_reason", "observation_id", "observation_digest", "observation_captured_at", "observation_coverage_end", "cumulative", "prior_observation_id", "prior_observation_digest", "window_delta"],
+      "properties": {
+        "cutoff": { "$ref": "#/$defs/kstTimestamp" },
+        "grace_end": { "$ref": "#/$defs/kstTimestamp" },
+        "status": { "$ref": "#/$defs/status" },
+        "invalid_reason": { "type": ["string", "null"] },
+        "observation_id": { "type": ["string", "null"] },
+        "observation_digest": { "anyOf": [{ "$ref": "#/$defs/digest" }, { "type": "null" }] },
+        "observation_captured_at": { "anyOf": [{ "$ref": "#/$defs/kstTimestamp" }, { "type": "null" }] },
+        "observation_coverage_end": { "anyOf": [{ "$ref": "#/$defs/date" }, { "type": "null" }] },
+        "cumulative": { "anyOf": [{ "$ref": "#/$defs/cohortMetrics" }, { "type": "null" }] },
+        "prior_observation_id": { "type": ["string", "null"] },
+        "prior_observation_digest": { "anyOf": [{ "$ref": "#/$defs/digest" }, { "type": "null" }] },
+        "window_delta": { "$ref": "#/$defs/cohortWindowDelta" }
+      }
+    },
+    "weeklyCohort": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "topic_id", "keyword", "blog_post_id", "published_at", "publication_link_digest", "artifact_digest", "score_version", "horizons"],
+      "properties": {
+        "run_id": { "type": "string", "minLength": 1 },
+        "topic_id": { "type": "string", "minLength": 1 },
+        "keyword": { "type": "string", "minLength": 1 },
+        "blog_post_id": { "type": "string", "minLength": 1 },
+        "published_at": { "$ref": "#/$defs/kstTimestamp" },
+        "publication_link_digest": { "$ref": "#/$defs/digest" },
+        "artifact_digest": { "$ref": "#/$defs/digest" },
+        "score_version": { "type": "string", "minLength": 1 },
+        "horizons": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["7d", "28d"],
+          "properties": {
+            "7d": { "$ref": "#/$defs/cohortHorizon" },
+            "28d": { "$ref": "#/$defs/cohortHorizon" }
+          }
+        }
+      }
+    },
+    "rankingFeature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_id", "source_confidence", "unit", "raw_value", "normalized_value"],
+      "properties": {
+        "source_id": { "type": "string", "minLength": 1 },
+        "source_confidence": { "enum": ["A", "B", "C", "D"] },
+        "unit": { "type": "string", "minLength": 1 },
+        "raw_value": { "type": "number" },
+        "normalized_value": { "type": "number" }
+      }
+    },
+    "rankingEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["keyword", "score", "baseline_score", "creator_rank", "trend_index", "features", "applied_weight"],
+      "properties": {
+        "keyword": { "type": "string", "minLength": 1 },
+        "score": { "type": "number" },
+        "baseline_score": { "type": "number" },
+        "creator_rank": { "type": "integer", "minimum": 1 },
+        "trend_index": { "type": ["number", "null"] },
+        "features": { "type": "array", "items": { "$ref": "#/$defs/rankingFeature" } },
+        "applied_weight": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "evaluationResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "evaluation_as_of", "promotion_eligible", "mature_selected_outcomes", "training_outcomes", "validation_outcomes", "search_inflow_7d_improvement", "search_inflow_28d_improvement", "missing_rate", "duplicate_rate", "rolling_origin_folds", "ndcg_usage"],
+      "properties": {
+        "schema_version": { "const": "topic-feedback-evaluation-candidate-v2" },
+        "evaluation_as_of": { "$ref": "#/$defs/kstTimestamp" },
+        "promotion_eligible": { "type": "boolean" },
+        "mature_selected_outcomes": { "type": "integer", "minimum": 0 },
+        "training_outcomes": { "type": "integer", "minimum": 0 },
+        "validation_outcomes": { "type": "integer", "minimum": 0 },
+        "search_inflow_7d_improvement": { "type": ["number", "null"] },
+        "search_inflow_28d_improvement": { "type": ["number", "null"] },
+        "missing_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "duplicate_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "rolling_origin_folds": { "type": "integer", "minimum": 0 },
+        "ndcg_usage": { "const": "diagnostic_only" }
+      }
+    },
+    "scoreProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "selection_mode", "score_version", "score_config_digest", "approval_evaluation_digest", "evaluation_source_path", "evaluation_source_digest", "evaluation_result_digest", "ranking_digest", "cohort_digest", "challenger_verdict", "search_inflow", "source_freshness", "data_as_of", "semantic_input_digest"],
+      "properties": {
+        "kind": { "const": "score_provenance" },
+        "selection_mode": { "enum": ["baseline", "shadow", "active"] },
+        "score_version": { "type": "string", "minLength": 1 },
+        "score_config_digest": { "anyOf": [{ "$ref": "#/$defs/digest" }, { "type": "null" }] },
+        "approval_evaluation_digest": { "anyOf": [{ "$ref": "#/$defs/digest" }, { "type": "null" }] },
+        "evaluation_source_path": { "type": ["string", "null"] },
+        "evaluation_source_digest": { "anyOf": [{ "$ref": "#/$defs/digest" }, { "type": "null" }] },
+        "evaluation_result_digest": { "$ref": "#/$defs/digest" },
+        "ranking_digest": { "$ref": "#/$defs/digest" },
+        "cohort_digest": { "$ref": "#/$defs/digest" },
+        "challenger_verdict": { "enum": ["promotion_eligible", "not_eligible", "insufficient_evidence"] },
+        "search_inflow": { "type": "object", "additionalProperties": false, "required": ["7d", "28d"], "properties": { "7d": { "$ref": "#/$defs/searchInflowSummary" }, "28d": { "$ref": "#/$defs/searchInflowSummary" } } },
+        "source_freshness": { "type": "array", "items": { "$ref": "#/$defs/sourceFreshness" } },
+        "data_as_of": { "$ref": "#/$defs/kstTimestamp" },
+        "semantic_input_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "searchInflowSummary": {
+      "type": "object", "additionalProperties": false,
+      "required": ["mature_count", "search_inflow_total"],
+      "properties": { "mature_count": { "type": "integer", "minimum": 0 }, "search_inflow_total": { "type": "number", "minimum": 0 } }
+    },
+    "sourceFreshness": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "schema_version", "captured_at", "age_days"],
+      "properties": { "path": { "type": "string", "minLength": 1 }, "schema_version": { "type": "string", "minLength": 1 }, "captured_at": { "anyOf": [{ "$ref": "#/$defs/kstTimestamp" }, { "type": "null" }] }, "age_days": { "type": ["integer", "null"], "minimum": 0 } }
+    },
+    "creatorRanking": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "schema_version", "selection_mode", "baseline", "shadow", "selected", "candidates", "excluded_signals", "evaluation", "challenger_verdict", "evidence_digests"],
+      "properties": {
+        "kind": { "const": "creator_advisor_ranking" },
+        "schema_version": { "const": "weekly-feedback-ranking-v1" },
+        "selection_mode": { "enum": ["baseline", "shadow", "active"] },
+        "baseline": { "type": "array", "items": { "$ref": "#/$defs/rankingEntry" } },
+        "shadow": { "type": "array", "items": { "$ref": "#/$defs/rankingEntry" } },
+        "selected": { "type": "array", "items": { "$ref": "#/$defs/rankingEntry" } },
+        "candidates": { "type": "array", "items": { "$ref": "#/$defs/rankingEntry" } },
+        "excluded_signals": { "$ref": "#/$defs/strings" },
+        "evaluation": { "$ref": "#/$defs/evaluationResult" },
+        "challenger_verdict": { "enum": ["promotion_eligible", "not_eligible", "insufficient_evidence"] },
+        "evidence_digests": { "$ref": "#/$defs/digests" }
+      }
+    },
+    "cohortStatus": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "status_counts"],
+      "properties": {
+        "kind": { "const": "cohort_status" },
+        "status_counts": { "type": "object", "additionalProperties": false, "required": ["mature", "pending", "delayed", "missing", "invalid"], "properties": { "mature": { "type": "integer", "minimum": 0 }, "pending": { "type": "integer", "minimum": 0 }, "delayed": { "type": "integer", "minimum": 0 }, "missing": { "type": "integer", "minimum": 0 }, "invalid": { "type": "integer", "minimum": 0 } } }
+      }
+    },
+    "weekly-feedback-v1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "captured_at", "as_of_date", "timezone", "limitations", "input_digests", "missing_fields", "status", "digest", "feedback_id", "score_version", "cohorts", "rankings"],
+      "properties": {
+        "schema_version": { "const": "weekly-feedback-v1" },
+        "captured_at": { "$ref": "#/$defs/kstTimestamp" },
+        "as_of_date": { "$ref": "#/$defs/date" },
+        "timezone": { "const": "Asia/Seoul" },
+        "limitations": { "$ref": "#/$defs/strings" },
+        "input_digests": { "$ref": "#/$defs/digests" },
+        "missing_fields": { "$ref": "#/$defs/strings" },
+        "status": { "$ref": "#/$defs/status" },
+        "digest": { "$ref": "#/$defs/digest" },
+        "feedback_id": { "type": "string", "minLength": 1 },
+        "score_version": { "type": "string", "minLength": 1 },
+        "cohorts": { "type": "array", "items": { "$ref": "#/$defs/weeklyCohort" } },
+        "rankings": {
+          "oneOf": [
+            { "type": "array", "maxItems": 0 },
+            { "type": "array", "prefixItems": [{ "$ref": "#/$defs/scoreProvenance" }, { "$ref": "#/$defs/creatorRanking" }, { "$ref": "#/$defs/cohortStatus" }], "items": false, "minItems": 3, "maxItems": 3 }
+          ]
+        }
+      }
+    }
+  }
+}

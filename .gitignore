@@ -19,6 +19,7 @@ runs/
 baseline/
 manifests/
 .omo/
+.e2e-artifacts/
 agents/
 reports/
 notion-config.md

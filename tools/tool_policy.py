@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-from tools.contract_types import JSONMap
+from tools.contract_types import JSONMap, JSONValue
 
 
 class ToolAction(StrEnum):
@@ -18,6 +18,8 @@ class ToolDecision:
     action: ToolAction
     reason: str
     external: bool
+    operation: str | None
+    connector: str | None
 
 
 _READ_ACTIONS = frozenset(
@@ -41,13 +43,20 @@ _READ_ACTIONS = frozenset(
         "search_pages",
         "list_databases",
         "query_database",
+        "query_data_sources",
         "fetch_page",
+        "goto",
+        "extract",
+        "get_content",
+        "text",
+        "wait",
     }
 )
 _WRITE_ACTIONS = frozenset(
     {
         "duplicate_page",
         "create_page",
+        "create_pages",
         "update_page",
         "create_attachment",
         "move_page",
@@ -78,6 +87,20 @@ _WRITE_ACTIONS = frozenset(
     }
 )
 _EXTERNAL_PREFIXES = ("mcp__", "browser.", "chrome.", "computer.")
+_BROWSER_PREFIXES = ("browser.", "chrome.", "computer.")
+_BROWSER_DENY_ACTIONS = frozenset(
+    {
+        "archive",
+        "delete",
+        "evaluate",
+        "execute_script",
+        "javascript",
+        "publish",
+        "reserve",
+        "schedule",
+        "settings",
+    }
+)
 
 
 def _explicit_action(tool_input: JSONMap) -> str | None:
@@ -89,6 +112,10 @@ def _explicit_action(tool_input: JSONMap) -> str | None:
 
 
 def _action_name(tool_name: str) -> str | None:
+    if tool_name.startswith("mcp__codex_apps__notion_"):
+        return tool_name.removeprefix("mcp__codex_apps__notion_").removeprefix(
+            "notion_"
+        )
     if tool_name.startswith("mcp__"):
         parts = tool_name.split("__")
         return parts[-1] if len(parts) >= 3 and parts[-1] else None
@@ -98,27 +125,85 @@ def _action_name(tool_name: str) -> str | None:
     return None
 
 
+def _connector_name(tool_name: str) -> str | None:
+    if tool_name.startswith("mcp__"):
+        parts = tool_name.split("__")
+        return parts[1] if len(parts) >= 3 and parts[1] else None
+    for prefix in _BROWSER_PREFIXES:
+        if tool_name.startswith(prefix):
+            return prefix.removesuffix(".")
+    return None
+
+
 def classify_tool_call(
     tool_name: str, tool_input: JSONMap | None = None
 ) -> ToolDecision:
     normalized_name = tool_name.strip().lower()
     if not normalized_name:
-        return ToolDecision(ToolAction.DENY, "tool name is missing", True)
+        return ToolDecision(ToolAction.DENY, "tool name is missing", True, None, None)
     if not normalized_name.startswith(_EXTERNAL_PREFIXES):
         return ToolDecision(
-            ToolAction.INTERNAL, "local tool is outside external-write policy", False
+            ToolAction.INTERNAL,
+            "local tool is outside external-write policy",
+            False,
+            None,
+            None,
         )
-    action = _explicit_action(tool_input or {})
+    connector = _connector_name(normalized_name)
+    raw_action = _action_name(normalized_name)
+    action = raw_action.replace("-", "_") if raw_action is not None else None
     if action is None:
-        raw_action = _action_name(normalized_name)
-        action = raw_action.replace("-", "_") if raw_action is not None else None
+        action = _explicit_action(tool_input or {})
+    if normalized_name.startswith(_BROWSER_PREFIXES) and action in _BROWSER_DENY_ACTIONS:
+        return ToolDecision(
+            ToolAction.DENY,
+            f"browser action is always denied: {action}",
+            True,
+            action,
+            connector,
+        )
     if action in _READ_ACTIONS:
-        return ToolDecision(ToolAction.READ, f"registered read action: {action}", True)
+        return ToolDecision(
+            ToolAction.READ,
+            f"registered read action: {action}",
+            True,
+            action,
+            connector,
+        )
     if action in _WRITE_ACTIONS:
         return ToolDecision(
-            ToolAction.WRITE, f"registered external write action: {action}", True
+            ToolAction.WRITE,
+            f"registered external write action: {action}",
+            True,
+            action,
+            connector,
         )
-    return ToolDecision(ToolAction.DENY, "external tool/action is not registered", True)
+    return ToolDecision(
+        ToolAction.DENY,
+        "external tool/action is not registered",
+        True,
+        action,
+        connector,
+    )
 
 
-__all__ = ["ToolAction", "ToolDecision", "classify_tool_call"]
+def notion_resource_id(operation: str | None, tool_input: JSONMap) -> str | None:
+    value: JSONValue = None
+    if operation in {"create_page", "create_pages"}:
+        parent = tool_input.get("parent")
+        if isinstance(parent, dict):
+            value = parent.get("data_source_id")
+    return value if isinstance(value, str) and value else None
+
+
+def is_notion_connector(tool_name: str) -> bool:
+    return tool_name.lower().startswith(("mcp__notion__", "mcp__codex_apps__notion_"))
+
+
+__all__ = [
+    "ToolAction",
+    "ToolDecision",
+    "classify_tool_call",
+    "is_notion_connector",
+    "notion_resource_id",
+]

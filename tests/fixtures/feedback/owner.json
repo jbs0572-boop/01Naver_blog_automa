@@ -1,0 +1,4 @@
+{
+  "schema_version": "blog-stats-owner-v1",
+  "allowed_blog_ids": ["owner-blog"]
+}

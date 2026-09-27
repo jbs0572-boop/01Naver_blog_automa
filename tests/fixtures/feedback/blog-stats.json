@@ -1,0 +1,14 @@
+{
+  "access_mode": "manual_import_fixture",
+  "capture_id": "synthetic-blog-stats-001",
+  "raw_payload": {
+    "observations": [
+      {"captured_day": "2026-09-07", "search_inflow": 0, "views": 0},
+      {"captured_day": "2026-09-07", "search_inflow": 0, "views": 0}
+    ],
+    "post_reference": "synthetic-post-001",
+    "status": "complete"
+  },
+  "source_id": "naver-blog-stats",
+  "terms_checked_at": "2026-09-08"
+}

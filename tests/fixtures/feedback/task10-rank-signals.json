@@ -1,0 +1,26 @@
+[
+  {
+    "keyword": "첫 후보",
+    "source_id": "naver-datalab",
+    "source_confidence": "A",
+    "as_of_date": "2026-09-07",
+    "unit": "relative_index",
+    "value": 0
+  },
+  {
+    "keyword": "둘째 후보",
+    "source_id": "naver-datalab",
+    "source_confidence": "A",
+    "as_of_date": "2026-09-07",
+    "unit": "relative_index",
+    "value": 100
+  },
+  {
+    "keyword": "연관어",
+    "source_id": "naver-datalab",
+    "source_confidence": "A",
+    "as_of_date": "2026-09-07",
+    "unit": "relative_index",
+    "value": 999
+  }
+]

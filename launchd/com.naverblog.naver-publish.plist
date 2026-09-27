@@ -4,21 +4,28 @@
 <dict>
 	<key>Label</key>
 	<string>com.naverblog.naver-publish</string>
+	<key>Comment</key>
+	<string>Manual-only helper. The runner starts this job after Notion Q2; it is not calendar scheduled.</string>
 	<key>ProgramArguments</key>
 	<array>
 		<string>/Users/beomseok/00_AI/01_ NAVER_BLOG_AUTOMATE/.venv/bin/python</string>
 		<string>-m</string>
-		<string>tools.automation_runner</string>
+		<string>tools.preflight_runner</string>
 		<string>run</string>
 		<string>naver-publish</string>
-		<string>--mode</string>
-		<string>formal</string>
 		<string>--run-id</string>
 		<string>__SET_RUN_ID__</string>
 		<string>--dry-run</string>
 	</array>
 	<key>WorkingDirectory</key>
 	<string>/Users/beomseok/00_AI/01_ NAVER_BLOG_AUTOMATE</string>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>CODEX_HOME</key>
+		<string>/Users/beomseok/.codex</string>
+		<key>PATH</key>
+		<string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+	</dict>
 	<key>StandardOutPath</key>
 	<string>/Users/beomseok/00_AI/01_ NAVER_BLOG_AUTOMATE/.automation/logs/launchd/naver-publish.stdout.log</string>
 	<key>StandardErrorPath</key>

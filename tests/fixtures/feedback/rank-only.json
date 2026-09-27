@@ -1,0 +1,24 @@
+{
+  "access_status": "read_only_partial",
+  "as_of_date": "2026-09-07",
+  "candidates": [
+    {
+      "keyword": "첫 후보",
+      "rank": 1,
+      "raw_observation": {"display_rank": "1위"},
+      "trend_index": null
+    },
+    {
+      "keyword": "둘째 후보",
+      "rank": 2,
+      "raw_observation": {"display_rank": "2위"},
+      "trend_index": null
+    }
+  ],
+  "capture_id": "rank-only",
+  "captured_at": "2026-09-07T09:00:00+09:00",
+  "limitations": ["trend index unavailable"],
+  "schema_version": "creator-advisor-snapshot-v1",
+  "source_url": "https://creator-advisor.naver.com/naver_blog/sola_note",
+  "timezone": "Asia/Seoul"
+}

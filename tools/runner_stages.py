@@ -1,24 +1,19 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import time
-from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
+from tools.codex_stage_error import failure_policy
 from tools.contract_types import ContractError, JSONMap
-from tools.log_contract import read_events
-from tools.manifest import build_manifest, verify_manifest
-from tools.runner_state import atomic_write_json, file_digest
+from tools.runner_secure_fs import secure_append, secure_storage_active
 from tools.runner_types import (
-    STAGE_ORDER,
     JobName,
-    RunnerBlocked,
     RunnerRequest,
-    RunnerResult,
-    RunStatus,
+    StageEventContext,
+    StageEventOutcome,
 )
 
 
@@ -27,6 +22,14 @@ def now(request: RunnerRequest) -> datetime:
     if value.tzinfo is None or value.utcoffset() is None:
         raise ContractError("runner timestamps must include a timezone")
     return value
+
+
+def monotonic_ns(_request: RunnerRequest) -> int:
+    return time.monotonic_ns()
+
+
+def sleep(seconds: float) -> None:
+    time.sleep(seconds)
 
 
 def _safe_component(value: str, label: str) -> None:
@@ -45,13 +48,9 @@ def validated_job(request: RunnerRequest) -> JobName:
         job = JobName(request.job)
     except ValueError as error:
         raise ContractError(f"unsupported runner job: {request.job}") from error
-    if request.mode not in {"beta", "formal"}:
-        raise ContractError("mode must be beta or formal")
     if request.run_id is not None:
         _safe_component(request.run_id, "run_id")
-    if job is JobName.DAILY_GENERATE:
-        if request.keyword is None:
-            raise ContractError("daily-generate requires keyword")
+    if job is JobName.DAILY_GENERATE and request.keyword is not None:
         _safe_component(request.keyword, "keyword")
     if job is JobName.NAVER_PUBLISH and request.run_id is None:
         raise ContractError("naver-publish requires run_id")
@@ -59,183 +58,117 @@ def validated_job(request: RunnerRequest) -> JobName:
 
 
 def append_event(path: Path, event: JSONMap) -> None:
+    encoded = (
+        json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n"
+    ).encode()
+    if secure_storage_active():
+        try:
+            secure_append(path, encoded)
+        except ContractError as error:
+            raise ContractError(f"runner log cannot be written: {path}") from error
+        return
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
-        with path.open("a", encoding="utf-8") as handle:
-            _ = handle.write(
-                json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n"
-            )
-            _ = handle.flush()
+        with path.open("ab") as handle:
+            _ = handle.write(encoded)
+            handle.flush()
             os.fsync(handle.fileno())
     except OSError as error:
         raise ContractError(f"runner log cannot be written: {path}") from error
-
-
-def set_stage(state: JSONMap, stage: str, status: RunStatus) -> None:
-    stages = state.get("stages")
-    if not isinstance(stages, dict):
-        raise ContractError("runner state stages are invalid")
-    stages[stage] = status.value
 
 
 def _topic_id(request: RunnerRequest, run_id: str) -> str:
     return f"TOPIC-{request.keyword}" if request.keyword else f"TOPIC-{run_id}"
 
 
-def event(
-    request: RunnerRequest,
-    run_id: str,
-    batch_id: str,
-    stage: str,
-    status: RunStatus,
-    started_at: str,
-    ended_at: str,
-    attempt: int,
-    message: str | None = None,
-) -> JSONMap:
-    return {
+def _quality(context: StageEventContext, outcome: StageEventOutcome) -> JSONMap:
+    quality: JSONMap = {
+        "runner": "local",
+        "external_call": False,
+        "dry_run": context.request.dry_run,
+        "execution": outcome.execution.value,
+    }
+    if outcome.details is not None:
+        external_call = outcome.details.get("external_call")
+        if isinstance(external_call, bool):
+            quality["external_call"] = external_call
+    if context.stage == "content-assembler" and outcome.details is not None:
+        artifact_digest = outcome.details.get("artifact_digest")
+        if isinstance(artifact_digest, str):
+            quality["artifact_digest"] = artifact_digest
+    if context.stage == "naver-rider" and outcome.details is not None:
+        article_quality = outcome.details.get("article_quality")
+        if isinstance(article_quality, dict):
+            quality["article_quality"] = article_quality
+        confirmation_request_digest = outcome.details.get(
+            "confirmation_request_digest"
+        )
+        if isinstance(confirmation_request_digest, str):
+            quality["confirmation_request_digest"] = confirmation_request_digest
+    if context.stage != "notion-rider" or outcome.details is None:
+        return quality
+    for key in (
+        "storage_integrity",
+        "notion_page_id",
+        "notion_last_verified_at",
+        "notion_target_id",
+        "expected_notion_content_digest",
+        "notion_content_digest",
+        "notion_roundtrip_digest",
+        "artifact_digest",
+        "first_image_block",
+    ):
+        value = outcome.details.get(key)
+        if isinstance(value, str):
+            quality[key] = value
+    return quality
+
+
+def event(context: StageEventContext, outcome: StageEventOutcome) -> JSONMap:
+    request = context.request
+    payload: JSONMap = {
         "event_type": "stage",
         "pipeline_version": "workflow-optimized-v1",
-        "batch_id": batch_id,
-        "run_id": run_id,
-        "topic_id": _topic_id(request, run_id),
-        "stage": stage,
-        "started_at": started_at,
-        "ended_at": ended_at,
-        "status": status.value,
-        "attempt": attempt,
-        "quality": {
-            "runner": "local",
-            "external_call": False,
-            "dry_run": request.dry_run,
-        },
+        "telemetry_version": 2,
+        "batch_id": context.batch_id,
+        "run_id": context.run_id,
+        "topic_id": _topic_id(request, context.run_id),
+        "topic_source": "auto_selected" if request.auto_topic else "user_defined",
+        "stage": context.stage,
+        "started_at": context.started_at,
+        "ended_at": context.ended_at,
+        "duration_ms": context.duration_ms,
+        "depends_on": list(context.depends_on),
+        "status": outcome.status.value,
+        "attempt": context.attempt,
+        "quality": _quality(context, outcome),
         "error_type": None,
-        "error_message_safe": message,
+        "error_message_safe": outcome.message,
     }
-
-
-def with_retry[T](operation: Callable[[], T]) -> tuple[T, int]:
-    for attempt in (1, 2):
-        try:
-            return operation(), attempt
-        except (OSError, TimeoutError):
-            if attempt == 2:
-                raise
-            time.sleep(0.05 * (2 ** (attempt - 1)))
-    raise ContractError("runner retry loop did not complete")
-
-
-def _manifest_for(request: RunnerRequest, run_id: str, created_at: str) -> Path:
-    if request.keyword is None:
-        raise ContractError("manifest creation requires keyword")
-    path = request.root / "manifests" / f"{run_id}-workflow-manifest.json"
-    if path.is_file():
-        manifest = verify_manifest(request.root, path)
-        if (
-            manifest.run_id != run_id
-            or manifest.topic_id != f"TOPIC-{request.keyword}"
-            or manifest.mode != request.mode
-        ):
-            raise ContractError("existing manifest identity does not match the run")
-        return path
-    data = build_manifest(
-        request.root,
-        request.keyword,
-        run_id,
-        f"TOPIC-{request.keyword}",
-        request.mode,
-        created_at,
-    )
-    atomic_write_json(path, data)
-    _ = verify_manifest(request.root, path)
-    return path
-
-
-def stage_action(
-    request: RunnerRequest, job: JobName, stage: str, run_id: str, created_at: str
-) -> tuple[RunStatus, str | None]:
-    if job is JobName.DAILY_GENERATE:
-        if stage == "content-assembler":
-            _ = _manifest_for(request, run_id, created_at)
-            return RunStatus.PASSED, "canonical manifest verified"
-        if stage in {"notion-rider", "naver-rider"}:
-            return RunStatus.SKIPPED, "external integration not called by local runner"
-        return RunStatus.PASSED, "stage order recorded; producer remains local"
-    if job is JobName.WEEKLY_IMPROVE:
-        if stage != "researcher":
-            return RunStatus.SKIPPED, "weekly-improve is read-only aggregation"
-        event_count = sum(
-            len(read_events(path))
-            for path in sorted((request.root / "runs").glob("*.jsonl"))
-        )
-        artifact_count = sum(
-            1
-            for directory in ("research", "drafts", "final", "assets")
-            for path in sorted((request.root / directory).rglob("*"))
-            if path.is_file()
-        )
-        return RunStatus.PASSED, (
-            f"read-only improvement inputs aggregated: {event_count} log events, "
-            f"{artifact_count} artifacts"
-        )
-    if stage != "naver-rider":
-        return RunStatus.SKIPPED, "naver-publish does not execute upstream stages"
-    manifest_path = request.root / "manifests" / f"{run_id}-workflow-manifest.json"
-    if manifest_path.is_file():
-        _ = verify_manifest(request.root, manifest_path)
-    if not request.dry_run:
-        raise RunnerBlocked(
-            "naver-publish requires --dry-run; external writes are disabled"
-        )
-    raise RunnerBlocked("Gate B approval is required; dry-run made no external call")
-
-
-def state_output_hash(state: JSONMap, request: RunnerRequest, run_id: str) -> str:
-    manifest_path = request.root / "manifests" / f"{run_id}-workflow-manifest.json"
-    if manifest_path.is_file():
-        return "sha256:" + file_digest(manifest_path)
-    value = json.dumps(state.get("stages"), ensure_ascii=False, sort_keys=True).encode(
-        "utf-8"
-    )
-    return "sha256:" + hashlib.sha256(value).hexdigest()
-
-
-def initial_state(
-    request: RunnerRequest, run_id: str, input_hash: str, now: str
-) -> JSONMap:
-    return {
-        "run_id": run_id,
-        "job": request.job,
-        "mode": request.mode,
-        "keyword": request.keyword,
-        "topic_id": _topic_id(request, run_id),
-        "manifest_path": None,
-        "artifact_digest": None,
-        "artifact_paths": [],
-        "status": RunStatus.PENDING.value,
-        "stages": {stage: RunStatus.PENDING.value for stage in STAGE_ORDER},
-        "input_hash": input_hash,
-        "output_hash": None,
-        "created_at": now,
-        "updated_at": now,
-        "message": "run created",
-    }
-
-
-def record_manifest(state: JSONMap, request: RunnerRequest, run_id: str) -> None:
-    manifest_path = request.root / "manifests" / f"{run_id}-workflow-manifest.json"
-    if not manifest_path.is_file():
-        return
-    manifest = verify_manifest(request.root, manifest_path)
-    state["topic_id"] = manifest.topic_id
-    state["manifest_path"] = (
-        manifest_path.resolve().relative_to(request.root.resolve()).as_posix()
-    )
-    state["artifact_digest"] = manifest.artifact_digest
-    state["artifact_paths"] = [entry.path for entry in manifest.files]
-
-
-def blocked_result(
-    run_id: str, state_path: Path, log_path: Path, message: str
-) -> RunnerResult:
-    return RunnerResult(run_id, RunStatus.BLOCKED, state_path, log_path, (), message)
+    payload["error_type"] = outcome.error_type
+    model_config = request.model_config
+    if model_config is not None:
+        payload["model_config_digest"] = model_config.digest
+        setting = model_config.setting_for(context.stage)
+        if setting is not None:
+            payload["model"] = setting.model
+            payload["reasoning_effort"] = setting.reasoning_effort
+    policy = failure_policy(outcome.error_type)
+    if policy is not None:
+        payload["retryable"] = policy.retryable
+        payload["next_action"] = policy.next_action
+        payload["retry_stage"] = context.stage
+    if outcome.details is not None:
+        for key in ("retryable", "next_action", "retry_stage", "process_attempts"):
+            value = outcome.details.get(key)
+            if isinstance(value, (str, bool, int)):
+                payload[key] = value
+    if context.batch_slot is not None:
+        payload["batch_slot"] = context.batch_slot
+    selection = request.selection_context
+    if selection is not None and selection.score_version is not None:
+        payload["score_version"] = selection.score_version
+        payload["score_config_digest"] = selection.score_config_digest
+        payload["feedback_manifest_digest"] = selection.feedback_manifest_digest
+        payload["feedback_selection_mode"] = selection.feedback_selection_mode
+    return payload

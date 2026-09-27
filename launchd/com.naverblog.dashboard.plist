@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.naverblog.dashboard</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/beomseok/00_AI/01_ NAVER_BLOG_AUTOMATE/.venv/bin/python</string>
+    <string>-m</string>
+    <string>tools.test_dashboard</string>
+    <string>--root</string>
+    <string>/Users/beomseok/00_AI/01_ NAVER_BLOG_AUTOMATE</string>
+    <string>--live-writes</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/beomseok/00_AI/01_ NAVER_BLOG_AUTOMATE</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>CODEX_HOME</key>
+    <string>/Users/beomseok/.codex</string>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>PYTHONUNBUFFERED</key>
+    <string>1</string>
+    <key>NAVER_E2E_DISCARD_RECOVERY</key>
+    <string>1</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>StandardOutPath</key>
+  <string>/Users/beomseok/00_AI/01_ NAVER_BLOG_AUTOMATE/.automation/logs/launchd/dashboard.stdout.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/beomseok/00_AI/01_ NAVER_BLOG_AUTOMATE/.automation/logs/launchd/dashboard.stderr.log</string>
+</dict>
+</plist>

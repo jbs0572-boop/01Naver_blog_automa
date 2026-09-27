@@ -1,0 +1,15 @@
+{
+  "access_mode": "official_api_fixture",
+  "capture_id": "synthetic-datalab-001",
+  "query_period": {"end": "2026-08-31", "start": "2026-08-01"},
+  "raw_payload": {
+    "results": [
+      {"keyword": "synthetic-alpha", "relative_ratio": 72},
+      {"keyword": "Ｓｙｎｔｈｅｔｉｃ Ａｌｐｈａ", "relative_ratio": 72},
+      {"keyword": "synthetic-null", "relative_ratio": null}
+    ],
+    "status": "complete"
+  },
+  "source_id": "naver-datalab",
+  "terms_checked_at": "2026-09-08"
+}

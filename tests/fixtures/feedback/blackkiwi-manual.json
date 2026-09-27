@@ -1,0 +1,12 @@
+{
+  "access_mode": "manual_import_fixture",
+  "capture_id": "synthetic-blackkiwi-001",
+  "raw_payload": {
+    "boundary_samples": {"synthetic_large": 2147483648, "synthetic_negative": -1},
+    "missing_fields": ["competition_index"],
+    "rows": [{"publication_count": null, "term": "synthetic-gamma"}],
+    "status": "missing"
+  },
+  "source_id": "blackkiwi-manual",
+  "terms_checked_at": "2026-09-08"
+}

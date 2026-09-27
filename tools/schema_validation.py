@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 from collections.abc import Iterable
 from datetime import datetime
+from functools import lru_cache
 from pathlib import Path
 from typing import Final, Protocol
 
@@ -52,6 +53,38 @@ def _load(path: Path) -> JSONValue:
         raise SchemaError(f"could not load schema: {path}") from error
 
 
+@lru_cache(maxsize=128)
+def _validator_for_file(
+    path: Path,
+    inode: int,
+    modified_ns: int,
+    changed_ns: int,
+    size: int,
+) -> _ValidatorProtocol:
+    _ = (inode, modified_ns, changed_ns, size)
+    schema = _map(_load(path), str(path))
+    try:
+        Draft202012Validator.check_schema(schema)
+    except JsonSchemaError as error:
+        raise SchemaError(f"invalid schema: {error.message}") from error
+    return Draft202012Validator(schema, format_checker=FORMAT_CHECKER)
+
+
+def _validator_for(path: Path) -> _ValidatorProtocol:
+    resolved = path.resolve()
+    try:
+        stat = resolved.stat()
+    except OSError as error:
+        raise SchemaError(f"could not load schema: {resolved}") from error
+    return _validator_for_file(
+        resolved,
+        stat.st_ino,
+        stat.st_mtime_ns,
+        stat.st_ctime_ns,
+        stat.st_size,
+    )
+
+
 def _path(parts: Iterable[object]) -> tuple[str, ...]:
     return tuple(str(part) for part in parts)
 
@@ -68,15 +101,7 @@ def _error_key(
 
 
 def validate_instance(value: JSONValue, schema_path: Path = SCHEMA_PATH) -> None:
-    schema = _map(_load(schema_path), str(schema_path))
-    try:
-        Draft202012Validator.check_schema(schema)
-    except JsonSchemaError as error:
-        raise SchemaError(f"invalid schema: {error.message}") from error
-
-    validator: _ValidatorProtocol = Draft202012Validator(
-        schema, format_checker=FORMAT_CHECKER
-    )
+    validator = _validator_for(schema_path)
     errors = sorted(validator.iter_errors(value), key=_error_key)
     if errors:
         details = "; ".join(

@@ -4,11 +4,16 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-import struct
 from datetime import datetime
 from pathlib import Path
 from typing import Final
 
+from tools.image_contract import (
+    AUTOMATED_CHECKS,
+    MOBILE_VIEWPORT,
+    SCORE_FIELDS,
+    has_image_signature,
+)
 from tools.workflow_contract import (
     ContractError,
     JSONMap,
@@ -19,7 +24,7 @@ from tools.workflow_contract import (
 
 HASH_RE: Final = re.compile(r"^sha256:[0-9a-f]{64}$")
 SIZE_RE: Final = re.compile(r"^[1-9][0-9]*x[1-9][0-9]*$")
-SNAPSHOT: Final = "gpt-image-2-2026-04-21"
+SNAPSHOT: Final = "gpt-image-2.5-flare-2026-09-08"
 SCHEMA_PATH: Final = (
     Path(__file__).resolve().parents[1] / "schemas" / "workflow-contract.schema.json"
 )
@@ -38,21 +43,6 @@ METADATA_FIELDS: Final = (
     "provenance_status",
     "output_path",
 )
-SCORE_FIELDS: Final = (
-    "subject_relevance",
-    "composition_legibility",
-    "rendering_completion",
-    "information_contribution",
-    "style_consistency",
-)
-AUTOMATED_CHECKS: Final = (
-    "decode_check",
-    "duplicate_check",
-    "ocr_check",
-    "visual_contract_check",
-    "mobile_render_check",
-)
-MOBILE_VIEWPORT: Final = "390x844"
 
 
 def _map(value: JSONValue, label: str) -> JSONMap:
@@ -74,6 +64,11 @@ def _digest(value: JSONValue, key: str) -> str:
     return value
 
 
+def _has_digest(record: JSONMap, key: str) -> bool:
+    value = record.get(key)
+    return isinstance(value, str) and HASH_RE.fullmatch(value) is not None
+
+
 def _timestamp(value: JSONValue, key: str) -> None:
     if not isinstance(value, str):
         raise ContractError(f"invalid timestamp field: {key}")
@@ -83,19 +78,6 @@ def _timestamp(value: JSONValue, key: str) -> None:
         raise ContractError(f"invalid timestamp field: {key}") from error
     if parsed.tzinfo is None:
         raise ContractError(f"timestamp must include timezone: {key}")
-
-
-def _has_image_signature(path: Path) -> bool:
-    raw = path.read_bytes()
-    if raw.startswith(b"\x89PNG\r\n\x1a\n"):
-        return (
-            len(raw) >= 24
-            and raw[12:16] == b"IHDR"
-            and struct.unpack(">II", raw[16:24]) > (0, 0)
-        )
-    return raw.startswith((b"\xff\xd8\xff", b"GIF87a", b"GIF89a", b"RIFF")) and (
-        b"WEBP" in raw[:16] or raw.startswith((b"\xff\xd8\xff", b"GIF87a", b"GIF89a"))
-    )
 
 
 def _records(path: Path) -> list[JSONMap]:
@@ -113,7 +95,7 @@ def _records(path: Path) -> list[JSONMap]:
     return records
 
 
-def _check_metadata(record: JSONMap, index: int, mode: str, metadata_path: Path) -> str:
+def _check_metadata(record: JSONMap, index: int, metadata_path: Path) -> str:
     try:
         validate_instance(record, SCHEMA_PATH)
     except SchemaError as error:
@@ -125,25 +107,39 @@ def _check_metadata(record: JSONMap, index: int, mode: str, metadata_path: Path)
         raise ContractError(
             f"image metadata record {index} is missing: {', '.join(missing)}"
         )
-    if (
-        _text(record, "generation_provider") != "openai"
-        or _text(record, "generation_model") != "gpt-image-2"
-    ):
-        raise ContractError(
-            f"image metadata record {index} has unsupported provider or model"
-        )
-    if _text(record, "generation_snapshot") != SNAPSHOT:
-        raise ContractError(
-            f"image metadata record {index} has unsupported model snapshot"
-        )
     control = _text(record, "generation_control")
-    if control not in {"locked", "unlocked"}:
+    if control not in {"locked", "unlocked", "unavailable"}:
         raise ContractError(
             f"image metadata record {index} has invalid generation_control"
         )
-    if mode == "formal" and control != "locked":
+    if control == "unlocked":
         raise ContractError(
-            f"formal image metadata record {index} is not generation_control=locked"
+            f"image metadata record {index} is not generation_control=locked"
+        )
+    if control == "locked" and (
+        (
+            record.get("production_method", "ai_generation") == "ai_generation"
+            and (
+                _text(record, "generation_provider") != "openai"
+                or _text(record, "generation_model") != "gpt-image-2.5-flare"
+                or _text(record, "generation_snapshot") != SNAPSHOT
+            )
+        )
+        or (
+            record.get("production_method") == "local_render"
+            and (
+                _text(record, "generation_provider") != "pillow"
+                or _text(record, "generation_model") != "not_applicable"
+                or not _text(record, "generation_snapshot").startswith("pillow-")
+                or _text(record, "renderer_version") != _text(record, "generation_snapshot")[6:]
+                or not _has_digest(record, "renderer_sha256")
+                or not _has_digest(record, "input_sha256")
+            )
+        )
+        or record.get("production_method") not in {"ai_generation", "local_render", None}
+    ):
+        raise ContractError(
+            f"image metadata record {index} has unsupported locked provider/model"
         )
     if _text(record, "quality") != "high" or not SIZE_RE.fullmatch(
         _text(record, "size")
@@ -184,7 +180,7 @@ def _check_metadata(record: JSONMap, index: int, mode: str, metadata_path: Path)
     output_file = metadata_path.parent / output_path
     if not output_file.is_file():
         raise ContractError(f"image metadata output is missing: {output_path}")
-    if not _has_image_signature(output_file):
+    if not has_image_signature(output_file):
         raise ContractError(
             f"image metadata output is not a recognized image: {output_path}"
         )
@@ -194,12 +190,10 @@ def _check_metadata(record: JSONMap, index: int, mode: str, metadata_path: Path)
     return control
 
 
-def validate_image_metadata(path: Path, mode: str) -> JSONMap:
-    if mode not in {"beta", "formal"}:
-        raise ContractError("mode must be beta or formal")
+def validate_image_metadata(path: Path) -> JSONMap:
     records = _records(path)
     controls = [
-        _check_metadata(record, index, mode, path)
+        _check_metadata(record, index, path)
         for index, record in enumerate(records, 1)
     ]
     output_digests = [record.get("output_sha256") for record in records]
@@ -214,7 +208,7 @@ def validate_image_metadata(path: Path, mode: str) -> JSONMap:
             "locked": controls.count("locked"),
             "unlocked": controls.count("unlocked"),
         },
-        "formal_ready": all(control == "locked" for control in controls),
+        "production_ready": all(control == "locked" for control in controls),
     }
 
 
@@ -269,7 +263,7 @@ def validate_image_quality(path: Path) -> JSONMap:
             raise ContractError(
                 f"image quality render evidence is missing: {mobile_render_path}"
             )
-        if not _has_image_signature(path.parent / mobile_render_path):
+        if not has_image_signature(path.parent / mobile_render_path):
             raise ContractError(
                 f"image quality render evidence is not a recognized image: {mobile_render_path}"
             )

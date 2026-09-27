@@ -50,8 +50,8 @@ class ImageQualityTests(unittest.TestCase):
             "image-generation.jsonl",
             {
                 "generation_provider": "openai",
-                "generation_model": "gpt-image-2",
-                "generation_snapshot": "gpt-image-2-2026-04-21",
+                "generation_model": "gpt-image-2.5-flare",
+                "generation_snapshot": "gpt-image-2.5-flare-2026-09-08",
                 "generation_control": "locked",
                 "quality": "high",
                 "size": "1600x900",
@@ -64,16 +64,16 @@ class ImageQualityTests(unittest.TestCase):
                 "provenance_status": "generated",
             },
         )
-        result = validate_image_metadata(metadata, "formal")
-        self.assertEqual(result["formal_ready"], True)
+        result = validate_image_metadata(metadata)
+        self.assertEqual(result["production_ready"], True)
 
-    def test_unlocked_metadata_is_blocked_in_formal_mode(self) -> None:
+    def test_unlocked_metadata_is_blocked_in_production_workflow(self) -> None:
         metadata = self._write_jsonl(
             "unlocked.jsonl",
             {
                 "generation_provider": "openai",
-                "generation_model": "gpt-image-2",
-                "generation_snapshot": "gpt-image-2-2026-04-21",
+                "generation_model": "gpt-image-2.5-flare",
+                "generation_snapshot": "gpt-image-2.5-flare-2026-09-08",
                 "generation_control": "unlocked",
                 "quality": "high",
                 "size": "1600x900",
@@ -86,14 +86,14 @@ class ImageQualityTests(unittest.TestCase):
             },
         )
         with self.assertRaises(ContractError):
-            _ = validate_image_metadata(metadata, "formal")
+            _ = validate_image_metadata(metadata)
 
     def test_metadata_missing_required_field_is_blocked(self) -> None:
         metadata = self._write_jsonl(
             "missing-field.jsonl",
             {
                 "generation_provider": "openai",
-                "generation_model": "gpt-image-2",
+                "generation_model": "gpt-image-2.5-flare",
                 "generation_control": "locked",
                 "quality": "high",
                 "size": "1600x900",
@@ -106,7 +106,7 @@ class ImageQualityTests(unittest.TestCase):
             },
         )
         with self.assertRaises(ContractError):
-            _ = validate_image_metadata(metadata, "beta")
+            _ = validate_image_metadata(metadata)
 
     def test_quality_requires_mobile_human_pass(self) -> None:
         _ = (self.root / "mobile.png").write_bytes(self._image_bytes())

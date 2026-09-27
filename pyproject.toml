@@ -3,7 +3,9 @@ name = "naver-blog-workflow"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
+    "httpx2[http2,brotli,zstd]>=2.12,<3",
     "jsonschema[format-nongpl]>=4.26,<5",
+    "packaging>=26.3,<27",
 ]
 
 [tool.basedpyright]
@@ -12,6 +14,9 @@ typeCheckingMode = "all"
 pythonVersion = "3.13"
 executionEnvironments = [{ root = ".", extraPaths = ["/Users/beomseok/00_AI/01_ NAVER_BLOG_AUTOMATE"] }]
 reportAny = "none"
+
+[tool.ruff]
+extend-exclude = [".e2e-artifacts"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

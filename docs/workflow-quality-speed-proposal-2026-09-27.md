@@ -214,7 +214,7 @@ OpenAI는 GPT-6 Sol을 어려운 작업의 추론용, Luna를 반복적·효율�
 - 이미지: 좋은 기존 결과물을 기준으로 관련성·구도·가독성·완성도·정보 기여를 비교한다. 5개 항목 16/20 이상 및 각 3점 이상을 실험의 평가 기준으로 사용한다. 썸네일을 단순 카드로 바꾸어 통과시키지 않는다.
 - 안전·무결성: 필수 시각 슬롯·최신 근거·manifest·Q1·Q2·외부 대상 바인딩 모두 유지. 단 한 건이라도 외부 저장 오염이나 검증 우회가 발생하면 도입 보류.
 - 이미지 사람 점수는 실제 사람 평가가 있는 경우에만 기록한다. 모델 평가를 사람 평가로 표시하지 않는다.
-- 운영의 Q3는 AGENTS.md대로 선택 기록이다. 위 이미지 평가는 최적화 도입 실험의 채택 조건이며, 모든 운영 실행에 새 사람 승인 대기를 추가하는 제안은 아니다.
+- 운영의 Q3는 EXECUTION_AGENT.md대로 선택 기록이다. 위 이미지 평가는 최적화 도입 실험의 채택 조건이며, 모든 운영 실행에 새 사람 승인 대기를 추가하는 제안은 아니다.
 
 ### 6.3 시간·usage 기준
 
@@ -244,7 +244,7 @@ OpenAI는 GPT-6 Sol을 어려운 작업의 추론용, Luna를 반복적·효율�
 
 ## 8. 주요 확인 파일
 
-- `AGENTS.md`, `researcher.md`, `writer.md`, `image-maker.md`, `content-assembler.md`, `evaluation-rubric.md`
+- `AGENTS.md`, `EXECUTION_AGENT.md`, `researcher.md`, `writer.md`, `image-maker.md`, `content-assembler.md`, `evaluation-rubric.md`
 - `.automation/dashboard/model-settings.json`, `.automation/state/`, `.automation/logs/`
 - `.automation/work/<run_id>/<stage>/[attempt-N/]codex-attempt-N.jsonl`의 `turn.completed.usage`
 - `tools/model_presets.py`, `tools/codex_stage_command.py`, `tools/codex_stage_executor.py`

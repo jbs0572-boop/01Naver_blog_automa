@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.naver-blog/schemas/topic-feedback-outcome-evidence.schema.json",
+  "title": "Immutable topic feedback outcome evidence",
+  "oneOf": [
+    { "$ref": "#/$defs/selection" },
+    { "$ref": "#/$defs/observation" },
+    { "$ref": "#/$defs/evaluation" }
+  ],
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "kstTimestamp": { "type": "string", "format": "date-time", "pattern": "(?:\\+09:00)$" },
+    "selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "outcome_id", "run_id", "keyword", "blog_post_id", "selected", "score_version", "prediction_recorded_at", "training_cutoff", "published_at", "digest"],
+      "properties": {
+        "schema_version": { "const": "topic-feedback-selection-evidence-v1" },
+        "outcome_id": { "type": "string", "minLength": 1 },
+        "run_id": { "type": "string", "minLength": 1 },
+        "keyword": { "type": "string", "minLength": 1 },
+        "blog_post_id": { "type": "string", "minLength": 1 },
+        "selected": { "type": "boolean" },
+        "score_version": { "const": "topic-feedback-v1" },
+        "prediction_recorded_at": { "$ref": "#/$defs/kstTimestamp" },
+        "training_cutoff": { "$ref": "#/$defs/kstTimestamp" },
+        "published_at": { "$ref": "#/$defs/kstTimestamp" },
+        "digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "outcome_id", "run_id", "blog_post_id", "horizon_days", "observed_at", "status", "baseline_search_inflow", "challenger_search_inflow", "digest"],
+      "properties": {
+        "schema_version": { "const": "topic-feedback-outcome-observation-v1" },
+        "outcome_id": { "type": "string", "minLength": 1 },
+        "run_id": { "type": "string", "minLength": 1 },
+        "blog_post_id": { "type": "string", "minLength": 1 },
+        "horizon_days": { "enum": [7, 28] },
+        "observed_at": { "$ref": "#/$defs/kstTimestamp" },
+        "status": { "enum": ["mature", "pending", "missing", "delayed", "invalid"] },
+        "baseline_search_inflow": { "type": "number", "minimum": 0 },
+        "challenger_search_inflow": { "type": "number", "minimum": 0 },
+        "digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "size_bytes", "sha256", "schema_version", "digest"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "size_bytes": { "type": "integer", "minimum": 1 },
+        "sha256": { "$ref": "#/$defs/digest" },
+        "schema_version": { "enum": ["topic-feedback-selection-evidence-v1", "topic-feedback-outcome-observation-v1"] },
+        "digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "selectionReference": {
+      "allOf": [
+        { "$ref": "#/$defs/reference" },
+        { "properties": { "schema_version": { "const": "topic-feedback-selection-evidence-v1" } } }
+      ]
+    },
+    "observationReference": {
+      "allOf": [
+        { "$ref": "#/$defs/reference" },
+        { "properties": { "schema_version": { "const": "topic-feedback-outcome-observation-v1" } } }
+      ]
+    },
+    "outcomeReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outcome_id", "selection_ref", "seven_day_ref", "twenty_eight_day_ref"],
+      "properties": {
+        "outcome_id": { "type": "string", "minLength": 1 },
+        "selection_ref": { "$ref": "#/$defs/selectionReference" },
+        "seven_day_ref": { "$ref": "#/$defs/observationReference" },
+        "twenty_eight_day_ref": { "$ref": "#/$defs/observationReference" }
+      }
+    },
+    "evaluationResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "evaluation_as_of", "promotion_eligible", "mature_selected_outcomes", "training_outcomes", "validation_outcomes", "search_inflow_7d_improvement", "search_inflow_28d_improvement", "missing_rate", "duplicate_rate", "rolling_origin_folds", "ndcg_usage"],
+      "properties": {
+        "schema_version": { "const": "topic-feedback-evaluation-candidate-v2" },
+        "evaluation_as_of": { "$ref": "#/$defs/kstTimestamp" },
+        "promotion_eligible": { "type": "boolean" },
+        "mature_selected_outcomes": { "type": "integer", "minimum": 0 },
+        "training_outcomes": { "type": "integer", "minimum": 0 },
+        "validation_outcomes": { "type": "integer", "minimum": 0 },
+        "search_inflow_7d_improvement": { "type": ["number", "null"] },
+        "search_inflow_28d_improvement": { "type": ["number", "null"] },
+        "missing_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "duplicate_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "rolling_origin_folds": { "type": "integer", "minimum": 0 },
+        "ndcg_usage": { "const": "diagnostic_only" }
+      }
+    },
+    "evaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "baseline_score_version", "challenger_score_version", "evaluation_as_of", "evaluation_parameters", "outcomes", "result", "ndcg_delta", "digest"],
+      "properties": {
+        "schema_version": { "const": "topic-feedback-evaluation-v3" },
+        "baseline_score_version": { "const": "topic-baseline-v1" },
+        "challenger_score_version": { "const": "topic-feedback-v1" },
+        "evaluation_as_of": { "$ref": "#/$defs/kstTimestamp" },
+        "evaluation_parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["minimum_mature_samples", "metric", "horizons_days", "aggregation", "comparison", "validation"],
+          "properties": {
+            "minimum_mature_samples": { "const": 30 },
+            "metric": { "const": "search_inflow" },
+            "horizons_days": { "const": [7, 28] },
+            "aggregation": { "const": "median" },
+            "comparison": { "const": "strict_improvement" },
+            "validation": { "const": "publication_time_expanding_origin_v2" }
+          }
+        },
+        "outcomes": { "type": "array", "items": { "$ref": "#/$defs/outcomeReference" }, "uniqueItems": true },
+        "result": { "$ref": "#/$defs/evaluationResult" },
+        "ndcg_delta": { "type": ["number", "null"] },
+        "digest": { "$ref": "#/$defs/digest" }
+      }
+    }
+  }
+}

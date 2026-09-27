@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from tools.contract_types import JSONMap
 from tools.tool_policy import ToolAction, classify_tool_call
 
@@ -10,6 +12,32 @@ def test_read_query_is_not_promoted_by_write_words() -> None:
     decision = classify_tool_call("mcp__notion__search", tool_input)
 
     assert decision.action is ToolAction.READ
+
+
+@pytest.mark.parametrize(
+    ("tool_name", "expected"),
+    [
+        ("mcp__codex_apps__notion_fetch", ToolAction.READ),
+        ("mcp__codex_apps__notion_notion_create_pages", ToolAction.WRITE),
+        ("mcp__codex_apps__notion_notion_update_page", ToolAction.WRITE),
+    ],
+)
+def test_installed_notion_connector_actions_are_registered(
+    tool_name: str, expected: ToolAction
+) -> None:
+    decision = classify_tool_call(tool_name, {})
+
+    assert decision.action is expected
+
+
+def test_named_tool_action_cannot_be_overridden_by_input() -> None:
+    tool_input: JSONMap = {"operation": "create_attachment"}
+
+    decision = classify_tool_call(
+        "mcp__codex_apps__notion_notion_create_pages", tool_input
+    )
+
+    assert decision.operation == "create_pages"
 
 
 def test_registered_external_writes_are_gate_protected() -> None:
@@ -25,7 +53,15 @@ def test_registered_external_writes_are_gate_protected() -> None:
 
 
 def test_read_tools_are_allowed_without_gate() -> None:
-    assert classify_tool_call("browser.snapshot", {}).action is ToolAction.READ
+    for tool_name in (
+        "browser.snapshot",
+        "browser.goto",
+        "browser.extract",
+        "browser.get_content",
+        "browser.text",
+        "browser.wait",
+    ):
+        assert classify_tool_call(tool_name, {}).action is ToolAction.READ
     assert classify_tool_call("mcp__notion__get_page", {}).action is ToolAction.READ
 
 

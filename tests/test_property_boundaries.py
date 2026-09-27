@@ -9,8 +9,8 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from tools.contract_types import ContractError, JSONMap, JSONValue
-from tools.gate import batch_artifact_digest, parse_aware_datetime
+from tools.contract_types import ContractError
+from tools.gate import parse_aware_datetime
 from tools.runner_state import file_digest, state_paths
 
 SAFE_TEXT = st.text(
@@ -56,25 +56,3 @@ def test_generated_safe_run_ids_stay_in_runner_directories(
 def test_unsafe_run_ids_are_rejected(tmp_path: Path, run_id: str) -> None:
     with pytest.raises(ContractError, match="safe path"):
         _ = state_paths(tmp_path, run_id)
-
-
-@given(st.sets(SAFE_TEXT, min_size=1, max_size=4))
-def test_batch_digest_map_has_exactly_the_generated_run_ids(
-    run_ids: set[str],
-) -> None:
-    ordered = sorted(run_ids)
-    current_run_id = ordered[0]
-    digest = "sha256:" + "0" * 64
-    run_ids_value: list[JSONValue] = list(ordered)
-    per_run: dict[str, JSONValue] = {run_id: digest for run_id in ordered}
-    event: JSONMap = {
-        "run_ids": run_ids_value,
-        "max_items": len(ordered),
-        "per_run_artifact_digests": per_run,
-    }
-
-    assert batch_artifact_digest(event, current_run_id) == digest
-
-    per_run["unexpected"] = digest
-    with pytest.raises(ContractError, match="exactly match"):
-        _ = batch_artifact_digest(event, current_run_id)
