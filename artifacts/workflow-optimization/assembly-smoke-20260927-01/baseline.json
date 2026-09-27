@@ -1,0 +1,8 @@
+{
+  "seconds": 52.93751179194078,
+  "passed": false,
+  "error": "LIST contains invalid content: ",
+  "model": "gpt-5.6-luna",
+  "reasoning_effort": "low",
+  "protocol_sha256": "31556df758d13f6045b39c89e266b9fbbe4b79bf8b0eaedcb77d4e7e40fd216c"
+}

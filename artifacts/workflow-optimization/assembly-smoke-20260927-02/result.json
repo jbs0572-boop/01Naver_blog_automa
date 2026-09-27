@@ -1,0 +1,21 @@
+{
+  "baseline": {
+    "seconds": 218.58805712522008,
+    "passed": false,
+    "error": "unknown or unbalanced tag inside TEXT: [ALT]브랜드 포장이나 로고 없이 과일 찹쌀떡의 일반적인 형태를 보여주는 이미지[/ALT]",
+    "model": "gpt-5.6-luna",
+    "reasoning_effort": "low",
+    "protocol_sha256": "b90d936bea713129b396601f24685dcad7eebf703cd51238d064a4c9bdf10331"
+  },
+  "candidate_seconds": [
+    0.7479983340017498,
+    0.6847800000105053,
+    0.7408455000258982,
+    0.6804422498680651,
+    0.6798738748766482
+  ],
+  "candidate_median_seconds": 0.6847800000105053,
+  "candidate_passes": 5,
+  "reduction_percent": null,
+  "scope": "mechanical_assembly_only"
+}
