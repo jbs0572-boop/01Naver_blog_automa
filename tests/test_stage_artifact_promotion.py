@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -312,6 +313,71 @@ def test_image_stage_promotion_failure_restores_prior_assets_and_ledger(
         )
 
     assert {p.name: p.read_bytes() for p in asset_dir.iterdir()} == old_files
+    assert ledger.read_bytes() == old_ledger
+
+
+def test_image_stage_restores_archived_assets_when_quarantine_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def accept_contract(_asset_dir: Path, _draft_path: Path) -> JSONMap:
+        return {}
+
+    monkeypatch.setattr(
+        "tools.stage_artifact_promotion.validate_image_stage_assets", accept_contract
+    )
+    project = tmp_path / "project"
+    staging = tmp_path / "staging"
+    ledger = project / ".automation/work/RUN-2/image-maker/artifact-ownership.json"
+    asset_dir = project / "assets/topic"
+    asset_dir.mkdir(parents=True)
+    old_files = {"thumbnail.png": b"old thumbnail", "body.png": b"old body"}
+    for name, value in old_files.items():
+        _ = (asset_dir / name).write_bytes(value)
+    ledger.parent.mkdir(parents=True)
+    old_ledger = b'{"run_id":"RUN-2","artifacts":{}}'
+    _ = ledger.write_bytes(old_ledger)
+    staged_files = {
+        "image-map.md": b"[THUMBNAIL] thumbnail.png\nbody.png",
+        "thumbnail.png": b"new thumbnail",
+        "body.png": b"new body",
+    }
+    for name, value in staged_files.items():
+        destination = staging / "assets/topic" / name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        _ = destination.write_bytes(value)
+    real_replace = os.replace
+    failed_quarantine = False
+
+    def replace(source: str | Path, destination: str | Path) -> None:
+        nonlocal failed_quarantine
+        if (
+            Path(source) == asset_dir
+            and Path(destination).name == "failed"
+            and not failed_quarantine
+        ):
+            failed_quarantine = True
+            raise OSError("quarantine failed")
+        _ = real_replace(source, destination)
+
+    def fail_ledger(*_args: object, **_kwargs: object) -> None:
+        raise OSError("ledger write failed")
+
+    monkeypatch.setattr("tools.stage_artifact_promotion.os.replace", replace)
+    monkeypatch.setattr("tools.stage_artifact_promotion._write_ledger", fail_ledger)
+
+    with pytest.raises(OSError, match="ledger write failed"):
+        _ = promote_stage_artifacts(
+            stage="image-maker",
+            keyword="topic",
+            run_id="RUN-2",
+            staging_root=staging,
+            project_root=project,
+            declared=tuple(f"assets/topic/{name}" for name in staged_files),
+            ledger_path=ledger,
+        )
+
+    assert failed_quarantine
+    assert {path.name: path.read_bytes() for path in asset_dir.iterdir()} == old_files
     assert ledger.read_bytes() == old_ledger
 
 

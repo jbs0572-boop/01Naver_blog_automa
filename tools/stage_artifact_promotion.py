@@ -251,6 +251,60 @@ def _restore_ledger(path: Path, previous: bytes | None) -> None:
         temporary_path.unlink(missing_ok=True)
 
 
+def _restore_archived_image_assets(
+    asset_dir: Path, previous_asset_dir: Path
+) -> list[OSError]:
+    errors: list[OSError] = []
+    try:
+        shutil.rmtree(asset_dir)
+    except FileNotFoundError:
+        pass
+    except OSError as error:
+        errors.append(error)
+    try:
+        os.replace(previous_asset_dir, asset_dir)
+        return errors
+    except OSError as error:
+        errors.append(error)
+
+    try:
+        asset_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as error:
+        errors.append(error)
+        return errors
+    try:
+        archived_files = {
+            path.relative_to(previous_asset_dir)
+            for path in previous_asset_dir.rglob("*")
+            if path.is_file()
+        }
+    except OSError as error:
+        errors.append(error)
+        return errors
+    for relative in sorted(archived_files):
+        try:
+            destination = asset_dir / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            _ = shutil.copy2(previous_asset_dir / relative, destination)
+        except OSError as error:
+            errors.append(error)
+    try:
+        current_files = sorted(asset_dir.rglob("*"), reverse=True)
+    except OSError as error:
+        errors.append(error)
+        current_files = []
+    for current in current_files:
+        relative = current.relative_to(asset_dir)
+        try:
+            if current.is_file() and relative not in archived_files:
+                current.unlink()
+            elif current.is_dir() and not any(current.iterdir()):
+                current.rmdir()
+        except OSError as error:
+            errors.append(error)
+    return errors
+
+
 def _replace_image_asset_set(
     request: PromotionRequest,
     validated: tuple[tuple[Path, Path, str], ...],
@@ -289,13 +343,21 @@ def _replace_image_asset_set(
         if new_installed and asset_dir.exists():
             try:
                 os.replace(asset_dir, failed_asset_dir)
-            except OSError as rollback_error:
-                rollback_errors.append(rollback_error)
+            except OSError:
+                if previous_moved and previous_asset_dir.exists():
+                    rollback_errors.extend(
+                        _restore_archived_image_assets(asset_dir, previous_asset_dir)
+                    )
+                    previous_moved = False
+                else:
+                    try:
+                        shutil.rmtree(asset_dir)
+                    except OSError as rollback_error:
+                        rollback_errors.append(rollback_error)
         if previous_moved and previous_asset_dir.exists() and not asset_dir.exists():
-            try:
-                os.replace(previous_asset_dir, asset_dir)
-            except OSError as rollback_error:
-                rollback_errors.append(rollback_error)
+            rollback_errors.extend(
+                _restore_archived_image_assets(asset_dir, previous_asset_dir)
+            )
         if ledger_write_attempted:
             try:
                 _restore_ledger(request.ledger_path, previous_ledger)
