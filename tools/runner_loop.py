@@ -86,8 +86,6 @@ def execute_run(context: RunExecutionContext) -> RunnerResult:
             return _cancelled_run(context, state_path, log_path, now(request).isoformat(), state)
         set_stage(state, stage, RunStatus.RUNNING)
         set_stage_execution(state, stage, StageExecution.NOT_CALLED)
-        if stage == "naver-rider" and active_request.confirmed:
-            state["naver_save_outcome_uncertain"] = True
         state["updated_at"] = now(request).isoformat()
         atomic_write_json(state_path, state)
         stage_context = StageRunContext(active_request, job, stage, run_id, timestamp)
@@ -96,6 +94,10 @@ def execute_run(context: RunExecutionContext) -> RunnerResult:
             AttemptContext(stage_context, state, log_path, batch_id, depends_on),
             AttemptRuntime(now, monotonic_ns, runner_stages.sleep),
         )
+        if stage == "naver-rider" and active_request.confirmed:
+            persisted_state = read_state(state_path)
+            if persisted_state.get("naver_save_outcome_uncertain") is True:
+                state["naver_save_outcome_uncertain"] = True
         stage_result = attempt_outcome.result
         active_request = attempt_outcome.request
         if stage_result.run_status is RunStatus.DRAFT_SAVED:

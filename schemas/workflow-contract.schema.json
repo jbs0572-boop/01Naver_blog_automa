@@ -207,7 +207,7 @@
     },
     "imageQuality": {
       "type": "object",
-      "required": ["image_sha256", "run_id", "article_quality_report_digest", "reviewed_at", "automated_checks", "scores", "immediate_failure", "mobile_rendered", "mobile_viewport", "mobile_render_path", "mobile_render_sha256", "human_verdict"],
+      "required": ["image_sha256", "automated_checks", "scores", "immediate_failure", "mobile_rendered", "mobile_viewport", "mobile_render_path", "mobile_render_sha256", "human_verdict"],
       "properties": {
         "image_sha256": { "$ref": "#/$defs/artifactDigest" },
         "run_id": { "type": "string", "minLength": 1 },

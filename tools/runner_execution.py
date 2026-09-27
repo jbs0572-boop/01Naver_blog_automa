@@ -171,6 +171,10 @@ def recover_job(request: RunnerRequest) -> RunnerResult:
     try:
         with acquire_lock(lock_path, metadata):
             state = read_state(state_path)
+            if state.get("naver_save_outcome_uncertain") is True:
+                raise ContractError(
+                    "Naver save outcome is uncertain; reconcile the existing draft before recovery"
+                )
             if state.get("status") in {RunStatus.DRAFT_SAVED.value, RunStatus.CANCELLED.value} or read_cancellation(request.root, request.run_id) is not None:
                 return result_from_state(state, state_path, log_path)
             recovered = request_from_state(state, request.root, request.state_dir)
@@ -221,6 +225,10 @@ def _resume_job(request: RunnerRequest, *, lease_held: bool) -> RunnerResult:
         raise ContractError("resume requires run_id")
     state_path, _, _ = state_paths(request.root, request.run_id, request.state_dir)
     state = read_state(state_path)
+    if state.get("naver_save_outcome_uncertain") is True:
+        raise ContractError(
+            "Naver save outcome is uncertain; reconcile the existing draft before resume"
+        )
     if state.get("status") == RunStatus.CANCELLED.value or read_cancellation(request.root, request.run_id) is not None:
         return result_from_state(state, state_path, state_path.with_suffix(".jsonl"))
     recovered = request_from_state(state, request.root, request.state_dir)

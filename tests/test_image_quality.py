@@ -142,6 +142,13 @@ class ImageQualityTests(unittest.TestCase):
         )
         result = validate_image_quality(quality)
         self.assertEqual(result["passed"], True)
+        record = json.loads(quality.read_text(encoding="utf-8"))
+        assert isinstance(record, dict)
+        del record["run_id"]
+        del record["article_quality_report_digest"]
+        del record["reviewed_at"]
+        _ = quality.write_text(json.dumps(record) + "\n", encoding="utf-8")
+        self.assertEqual(validate_image_quality(quality)["passed"], True)
 
     def test_quality_score_below_threshold_is_blocked(self) -> None:
         _ = (self.root / "mobile.png").write_bytes(self._image_bytes())

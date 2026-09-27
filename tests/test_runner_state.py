@@ -66,6 +66,32 @@ def test_stable_run_id_separates_batch_slots(tmp_path: Path) -> None:
     assert stable_run_id(first) != stable_run_id(second)
 
 
+def test_q3_evidence_updates_do_not_change_immutable_workflow_fingerprint(
+    tmp_path: Path,
+) -> None:
+    request = RunnerRequest(
+        root=tmp_path,
+        job="daily-generate",
+        keyword="fixture",
+    )
+    assets = tmp_path / "assets" / "fixture"
+    assets.mkdir(parents=True)
+    quality = assets / "image-quality.jsonl"
+    mobile = assets / "q3-mobile.png"
+    image = assets / "body.png"
+    _ = quality.write_text('{"reviewed_at":"first"}\n', encoding="utf-8")
+    _ = mobile.write_bytes(b"mobile-evidence-v1")
+    _ = image.write_bytes(b"original-image")
+
+    initial = input_fingerprint(request)
+    _ = quality.write_text('{"reviewed_at":"post-q2"}\n', encoding="utf-8")
+    _ = mobile.write_bytes(b"mobile-evidence-v2")
+
+    assert input_fingerprint(request) == initial
+    _ = image.write_bytes(b"changed-image")
+    assert input_fingerprint(request) != initial
+
+
 def test_request_from_state_accepts_legacy_context_without_batch_fields(tmp_path: Path) -> None:
     # Given
     state: JSONMap = {

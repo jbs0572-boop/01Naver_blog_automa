@@ -157,6 +157,12 @@ def naver_stage_action(context: StageRunContext) -> StageResult:
             RunStatus.AWAITING_USER_CONFIRMATION,
             details,
         )
+    state_path, _, _ = state_paths(
+        request.root, context.run_id, request.state_dir
+    )
+    state = read_state(state_path)
+    state["naver_save_outcome_uncertain"] = True
+    atomic_write_json(state_path, state)
     saved = adapter.save(title, manifest.artifact_digest)
     if saved.get("draft_status") != "saved":
         raise ContractError("Naver adapter did not confirm draft save")

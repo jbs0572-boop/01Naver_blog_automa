@@ -1075,6 +1075,17 @@ def test_uncertain_naver_save_blocks_preparation_renewal(
     assert state_after_interruption["naver_save_outcome_uncertain"] is True
     with pytest.raises(ContractError, match="outcome is uncertain"):
         invalidate_naver_preparation(tmp_path, first.run_id)
+    with pytest.raises(ContractError, match="outcome is uncertain"):
+        _ = resume_job(
+            RunnerRequest(
+                root=tmp_path,
+                job="",
+                run_id=first.run_id,
+                executor=FixtureExecutor(),
+                notion_adapter=FixtureNotion(),
+                naver_adapter=naver,
+            )
+        )
     assert naver.save_attempts == 1
     assert naver.save_calls == 0
 

@@ -214,6 +214,7 @@ def _cli(
             and stages.get("notion-rider") in {"passed", "validated"}
             and stages.get("naver-rider") not in {"passed", "validated"}
             and state.get("status") != RunStatus.DRAFT_SAVED.value
+            and state.get("naver_save_outcome_uncertain") is not True
         )
         resume_naver_adapter: NaverBrowserAdapter | None = None
         cleanup_naver = lambda: None

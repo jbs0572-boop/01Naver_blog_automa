@@ -77,7 +77,11 @@ def input_fingerprint(request: RunnerRequest) -> str:
         ]
         if keyword_dir.is_dir():
             candidates.extend(
-                path for path in sorted(keyword_dir.rglob("*")) if path.is_file()
+                path
+                for path in sorted(keyword_dir.rglob("*"))
+                if path.is_file()
+                and path.name != "image-quality.jsonl"
+                and not path.name.startswith("q3-mobile")
             )
         for path in sorted(set(candidates)):
             record: JSONMap = {
