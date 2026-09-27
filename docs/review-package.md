@@ -36,6 +36,12 @@ Plan.md의 T00에는 코드·스키마·manifest·검사기·지침을 같은 �
 구현 전 코드·스키마·검사기·운영 계약을 일치시키고, 같은 revision에서 다시 검토해야 한다.
 최신 계약을 예전 규칙으로 되돌리는 수정이나, 근거 확인 없이 지적을 해결 처리하는 것은 하지 않는다.
 
+커밋 `95684d6e50`의 추가 지적은 Notion 쓰기 전에 Gate 검증이 계획에 명확하지 않다는 내용이다.
+이를 반영해 Plan.md의 T12에 Q1, 네 파일을 포함한 canonical manifest, 같은 run의 Q1 로그,
+설정·실제 데이터 소스 ID 일치와 `notion_write` Hook 검증을 신규 페이지 생성의 선행조건으로 적었다.
+저장 후 Q2 재조회도 명시했다. 최신 목표 계약은 Notion 쓰기에 별도 사람 승인을 요구하지 않으므로 이를 새로 도입하지 않았다.
+네이버 입력은 Q2·digest·페이지/블로그 ID·산출물 대조와 Hook 뒤에 두고, 임시저장 직전의 명시적 사용자 확인을 유지한다.
+
 리뷰 근거: [Q3 지적](https://github.com/jbs0572-boop/01Naver_blog_automa/pull/1#discussion_r4113535762),
 [최종 파일 개수 지적](https://github.com/jbs0572-boop/01Naver_blog_automa/pull/1#discussion_r4113535763).
 
