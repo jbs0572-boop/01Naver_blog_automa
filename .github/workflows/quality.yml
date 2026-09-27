@@ -6,6 +6,8 @@ on:
       - ".github/pull_request_template.md"
       - ".github/workflows/quality.yml"
       - "AGENTS.md"
+      - "EXECUTION_AGENT.md"
+      - "Plan.md"
       - ".codex/**"
       - "config/**"
       - "DESIGN.md"

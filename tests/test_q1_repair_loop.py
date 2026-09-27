@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import override
@@ -13,7 +14,7 @@ from tools.codex_process import CodexProcessError, run_codex
 from tools.codex_stage_error import StageExecutionError, StageFailureType
 from tools.contract_types import ContractError, JSONMap
 from tools.external_adapter import ExternalWriteRequest
-from tools.runner_execution import recover_job, run_job
+from tools.runner_execution import recover_job, resume_job, run_job
 from tools.runner_types import (
     RunnerRequest,
     RunStatus,
@@ -239,7 +240,10 @@ def test_q1_failure_retries_content_assembler_with_feedback_and_preserves_produc
     notion = CountingQ1Notion()
     _write_notion_config(tmp_path)
 
-    result = run_job(_request(tmp_path, executor, notion))
+    request = _request(tmp_path, executor, notion)
+    result = run_job(request)
+    if result.status is RunStatus.READY_FOR_NAVER:
+        result = resume_job(replace(request, run_id=result.run_id, resume=True))
 
     assert result.status is RunStatus.AWAITING_USER_CONFIRMATION
     assert executor.calls == [

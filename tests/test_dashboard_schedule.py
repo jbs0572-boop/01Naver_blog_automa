@@ -131,6 +131,44 @@ def test_pause_invalid_time_and_missed_occurrences(tmp_path: Path) -> None:
     assert not calls
 
 
+def test_missed_occurrences_are_recorded_after_dashboard_was_offline_overnight(
+    tmp_path: Path,
+) -> None:
+    scheduler = DailySchedule(tmp_path)
+    configured_at = datetime.fromisoformat("2026-09-10T07:00:00+09:00")
+    _ = scheduler.save({"times": ["08:00", "18:00"], "enabled": True}, configured_at)
+
+    def should_not_launch(
+        _day: str,
+        _scheduled_at: str,
+        _occurrence_id: str,
+        _model_config: ModelConfigSnapshot,
+    ) -> str:
+        raise AssertionError("an overdue occurrence must not launch automatically")
+
+    scheduler.tick(
+        datetime.fromisoformat("2026-09-11T09:00:00+09:00"),
+        lambda: False,
+        should_not_launch,
+    )
+
+    history = scheduler.data["history"]
+    assert isinstance(history, list)
+    missed_at: set[str] = set()
+    for item in history:
+        if not isinstance(item, dict) or item.get("status") != "missed":
+            continue
+        at = item.get("at")
+        if isinstance(at, str):
+            missed_at.add(at)
+    assert missed_at == {
+        "2026-09-10T08:00:00+09:00",
+        "2026-09-10T18:00:00+09:00",
+        "2026-09-11T08:00:00+09:00",
+    }
+    assert scheduler.data["last_observed_date"] == "2026-09-11"
+
+
 def test_server_timer_starts_one_injected_batch_without_browser(tmp_path: Path) -> None:
     now = datetime.now(KST)
     def runner(request: RunnerRequest) -> RunnerResult:

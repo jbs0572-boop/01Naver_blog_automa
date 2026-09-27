@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import shutil
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import override
@@ -186,6 +187,13 @@ class FixtureNaver:
     def save(self, title: str, artifact_digest: str) -> JSONMap:
         _ = artifact_digest
         return {"draft_status": "saved", "naver_title": title}
+
+
+def _run_through_q3_fixture(request: RunnerRequest) -> RunnerResult:
+    result = run_job(request)
+    if result.status is RunStatus.READY_FOR_NAVER:
+        result = resume_job(replace(request, run_id=result.run_id, resume=True))
+    return result
 
 
 class CountingNaver(FixtureNaver):
@@ -751,9 +759,8 @@ def test_both_topic_sources_follow_same_pipeline_to_draft_saved(
         naver_adapter=FixtureNaver(),
     )
 
-    from tools.runner_execution import run_job
 
-    waiting = run_job(request)
+    waiting = _run_through_q3_fixture(request)
     assert waiting.status is RunStatus.AWAITING_USER_CONFIRMATION
     waiting_state = json.loads(waiting.state_path.read_text(encoding="utf-8"))
     assert waiting_state["topic_source"] == topic_source
@@ -796,10 +803,9 @@ def test_auto_save_flag_cannot_bypass_explicit_naver_confirmation(
         "- 데이터 소스 ID: `datasource-fixture`\n", encoding="utf-8"
     )
     naver = CountingNaver()
-    from tools.runner_execution import run_job
 
     # When: Q2 completes and the request reaches the Naver boundary unconfirmed.
-    result = run_job(
+    result = _run_through_q3_fixture(
         RunnerRequest(
             root=tmp_path,
             job="daily-generate",
@@ -833,9 +839,8 @@ def test_direct_confirmation_without_active_nonce_cannot_save_naver_draft(
         "- 데이터 소스 ID: `datasource-fixture`\n", encoding="utf-8"
     )
     naver = CountingNaver()
-    from tools.runner_execution import run_job
 
-    waiting = run_job(
+    waiting = _run_through_q3_fixture(
         RunnerRequest(
             root=tmp_path,
             job="daily-generate",
@@ -875,9 +880,8 @@ def test_explicit_confirmation_saves_after_blocked_auto_save_flag(
         "- 데이터 소스 ID: `datasource-fixture`\n", encoding="utf-8"
     )
     naver = CountingNaver()
-    from tools.runner_execution import run_job
 
-    waiting = run_job(
+    waiting = _run_through_q3_fixture(
         RunnerRequest(
             root=tmp_path,
             job="daily-generate",
@@ -920,9 +924,8 @@ def test_renewed_naver_preparation_requires_fresh_confirmation(
         "- 데이터 소스 ID: `datasource-fixture`\n", encoding="utf-8"
     )
     naver = InterruptFirstSaveNaver()
-    from tools.runner_execution import run_job
 
-    first = run_job(
+    first = _run_through_q3_fixture(
         RunnerRequest(
             root=tmp_path,
             job="daily-generate",
@@ -1010,7 +1013,6 @@ def test_q2_failure_is_recorded_and_blocks_naver(tmp_path: Path) -> None:
         naver_adapter=FixtureNaver(),
     )
 
-    from tools.runner_execution import run_job
 
     result = run_job(request)
 
@@ -1036,9 +1038,8 @@ def test_naver_gate_failure_prevents_prepare(tmp_path: Path) -> None:
     naver = CountingNaver()
 
     # When: the pipeline reaches the Naver preparation boundary.
-    from tools.runner_execution import run_job
 
-    result = run_job(
+    result = _run_through_q3_fixture(
         RunnerRequest(
             root=tmp_path,
             job="daily-generate",
@@ -1065,7 +1066,7 @@ def test_low_article_quality_blocks_naver_before_any_adapter_call(
     )
     naver = CountingNaver()
 
-    result = run_job(
+    result = _run_through_q3_fixture(
         RunnerRequest(
             root=tmp_path,
             job="daily-generate",
@@ -1101,9 +1102,8 @@ def test_stale_confirmation_resume_revalidates_gate_before_save(
         "- 데이터 소스 ID: `datasource-fixture`\n", encoding="utf-8"
     )
     naver = CountingNaver()
-    from tools.runner_execution import run_job
 
-    waiting = run_job(
+    waiting = _run_through_q3_fixture(
         RunnerRequest(
             root=tmp_path,
             job="daily-generate",
@@ -1157,9 +1157,8 @@ def test_confirmation_resume_rejects_changed_blog_before_save(
         "- 데이터 소스 ID: `datasource-fixture`\n", encoding="utf-8"
     )
     naver = MutableTargetNaver()
-    from tools.runner_execution import run_job
 
-    waiting = run_job(
+    waiting = _run_through_q3_fixture(
         RunnerRequest(
             root=tmp_path,
             job="daily-generate",
@@ -1201,9 +1200,8 @@ def test_ready_for_naver_resume_revalidates_persisted_q2_before_prepare(
     _ = (tmp_path / "notion-config.md").write_text(
         "- 데이터 소스 ID: `datasource-fixture`\n", encoding="utf-8"
     )
-    from tools.runner_execution import run_job
 
-    ready = run_job(
+    ready = _run_through_q3_fixture(
         RunnerRequest(
             root=tmp_path,
             job="daily-generate",
@@ -1237,10 +1235,50 @@ def test_ready_for_naver_resume_revalidates_persisted_q2_before_prepare(
     assert naver.save_calls == 0
 
 
-def test_user_defined_topic_cannot_be_replaced_by_selector(tmp_path: Path) -> None:
-    from tools.runner_execution import run_job
+def test_q2_completion_pauses_before_naver_until_explicit_resume(
+    tmp_path: Path,
+) -> None:
+    _ = (tmp_path / "notion-config.md").write_text(
+        "- 데이터 소스 ID: `datasource-fixture`\n", encoding="utf-8"
+    )
+    naver = CountingNaver()
+    request = RunnerRequest(
+        root=tmp_path,
+        job="daily-generate",
+        keyword="fixture",
+        now=NOW,
+        selection_context=DATE_CONTEXT,
+        executor=FixtureExecutor(),
+        notion_adapter=FixtureNotion(),
+        naver_adapter=naver,
+    )
 
-    result = run_job(
+    ready = run_job(request)
+
+    assert ready.status is RunStatus.READY_FOR_NAVER
+    assert naver.prepare_calls == 0
+    assert naver.save_calls == 0
+
+    resumed = resume_job(
+        RunnerRequest(
+            root=tmp_path,
+            job="",
+            run_id=ready.run_id,
+            resume=True,
+            executor=FixtureExecutor(),
+            notion_adapter=FixtureNotion(),
+            naver_adapter=naver,
+        )
+    )
+
+    assert resumed.status is RunStatus.AWAITING_USER_CONFIRMATION
+    assert naver.prepare_calls == 1
+    assert naver.save_calls == 0
+
+
+def test_user_defined_topic_cannot_be_replaced_by_selector(tmp_path: Path) -> None:
+
+    result = _run_through_q3_fixture(
         RunnerRequest(
             root=tmp_path,
             job="daily-generate",
@@ -1267,7 +1305,6 @@ def test_pipeline_completes_content_when_external_adapters_are_absent(
         executor=FixtureExecutor(),
     )
 
-    from tools.runner_execution import run_job
 
     result = run_job(request)
 
@@ -1297,16 +1334,15 @@ def test_notion_only_pipeline_reaches_ready_for_naver_without_confirmation(
         notion_adapter=FixtureNotion(),
     )
 
-    from tools.runner_execution import run_job
 
     # When: the actual pipeline executes through Notion Q2.
     result = run_job(request)
     state = json.loads(result.state_path.read_text(encoding="utf-8"))
 
-    # Then: Naver is skipped and no save confirmation is created.
+    # Then: execution pauses after Q2 so the Q3 quality report can be recorded.
     assert result.status is RunStatus.READY_FOR_NAVER
     assert state["stages"]["notion-rider"] == "passed"
-    assert state["stages"]["naver-rider"] == "skipped"
+    assert state["stages"]["naver-rider"] == "pending"
     assert state["confirmation"] is None
 
 

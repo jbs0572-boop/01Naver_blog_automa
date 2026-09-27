@@ -42,7 +42,7 @@ def test_plist_has_absolute_runner_contract(path: Path) -> None:
         assert data["ThrottleInterval"] == 10
         assert "StartCalendarInterval" not in data
         assert "--root" in args
-        assert "--live-writes" in args
+        assert "--live-writes" not in args
         assert "--demo" not in args
     elif path.stem == "com.naverblog.naver-publish":
         assert "StartCalendarInterval" not in data

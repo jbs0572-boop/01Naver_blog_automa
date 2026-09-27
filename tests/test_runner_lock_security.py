@@ -32,8 +32,10 @@ def test_stale_lock_cleanup_does_not_delete_replacement_owner(
     original_unlink = secure_unlink_if_identity
 
     def replace_before_unlink(path: Path, identity: tuple[int, int]) -> bool:
+        replacement = path.with_name(f"{path.name}.replacement")
+        _ = replacement.write_text(json.dumps({"pid": os.getpid()}), encoding="utf-8")
         path.unlink()
-        _ = path.write_text(json.dumps({"pid": os.getpid()}), encoding="utf-8")
+        os.replace(replacement, path)
         return original_unlink(path, identity)
 
     monkeypatch.setattr(
@@ -55,8 +57,10 @@ def test_secure_create_cleanup_preserves_replacement_leaf(
         calls += 1
         if calls == 1:
             return True
+        replacement = lock.with_name(f"{lock.name}.replacement")
+        _ = replacement.write_bytes(b"replacement")
         lock.unlink()
-        _ = lock.write_bytes(b"replacement")
+        os.replace(replacement, lock)
         return False
 
     monkeypatch.setattr(
@@ -84,8 +88,10 @@ def test_secure_create_captures_owner_before_path_replacement(
         nonlocal replaced
         if path == lock.name and dir_fd is not None and not replaced:
             replaced = True
+            replacement = lock.with_name(f"{lock.name}.replacement")
+            _ = replacement.write_bytes(b"replacement")
             lock.unlink()
-            _ = lock.write_bytes(b"replacement")
+            os.replace(replacement, lock)
         return original_stat(path, dir_fd=dir_fd, follow_symlinks=follow_symlinks)
 
     monkeypatch.setattr("tools.runner_secure_fs.os.stat", replace_before_path_stat)

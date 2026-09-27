@@ -133,7 +133,10 @@ def execute_run(context: RunExecutionContext) -> RunnerResult:
                 updated_at=now(active_request).isoformat(),
             )
             atomic_write_json(state_path, state)
-            if stage_result.run_status is RunStatus.AWAITING_USER_CONFIRMATION:
+            if stage_result.run_status in {
+                RunStatus.READY_FOR_NAVER,
+                RunStatus.AWAITING_USER_CONFIRMATION,
+            }:
                 return result_from_state(state, state_path, log_path)
         if job is JobName.WEEKLY_IMPROVE and stage == "researcher":
             state["message"] = message

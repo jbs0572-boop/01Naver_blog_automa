@@ -20,7 +20,8 @@
     return preview;
   }
 
-  function actionLabel(kind) {
+  function actionLabel(kind, child) {
+    if (kind === "external" && child?.result_status === "ready_for_naver") return "품질 검수 보고서 확인 후 계속";
     return { retry: "실행 재시도", external: "외부 저장 실행", confirm: "대상 확인 후 임시저장" }[kind] ?? null;
   }
 
@@ -48,7 +49,7 @@
     const result = textElement("p", "manual-child-result", labels[child.result_status] ?? labels[child.status] ?? valueOr(child.result_status, "상태 확인 필요"));
     card.append(heading, meta, result);
     const action = child.next_action;
-    const label = action && actionLabel(action.kind);
+    const label = action && actionLabel(action.kind, child);
     if (!action || !label || typeof action.nonce !== "string" || !action.nonce) return card;
     if (action.kind === "confirm" && !safePreview(child)) {
       status("임시저장 차단 · 대상 블로그·제목·이미지 확인 정보가 없습니다.", "error");
@@ -176,7 +177,7 @@
 
   async function runChildAction(batch, child) {
     const action = child.next_action;
-    if (!action || !actionLabel(action.kind) || typeof action.nonce !== "string" || !action.nonce) return;
+    if (!action || !actionLabel(action.kind, child) || typeof action.nonce !== "string" || !action.nonce) return;
     const preview = action.kind === "confirm" ? safePreview(child) : null;
     if (action.kind === "confirm" && !preview) {
       status("임시저장 차단 · 최종 확인 정보가 불완전합니다.", "error");
@@ -188,7 +189,7 @@
     }
     state.activeChildId = child.child_id;
     render(batch);
-    status(`${actionLabel(action.kind)} 처리 중입니다.`, "warning");
+    status(`${actionLabel(action.kind, child)} 처리 중입니다.`, "warning");
     try {
       const response = await fetch(`/api/manual-run/${encodeURIComponent(batch.batch_id)}/children/${encodeURIComponent(child.child_id)}/${action.kind}`, {
         method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({nonce: action.nonce}),

@@ -4,7 +4,7 @@ import hashlib
 import json
 import re
 from collections.abc import Callable
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Final
 from zoneinfo import ZoneInfo
@@ -103,6 +103,7 @@ class DailySchedule:
             },
             "version": 2,
             "enabled": enabled,
+            "last_observed_date": now.astimezone(KST).date().isoformat(),
             "entries": sorted(
                 normalized,
                 key=lambda item: str(item.get("time")) if isinstance(item, dict) else "",
@@ -170,44 +171,62 @@ class DailySchedule:
         if not self.data.get("enabled"):
             return
         entries = self._entries()
-        day = now.astimezone(KST).date().isoformat()
+        today = now.astimezone(KST).date()
+        last_observed = self.data.get("last_observed_date")
+        if last_observed is None:
+            first_day = datetime.fromisoformat(since).astimezone(KST).date()
+        elif isinstance(last_observed, str):
+            try:
+                first_day = date.fromisoformat(last_observed)
+            except ValueError as error:
+                raise ContractError("예약 관찰 날짜가 올바르지 않습니다.") from error
+        else:
+            raise ContractError("예약 관찰 날짜가 올바르지 않습니다.")
+        first_day = min(first_day, today)
         for entry in entries:
             value = entry.get("time")
             entry_id = entry.get("entry_id")
             if entry.get("enabled") is not True or not isinstance(value, str) or not isinstance(entry_id, str):
                 continue
-            key = f"{day}T{value}:00+09:00"
-            due = datetime.fromisoformat(key)
-            if due <= datetime.fromisoformat(since) or due > now:
-                continue
-            occurrence_id = "schedule-" + hashlib.sha256(
-                f"{entry_id}\0{key}".encode()
-            ).hexdigest()[:16]
-            if any(
-                isinstance(item, dict)
-                and (
-                    item.get("occurrence_id") == occurrence_id
-                    or item.get("at") == key and item.get("entry_id") in {None, entry_id}
-                )
-                for item in history
-            ):
-                continue
-            item: JSONMap = {
-                "occurrence_id": occurrence_id,
-                "entry_id": entry_id,
-                "at": key,
-                "observed_at": now.isoformat(),
-                "preset_id": entry.get("preset_id"),
-                "model_config": entry.get("model_config"),
-                "status": "missed" if now - due >= timedelta(minutes=5) else "claimed",
-                "reason_code": "server_unobserved_or_delayed" if now - due >= timedelta(minutes=5) else None,
-            }
-            history.append(item)
-            self.data["history"] = history[-100:]
+            day = first_day
+            while day <= today:
+                key = f"{day.isoformat()}T{value}:00+09:00"
+                due = datetime.fromisoformat(key)
+                if due <= datetime.fromisoformat(since) or due > now:
+                    day += timedelta(days=1)
+                    continue
+                occurrence_id = "schedule-" + hashlib.sha256(
+                    f"{entry_id}\0{key}".encode()
+                ).hexdigest()[:16]
+                if any(
+                    isinstance(item, dict)
+                    and (
+                        item.get("occurrence_id") == occurrence_id
+                        or item.get("at") == key and item.get("entry_id") in {None, entry_id}
+                    )
+                    for item in history
+                ):
+                    day += timedelta(days=1)
+                    continue
+                item: JSONMap = {
+                    "occurrence_id": occurrence_id,
+                    "entry_id": entry_id,
+                    "at": key,
+                    "observed_at": now.isoformat(),
+                    "preset_id": entry.get("preset_id"),
+                    "model_config": entry.get("model_config"),
+                    "status": "missed" if now - due >= timedelta(minutes=5) else "claimed",
+                    "reason_code": "server_unobserved_or_delayed" if now - due >= timedelta(minutes=5) else None,
+                }
+                history.append(item)
+                self.data["history"] = history[-100:]
+                atomic_write_json(self.path, self.data)
+                if item["status"] != "missed":
+                    self._submit_claim(item, now, launch)
+                day += timedelta(days=1)
+        if self.data.get("last_observed_date") != today.isoformat():
+            self.data["last_observed_date"] = today.isoformat()
             atomic_write_json(self.path, self.data)
-            if item["status"] == "missed":
-                continue
-            self._submit_claim(item, now, launch)
 
     def _submit_claim(
         self,

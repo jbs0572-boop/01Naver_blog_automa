@@ -19,7 +19,7 @@ from tests.test_runner_prd import (
     FixtureNotion,
 )
 from tools.contract_types import JSONMap
-from tools.runner_execution import confirm_job, recover_job, run_job
+from tools.runner_execution import confirm_job, recover_job, resume_job, run_job
 from tools.runner_lock import acquire_lock
 from tools.runner_secure_fs import runner_secure_storage
 from tools.runner_state import state_paths
@@ -87,6 +87,18 @@ def test_live_confirmation_lease_prevents_recovery_drift_mutation(
             naver_adapter=naver,
         )
     )
+    if waiting.status is RunStatus.READY_FOR_NAVER:
+        waiting = resume_job(
+            RunnerRequest(
+                root=tmp_path,
+                job="",
+                run_id=waiting.run_id,
+                resume=True,
+                executor=FixtureExecutor(),
+                notion_adapter=FixtureNotion(),
+                naver_adapter=naver,
+            )
+        )
     saved: list[RunnerResult] = []
     waiting_state = json.loads(waiting.state_path.read_text(encoding="utf-8"))
     confirmation_nonce = str(waiting_state["confirmation_nonce"])

@@ -157,7 +157,11 @@ def test_replay_fails_before_output_when_snapshot_is_tampered(tmp_path: Path) ->
     _ = shutil.copytree(FIXTURE, root)
     evidence = tmp_path / "evidence"
     evidence.mkdir()
-    stats = next((root / "metadata/blog-stats").rglob("*.json"))
+    stats = (
+        root
+        / "metadata/blog-stats/owner/2026-08-08/CAP-7D.json"
+    )
+    assert b'"views":30' in stats.read_bytes()
     _ = stats.write_bytes(stats.read_bytes().replace(b'"views":30', b'"views":31'))
 
     # When: replay validates the full chain before publishing evidence.
