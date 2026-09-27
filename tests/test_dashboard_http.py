@@ -54,6 +54,30 @@ def test_dashboard_instance_lock_rejects_a_second_process(tmp_path: Path) -> Non
         raise AssertionError("second dashboard instance must not start")
 
 
+def test_dashboard_remains_readable_when_external_adapters_are_unavailable(
+    tmp_path: Path,
+) -> None:
+    server, thread, base_url = _start_server(
+        tmp_path,
+        dependencies=DashboardServerDependencies(
+            external_adapter_error="external_adapters_unavailable"
+        ),
+    )
+    try:
+        health = _json_request(base_url, "/api/health")
+        check = _json_request(base_url, "/api/health/check", method="POST")
+        history = _json_request(base_url, "/api/manual-runs")
+    finally:
+        _stop_server(server, thread)
+
+    assert health.status is HTTPStatus.OK
+    assert health.body["status"] == "failed"
+    assert health.body["error_code"] == "external_adapters_unavailable"
+    assert check.status is HTTPStatus.SERVICE_UNAVAILABLE
+    assert check.body["error_code"] == "external_adapters_unavailable"
+    assert history.status is HTTPStatus.OK
+
+
 class JsonReadable(Protocol):
     def read(self, n: int = -1) -> bytes: ...
 

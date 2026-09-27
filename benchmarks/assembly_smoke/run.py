@@ -36,14 +36,14 @@ def save(path: Path, data: JSONMap) -> None:
         _ = handle.write(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
 
 
-def prepare(root: Path) -> None:
+def prepare(root: Path, project: Path = PROJECT, keyword: str = KEYWORD) -> None:
     root.mkdir(parents=True, exist_ok=False)
     (root / "drafts").mkdir()
-    (root / "assets" / KEYWORD).mkdir(parents=True)
-    _ = shutil.copy2(PROJECT / "drafts" / f"{KEYWORD}.md", root / "drafts")
+    (root / "assets" / keyword).mkdir(parents=True)
+    _ = shutil.copy2(project / "drafts" / f"{keyword}.md", root / "drafts")
     for filename in ASSETS:
         _ = shutil.copy2(
-            PROJECT / "assets" / KEYWORD / filename, root / "assets" / KEYWORD
+            project / "assets" / keyword / filename, root / "assets" / keyword
         )
 
 

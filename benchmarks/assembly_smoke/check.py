@@ -30,12 +30,12 @@ def without_blanks(parsed: ParsedNotionCopy) -> ParsedNotionCopy:
     )
 
 
-def validate_contract(root: Path) -> None:
+def validate_contract(root: Path, keyword: str = KEYWORD) -> None:
     for suffix in ("layout", "copy", "input"):
-        _ = parse_naver_copy(root / "final" / f"{KEYWORD}-naver-{suffix}.md")
+        _ = parse_naver_copy(root / "final" / f"{keyword}-naver-{suffix}.md")
     manifest = build_manifest(
         ManifestBuildInput(
-            root, KEYWORD, "BENCH-ASSEMBLY", "BENCH-TOPIC", "2026-09-27T00:00:00+09:00"
+            root, keyword, "BENCH-ASSEMBLY", "BENCH-TOPIC", "2026-09-27T00:00:00+09:00"
         )
     )
     path = root / "benchmark-manifest.json"
@@ -43,8 +43,8 @@ def validate_contract(root: Path) -> None:
     _ = verify_manifest(root, path)
 
 
-def compare_golden(root: Path, reference: Path) -> None:
-    filename = f"{KEYWORD}.md"
+def compare_golden(root: Path, reference: Path, keyword: str = KEYWORD) -> None:
+    filename = f"{keyword}.md"
     if sha(root / "drafts" / filename) != sha(reference / "drafts" / filename):
         raise ValueError("input draft changed")
     if (root / "final" / filename).read_bytes() != (
@@ -52,13 +52,13 @@ def compare_golden(root: Path, reference: Path) -> None:
     ).read_bytes():
         raise ValueError("final Markdown differs from historical golden")
     for suffix in ("layout", "copy", "input"):
-        filename = f"{KEYWORD}-naver-{suffix}.md"
+        filename = f"{keyword}-naver-{suffix}.md"
         got = without_blanks(parse_naver_copy(root / "final" / filename))
         expected = without_blanks(parse_naver_copy(reference / "final" / filename))
         if got != expected:
             raise ValueError(f"content/order/structure mismatch: {suffix}")
     for filename in ASSETS:
-        if sha(root / "assets" / KEYWORD / filename) != sha(
-            reference / "assets" / KEYWORD / filename
+        if sha(root / "assets" / keyword / filename) != sha(
+            reference / "assets" / keyword / filename
         ):
             raise ValueError(f"asset changed: {filename}")

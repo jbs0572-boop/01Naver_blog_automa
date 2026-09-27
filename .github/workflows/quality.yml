@@ -6,6 +6,7 @@ on:
       - ".github/pull_request_template.md"
       - ".github/workflows/quality.yml"
       - "AGENTS.md"
+      - "benchmarks/**"
       - "EXECUTION_AGENT.md"
       - "Plan.md"
       - ".codex/**"
@@ -68,7 +69,7 @@ jobs:
         run: uv run --no-sync basedpyright
 
       - name: Python tests
-        run: uv run --no-sync pytest -q
+        run: uv run --no-sync pytest -q tests benchmarks
 
       - name: Set up Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38

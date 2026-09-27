@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -223,6 +225,35 @@ def test_run_codex_stops_after_two_persistent_timeouts(
     attempt_dir = tmp_path / "work" / "attempt-1"
     assert (attempt_dir / "codex-attempt-1.jsonl").read_text() == "partial-1\n"
     assert (attempt_dir / "codex-attempt-2.jsonl").read_text() == "partial-2\n"
+
+
+def test_run_codex_timeout_kills_descendant_processes(
+    tmp_path: Path,
+) -> None:
+    marker = tmp_path / "descendant-ran-after-timeout"
+    child = (
+        "import pathlib,sys,time; time.sleep(1.5); "
+        "pathlib.Path(sys.argv[1]).write_text('alive')"
+    )
+    parent = (
+        "import subprocess,sys,time; "
+        "subprocess.Popen([sys.executable,'-c',sys.argv[1],sys.argv[2]]); "
+        "time.sleep(30)"
+    )
+
+    with pytest.raises(CodexProcessError) as caught:
+        run_codex(
+            [sys.executable, "-c", parent, child, str(marker)],
+            root=tmp_path,
+            environment={},
+            timeout=1,
+            work_dir=tmp_path / "work",
+            max_attempts=1,
+        )
+    time.sleep(1.0)
+
+    assert caught.value.error_type == "process_timeout"
+    assert not marker.exists()
 
 
 def test_run_codex_does_not_retry_missing_process(

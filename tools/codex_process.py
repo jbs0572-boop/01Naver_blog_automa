@@ -4,6 +4,7 @@ import codecs
 import os
 import re
 import selectors
+import signal
 import subprocess
 import time
 from dataclasses import dataclass, field
@@ -109,6 +110,15 @@ def _write_attempt_log(
         ) from error
 
 
+def _kill_process_group(process: subprocess.Popen[bytes]) -> None:
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    except OSError:
+        process.kill()
+
+
 def _stream_attempt(
     command: list[str],
     *,
@@ -126,6 +136,7 @@ def _stream_attempt(
             env=environment,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
+            start_new_session=True,
         )
         assert process.stdout is not None
         decoder = codecs.getincrementaldecoder("utf-8")("replace")
@@ -139,7 +150,7 @@ def _stream_attempt(
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 timed_out = True
-                process.kill()
+                _kill_process_group(process)
                 remaining = 0
             events = selector.select(min(0.1, max(0, remaining)))
             for key, _mask in events:

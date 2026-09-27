@@ -88,6 +88,7 @@ class DashboardServerDependencies:
     executor: StageExecutor | None = None
     notion_adapter: NotionAdapter | None = None
     naver_adapter: NaverBrowserAdapter | None = None
+    external_adapter_error: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -164,7 +165,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 self._error(error, HTTPStatus.CONFLICT)
             return
         if route == "/api/health":
-            self._json(server.health.view())
+            self._json(server.health_view())
             return
         if route == "/api/notifications":
             server.sync_notifications()
@@ -262,7 +263,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 self._error(error, HTTPStatus.CONFLICT)
             return
         if route == "/api/health/check":
-            self._json(server.health.start(), HTTPStatus.ACCEPTED)
+            if server.dependencies.external_adapter_error is not None:
+                self._json(server.health_view(), HTTPStatus.SERVICE_UNAVAILABLE)
+            else:
+                self._json(server.health.start(), HTTPStatus.ACCEPTED)
             return
         if route.startswith("/api/notifications/") and route.endswith("/read"):
             notice_id = route.removeprefix("/api/notifications/").removesuffix("/read").strip("/")
@@ -558,6 +562,16 @@ class DashboardServer(ThreadingHTTPServer):
             for child in batch.children:
                 self._notification_states[child.task_id] = child.result_status or child.status
 
+    def health_view(self) -> JSONMap:
+        result = self.health.view()
+        if self.dependencies.external_adapter_error is not None:
+            result.update(
+                status="failed",
+                error_code="external_adapters_unavailable",
+                next_action="외부 저장 연결을 사용할 수 없습니다. 설정을 확인하세요.",
+            )
+        return result
+
     def sync_notifications(self) -> None:
         for batch in self.manual_runs.list(100):
             for child in batch.children:
@@ -600,6 +614,27 @@ class DashboardServer(ThreadingHTTPServer):
         super().server_close()
 
 
+def load_server_dependencies(
+    root: Path,
+) -> tuple[DashboardServerDependencies, DashboardExternalAdapters | None]:
+    try:
+        external_adapters = load_dashboard_external_adapters(root)
+    except (ContractError, OSError):
+        return (
+            DashboardServerDependencies(
+                external_adapter_error="external_adapters_unavailable"
+            ),
+            None,
+        )
+    return (
+        DashboardServerDependencies(
+            notion_adapter=external_adapters.notion,
+            naver_adapter=external_adapters.naver,
+        ),
+        external_adapters,
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="serve the local workflow QA dashboard"
@@ -607,15 +642,9 @@ def main() -> None:
     _ = parser.add_argument("--root", type=Path, default=Path.cwd())
     args = parser.parse_args()
     root = args.root.resolve()
-    try:
-        external_adapters = load_dashboard_external_adapters(root)
-    except (ContractError, OSError) as error:
-        _ = print(f"dashboard: {error}")
-        return
-    dependencies = DashboardServerDependencies(
-        notion_adapter=external_adapters.notion,
-        naver_adapter=external_adapters.naver,
-    )
+    dependencies, external_adapters = load_server_dependencies(root)
+    if external_adapters is None:
+        _ = print("dashboard: external adapters unavailable; local dashboard remains available")
     try:
         with (
             dashboard_instance_lock(root),
@@ -635,7 +664,8 @@ def main() -> None:
     except DashboardAlreadyRunningError as error:
         _ = print(f"dashboard: {error}")
     finally:
-        external_adapters.close()
+        if external_adapters is not None:
+            external_adapters.close()
 
 
 if __name__ == "__main__":

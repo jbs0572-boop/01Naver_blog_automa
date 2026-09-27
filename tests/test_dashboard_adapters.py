@@ -5,10 +5,11 @@ from pathlib import Path
 import pytest
 
 from tools.browser_gateway import BrowserCapability
-from tools.contract_types import JSONMap
+from tools.contract_types import ContractError, JSONMap
 from tools.dashboard_adapters import load_dashboard_external_adapters
 from tools.external_adapter import ExternalWriteRequest
 from tools.naver_adapter import NaverBrowserAdapter
+from tools.test_dashboard import load_server_dependencies
 
 
 class FixtureNotionAdapter:
@@ -79,3 +80,20 @@ def test_dashboard_factory_requests_only_naver_draft_capability(
     assert adapters.naver is gateway.naver
     assert gateway.discard_recovery is True
     assert gateway.close_count == 1
+
+
+def test_adapter_startup_failure_disables_writes_without_disabling_dashboard(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_to_load(_root: Path) -> None:
+        raise ContractError("browser session unavailable")
+
+    monkeypatch.setattr("tools.test_dashboard.load_dashboard_external_adapters", fail_to_load)
+
+    dependencies, adapters = load_server_dependencies(tmp_path)
+
+    assert adapters is None
+    assert dependencies.notion_adapter is None
+    assert dependencies.naver_adapter is None
+    assert dependencies.external_adapter_error == "external_adapters_unavailable"
