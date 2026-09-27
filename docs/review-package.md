@@ -35,10 +35,17 @@ Plan.md, 최적화 제안서, 조립 시험 규칙, 두 모델 호출의 요약 
 
 ## Codex 리뷰 연결
 
-저장소의 AGENTS.md에 Code Review Rules를 추가했다. 실제 자동 호출은
+2026-09-27에 로그인된 설정 화면과 GitHub 연결 조회에서 다음을 확인했다.
+
+- ChatGPT Codex Connector 설치 ID: `165296533`.
+- 저장소 접근: `Only select repositories`, `jbs0572-boop/01Naver_blog_automa` 1개.
+- 저장소별 자동 리뷰: 켜짐. 리뷰 범위: `모든 PR`. 트리거: `푸시할 때마다`.
+- 저장소 AGENTS.md의 Code Review Rules를 리뷰 지침으로 사용한다.
+- 계정 전체의 개인 자동 검토 설정, 크레딧 사용, 심층 리뷰 설정은 변경하지 않았다.
+
 [Codex 코드 리뷰 설정](https://chatgpt.com/codex/settings/code-review)에서
-이 저장소의 Code review와 Automatic reviews를 켜야 한다.
-설정 또는 리뷰 응답을 확인하기 전에는 자동화 완료로 표시하지 않는다.
+해당 저장소 설정을 관리할 수 있다. 이 기록을 추가한 push로 자동 실행을 확인한다.
+설정 완료와 실제 리뷰 응답 완료는 구분하며, PR 타임라인의 봇 응답이 실행 증거다.
 
 이 PR에서는 자동 merge, 자동 코드 수정, 운영 실행을 설정하지 않는다.
 원격 CI와 Codex 리뷰는 별개이며, 로컬 문서·JSON 검사 성공을 원격 CI 성공으로 표시하지 않는다.
