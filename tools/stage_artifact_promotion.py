@@ -302,6 +302,23 @@ def _restore_archived_image_assets(
                 current.rmdir()
         except OSError as error:
             errors.append(error)
+    try:
+        archived_hashes = {
+            relative.as_posix(): _sha256(previous_asset_dir / relative)
+            for relative in archived_files
+        }
+        restored_hashes = {
+            path.relative_to(asset_dir).as_posix(): _sha256(path)
+            for path in asset_dir.rglob("*")
+            if path.is_file()
+        }
+    except OSError as error:
+        errors.append(error)
+        return errors
+    if restored_hashes == archived_hashes:
+        return []
+    if not errors:
+        errors.append(OSError("restored image assets do not match the archive"))
     return errors
 
 

@@ -347,9 +347,10 @@ def test_image_stage_restores_archived_assets_when_quarantine_fails(
         _ = destination.write_bytes(value)
     real_replace = os.replace
     failed_quarantine = False
+    failed_archive_restore = False
 
     def replace(source: str | Path, destination: str | Path) -> None:
-        nonlocal failed_quarantine
+        nonlocal failed_archive_restore, failed_quarantine
         if (
             Path(source) == asset_dir
             and Path(destination).name == "failed"
@@ -357,6 +358,13 @@ def test_image_stage_restores_archived_assets_when_quarantine_fails(
         ):
             failed_quarantine = True
             raise OSError("quarantine failed")
+        if (
+            Path(source).name == "previous"
+            and Path(destination) == asset_dir
+            and not failed_archive_restore
+        ):
+            failed_archive_restore = True
+            raise OSError("directory restore failed transiently")
         _ = real_replace(source, destination)
 
     def fail_ledger(*_args: object, **_kwargs: object) -> None:
@@ -377,6 +385,7 @@ def test_image_stage_restores_archived_assets_when_quarantine_fails(
         )
 
     assert failed_quarantine
+    assert failed_archive_restore
     assert {path.name: path.read_bytes() for path in asset_dir.iterdir()} == old_files
     assert ledger.read_bytes() == old_ledger
 
