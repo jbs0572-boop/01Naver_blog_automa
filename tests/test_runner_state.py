@@ -73,6 +73,7 @@ def test_post_q2_evidence_is_separate_from_hashed_producer_inputs(
         root=tmp_path,
         job="daily-generate",
         keyword="fixture",
+        auto_topic=True,
     )
     assets = tmp_path / "assets" / "fixture"
     assets.mkdir(parents=True)
@@ -81,23 +82,24 @@ def test_post_q2_evidence_is_separate_from_hashed_producer_inputs(
     _ = producer_quality.write_text('{"quality":"passed"}\n', encoding="utf-8")
     _ = image.write_bytes(b"original-image")
 
-    initial = input_fingerprint(request)
+    completed = {"image-maker": "passed"}
+    initial = input_fingerprint(request, completed_stages=completed)
     q3_directory = tmp_path / "metadata" / "quality-reviews"
     q3_directory.mkdir(parents=True)
     _ = (q3_directory / "RUN-fixture-images.jsonl").write_text(
         '{"reviewed_at":"post-q2"}\n', encoding="utf-8"
     )
 
-    assert input_fingerprint(request) == initial
+    assert input_fingerprint(request, completed_stages=completed) == initial
     _ = producer_quality.write_text('{"quality":"changed"}\n', encoding="utf-8")
-    assert input_fingerprint(request) != initial
-    after_q3 = input_fingerprint(request)
+    assert input_fingerprint(request, completed_stages=completed) != initial
+    after_q3 = input_fingerprint(request, completed_stages=completed)
     _ = (q3_directory / "RUN-fixture-images.jsonl").write_text(
         '{"reviewed_at":"refreshed-post-q2"}\n', encoding="utf-8"
     )
-    assert input_fingerprint(request) == after_q3
+    assert input_fingerprint(request, completed_stages=completed) == after_q3
     _ = image.write_bytes(b"changed-image")
-    assert input_fingerprint(request) != after_q3
+    assert input_fingerprint(request, completed_stages=completed) != after_q3
 
 
 def test_request_from_state_accepts_legacy_context_without_batch_fields(tmp_path: Path) -> None:

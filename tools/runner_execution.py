@@ -84,17 +84,25 @@ def _run(
                 resume=True,
             )
         )
-    input_hash = input_fingerprint(request)
-    if state_path.is_file() and not allow_existing:
-        state = read_state(state_path)
-        if state.get("input_hash") != input_hash:
+    existing_state = read_state(state_path) if state_path.is_file() else None
+    existing_stages = (
+        existing_state.get("stages") if isinstance(existing_state, dict) else None
+    )
+    input_hash = input_fingerprint(
+        request,
+        completed_stages=(
+            existing_stages if isinstance(existing_stages, dict) else None
+        ),
+    )
+    if existing_state is not None and not allow_existing:
+        if existing_state.get("input_hash") != input_hash:
             return blocked_result(
                 run_id,
                 state_path,
                 log_path,
                 "input hash changed; recovery requires a fresh run",
             )
-        return result_from_state(state, state_path, log_path)
+        return result_from_state(existing_state, state_path, log_path)
     duplicate = find_duplicate_job(request, job.value, request.state_dir)
     if duplicate is not None and duplicate[0] != run_id:
         return result_from_state(duplicate[1], duplicate[2], duplicate[3])
@@ -178,7 +186,11 @@ def recover_job(request: RunnerRequest) -> RunnerResult:
             if state.get("status") in {RunStatus.DRAFT_SAVED.value, RunStatus.CANCELLED.value} or read_cancellation(request.root, request.run_id) is not None:
                 return result_from_state(state, state_path, log_path)
             recovered = request_from_state(state, request.root, request.state_dir)
-            current_hash = input_fingerprint(recovered)
+            stages = state.get("stages")
+            current_hash = input_fingerprint(
+                recovered,
+                completed_stages=stages if isinstance(stages, dict) else None,
+            )
             if state.get("input_hash") != current_hash:
                 state["status"] = RunStatus.BLOCKED.value
                 state["message"] = "input hash changed; recovery refused"

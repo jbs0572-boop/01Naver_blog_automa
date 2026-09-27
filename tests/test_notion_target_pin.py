@@ -157,10 +157,20 @@ def test_live_run_pins_target_before_producers_and_records_identity(tmp_path: Pa
     assert state["notion_target_id"] == "original-target"
     assert state["input_hash"].startswith("sha256:")
     assert state["input_hash"] == input_fingerprint(
-        replace(pinned_request, notion_target_id="original-target")
+        replace(
+            pinned_request,
+            keyword=str(state["keyword"]),
+            notion_target_id="original-target",
+        ),
+        completed_stages=state["stages"],
     )
     assert state["input_hash"] != input_fingerprint(
-        replace(pinned_request, notion_target_id="different-target")
+        replace(
+            pinned_request,
+            keyword=str(state["keyword"]),
+            notion_target_id="different-target",
+        ),
+        completed_stages=state["stages"],
     )
     assert [call.target_id for call in notion.calls] == ["original-target"]
     events = [

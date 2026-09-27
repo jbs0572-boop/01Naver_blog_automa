@@ -168,7 +168,9 @@ def test_idle_input_drift_still_persists_blocked_state(
     ) -> RunnerRequest:
         return recovered
 
-    def changed_fingerprint(_request: RunnerRequest) -> str:
+    def changed_fingerprint(
+        _request: RunnerRequest, **_kwargs: object
+    ) -> str:
         return "new"
 
     monkeypatch.setattr("tools.runner_execution.request_from_state", recovered_request)
@@ -204,7 +206,9 @@ def test_stale_recovery_lock_is_cleaned_before_leased_execution(
     ) -> RunnerRequest:
         return recovered
 
-    def unchanged_fingerprint(_request: RunnerRequest) -> str:
+    def unchanged_fingerprint(
+        _request: RunnerRequest, **_kwargs: object
+    ) -> str:
         return "same"
 
     monkeypatch.setattr("tools.runner_execution.request_from_state", recovered_request)

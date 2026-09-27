@@ -738,7 +738,9 @@ def test_recover_preserves_injected_notion_adapter_after_state_reconstruction(
     ) -> RunnerRequest:
         return reconstructed
 
-    def unchanged_fingerprint(_request: RunnerRequest) -> str:
+    def unchanged_fingerprint(
+        _request: RunnerRequest, **_kwargs: object
+    ) -> str:
         return "same"
 
     monkeypatch.setattr(

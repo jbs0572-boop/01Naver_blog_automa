@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
 from typing import Final, Literal
@@ -55,9 +56,13 @@ def file_digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def input_fingerprint(request: RunnerRequest) -> str:
+def input_fingerprint(
+    request: RunnerRequest,
+    *,
+    completed_stages: Mapping[str, JSONValue] | None = None,
+) -> str:
     records: list[JSONValue] = []
-    if request.keyword is not None and not request.auto_topic:
+    if request.keyword is not None:
         keyword_parts = Path(request.keyword).parts
         if (
             not request.keyword
@@ -68,17 +73,54 @@ def input_fingerprint(request: RunnerRequest) -> str:
             raise ContractError("keyword must be a single safe path component")
         keyword_dir = request.root / "assets" / request.keyword
         candidates = [
-            request.root / "research" / f"{request.keyword}.md",
             request.root / "research" / f"topic-selection-{request.keyword}.md",
-            request.root / "drafts" / f"{request.keyword}.md",
-            request.root / "final" / f"{request.keyword}.md",
-            request.root / "final" / f"{request.keyword}-naver-layout.md",
-            request.root / "final" / f"{request.keyword}-naver-copy.md",
         ]
-        if keyword_dir.is_dir():
+        if request.auto_topic:
+            completed = completed_stages or {}
+            passed = {"passed", "validated"}
+            if completed.get("researcher") in passed:
+                candidates.append(request.root / "research" / f"{request.keyword}.md")
+            if completed.get("writer") in passed:
+                candidates.append(request.root / "drafts" / f"{request.keyword}.md")
+            if completed.get("content-assembler") in passed:
+                candidates.extend(
+                    request.root / "final" / f"{request.keyword}{suffix}"
+                    for suffix in (
+                        ".md",
+                        "-naver-layout.md",
+                        "-naver-copy.md",
+                        "-naver-input.md",
+                    )
+                )
+            if completed.get("image-maker") in passed:
+                keyword_dir = request.root / "assets" / request.keyword
+                if keyword_dir.is_dir():
+                    candidates.extend(
+                        path for path in sorted(keyword_dir.rglob("*")) if path.is_file()
+                    )
             candidates.extend(
-                path for path in sorted(keyword_dir.rglob("*")) if path.is_file()
+                request.root / name
+                for name in (
+                    "notion-config.md",
+                    "naver-config.md",
+                    "schemas/workflow-contract.schema.json",
+                )
             )
+        else:
+            candidates.extend(
+                (
+                    request.root / "research" / f"{request.keyword}.md",
+                    request.root / "drafts" / f"{request.keyword}.md",
+                    request.root / "final" / f"{request.keyword}.md",
+                    request.root / "final" / f"{request.keyword}-naver-layout.md",
+                    request.root / "final" / f"{request.keyword}-naver-copy.md",
+                )
+            )
+            keyword_dir = request.root / "assets" / request.keyword
+            if keyword_dir.is_dir():
+                candidates.extend(
+                    path for path in sorted(keyword_dir.rglob("*")) if path.is_file()
+                )
         for path in sorted(set(candidates)):
             record: JSONMap = {
                 "path": path.relative_to(request.root).as_posix(),

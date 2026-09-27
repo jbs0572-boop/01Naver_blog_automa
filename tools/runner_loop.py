@@ -131,7 +131,15 @@ def execute_run(context: RunExecutionContext) -> RunnerResult:
         set_stage(state, stage, result)
         set_stage_execution(state, stage, stage_result.execution)
         if result in {RunStatus.PASSED, RunStatus.VALIDATED}:
-            state["input_hash"] = input_fingerprint(active_request)
+            completed_stages = state.get("stages")
+            state["input_hash"] = input_fingerprint(
+                active_request,
+                completed_stages=(
+                    completed_stages
+                    if isinstance(completed_stages, dict)
+                    else None
+                ),
+            )
         if stage_result.run_status is not None:
             state.update(
                 status=stage_result.run_status.value,

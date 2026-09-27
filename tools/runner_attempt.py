@@ -18,7 +18,6 @@ from tools.runner_records import (
     record_stage_attempt,
 )
 from tools.runner_stages import append_event, event
-from tools.runner_state import input_fingerprint
 from tools.runner_types import (
     Q1_MAX_ATTEMPTS,
     RunnerBlocked,
@@ -271,6 +270,5 @@ def _project_result(context: AttemptContext, result: StageResult) -> RunnerReque
                 active_request, selection_context=updated_selection
             )
             context.state["selection_context"] = updated_selection.as_json()
-            context.state["input_hash"] = input_fingerprint(active_request)
     record_manifest(context.state, active_request, context.stage_context.run_id)
     return active_request
