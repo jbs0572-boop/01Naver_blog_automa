@@ -21,7 +21,8 @@ PR에는 변경 목적을 제목으로 적는다. 자동 리뷰 완료는 병합
 | [최적화 제안서](docs/workflow-quality-speed-proposal-2026-09-27.md) | 설계 방향과 단계별 개선안 |
 | [벤치마크 보고서](artifacts/workflow-optimization/assembly-smoke-20260927-02/report.md) | 조립 예비시험의 실측값과 한계 |
 | [검토 범위](docs/review-package.md) | 로컬과 GitHub 기준의 차이, 공개 근거와 리뷰 연결 상태 |
-| [AGENTS.md](AGENTS.md) | 저장소에 기록된 운영 계약과 코드 리뷰 규칙 |
+| [AGENTS.md](AGENTS.md) | 이 checkout의 운영 계약과 검토 대상별 코드 리뷰 규칙 |
+| [계획의 목표 계약](docs/reference/local-operating-contract-2026-09-27.md) | 최신 로컬 계약의 검토용 snapshot |
 
 ## 코드 리뷰의 역할과 현재 기준
 
@@ -32,3 +33,5 @@ PR에는 변경 목적을 제목으로 적는다. 자동 리뷰 완료는 병합
 원격 AGENTS.md 사이에 Q3의 필수 여부와 최종 파일 개수 등의 차이가 있다.
 실제 구현 전에 [검토 범위](docs/review-package.md)에 따라 코드·운영 계약의 기준을 맞춰야 한다.
 예전 계약에 근거한 리뷰 지적을 그대로 적용해 최신 운영 규칙을 되돌리지 않는다.
+계획 리뷰는 첨부한 목표 계약을, 코드 리뷰는 해당 revision의 실제 구현·테스트를 기준으로 한다.
+Plan.md의 T00에서 계약 차이와 회귀 검사를 해결한 뒤 효율화 구현을 시작한다.
