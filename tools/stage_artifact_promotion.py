@@ -256,6 +256,15 @@ def _restore_archived_image_assets(
 ) -> list[OSError]:
     errors: list[OSError] = []
     try:
+        archived_hashes = {
+            path.relative_to(previous_asset_dir).as_posix(): _sha256(path)
+            for path in previous_asset_dir.rglob("*")
+            if path.is_file()
+        }
+    except OSError as error:
+        return [error]
+    archived_files = {Path(relative) for relative in archived_hashes}
+    try:
         shutil.rmtree(asset_dir)
     except FileNotFoundError:
         pass
@@ -263,50 +272,35 @@ def _restore_archived_image_assets(
         errors.append(error)
     try:
         os.replace(previous_asset_dir, asset_dir)
-        return errors
     except OSError as error:
         errors.append(error)
-
-    try:
-        asset_dir.mkdir(parents=True, exist_ok=True)
-    except OSError as error:
-        errors.append(error)
-        return errors
-    try:
-        archived_files = {
-            path.relative_to(previous_asset_dir)
-            for path in previous_asset_dir.rglob("*")
-            if path.is_file()
-        }
-    except OSError as error:
-        errors.append(error)
-        return errors
-    for relative in sorted(archived_files):
         try:
-            destination = asset_dir / relative
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            _ = shutil.copy2(previous_asset_dir / relative, destination)
-        except OSError as error:
-            errors.append(error)
-    try:
-        current_files = sorted(asset_dir.rglob("*"), reverse=True)
-    except OSError as error:
-        errors.append(error)
-        current_files = []
-    for current in current_files:
-        relative = current.relative_to(asset_dir)
+            asset_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as mkdir_error:
+            errors.append(mkdir_error)
+            return errors
+        for relative in sorted(archived_files):
+            try:
+                destination = asset_dir / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                _ = shutil.copy2(previous_asset_dir / relative, destination)
+            except OSError as copy_error:
+                errors.append(copy_error)
         try:
-            if current.is_file() and relative not in archived_files:
-                current.unlink()
-            elif current.is_dir() and not any(current.iterdir()):
-                current.rmdir()
-        except OSError as error:
-            errors.append(error)
+            current_files = sorted(asset_dir.rglob("*"), reverse=True)
+        except OSError as scan_error:
+            errors.append(scan_error)
+            current_files = []
+        for current in current_files:
+            relative = current.relative_to(asset_dir)
+            try:
+                if current.is_file() and relative not in archived_files:
+                    current.unlink()
+                elif current.is_dir() and not any(current.iterdir()):
+                    current.rmdir()
+            except OSError as cleanup_error:
+                errors.append(cleanup_error)
     try:
-        archived_hashes = {
-            relative.as_posix(): _sha256(previous_asset_dir / relative)
-            for relative in archived_files
-        }
         restored_hashes = {
             path.relative_to(asset_dir).as_posix(): _sha256(path)
             for path in asset_dir.rglob("*")

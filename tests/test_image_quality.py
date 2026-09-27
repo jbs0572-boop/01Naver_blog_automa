@@ -45,8 +45,8 @@ class ImageQualityTests(unittest.TestCase):
     def test_image_map_requires_exact_ordered_asset_references(self) -> None:
         image_map = self.root / "image-map.md"
         _ = image_map.write_text(
-            "| [IMAGE] | `copy-image-01.png` |\n"
-            + "| [THUMBNAIL] | `thumbnail.png` |\n",
+            "| 1 | VIS-01 | [IMAGE: slot 1] | `copy-image-01.png` |\n"
+            + "| [THUMBNAIL] | `[THUMBNAIL]` | `thumbnail.png` |\n",
             encoding="utf-8",
         )
 
@@ -58,9 +58,9 @@ class ImageQualityTests(unittest.TestCase):
             )
 
         _ = image_map.write_text(
-            "| [IMAGE] | `image-01.png` |\n"
-            + "| [IMAGE] | `copy-image-01.png` |\n"
-            + "| [THUMBNAIL] | `thumbnail.png` |\n",
+            "| 1 | VIS-01 | [IMAGE: slot 1] | `image-01.png` |\n"
+            + "| 2 | VIS-02 | [IMAGE: slot 2] | `copy-image-01.png` |\n"
+            + "| [THUMBNAIL] | `[THUMBNAIL]` | `thumbnail.png` |\n",
             encoding="utf-8",
         )
         result = validate_image_map(
@@ -69,6 +69,19 @@ class ImageQualityTests(unittest.TestCase):
             "thumbnail.png",
         )
         self.assertEqual(result["body_images"], 2)
+
+        _ = image_map.write_text(
+            "| 1 | VIS-01 | [IMAGE: slot 1] | `missing.png` |\n"
+            + "| 2 | VIS-02 | [IMAGE: slot 2] | `copy-image-01.png` | `image-01.png` |\n"
+            + "| [THUMBNAIL] | `[THUMBNAIL]` | `thumbnail.png` |\n",
+            encoding="utf-8",
+        )
+        with self.assertRaises(ContractError):
+            _ = validate_image_map(
+                image_map,
+                ["image-01.png", "copy-image-01.png"],
+                "thumbnail.png",
+            )
 
     def _image_bytes(self) -> bytes:
         return base64.b64decode(
@@ -297,7 +310,8 @@ class ImageQualityTests(unittest.TestCase):
             encoding="utf-8",
         )
         _ = (asset_dir / "image-map.md").write_text(
-            "| [IMAGE] | `body.png` |\n| [THUMBNAIL] | `thumbnail.png` |\n",
+            "| 1 | VIS-01 | [IMAGE: body image] | `body.png` |\n"
+            + "| [THUMBNAIL] | `[THUMBNAIL]` | `thumbnail.png` |\n",
             encoding="utf-8",
         )
 

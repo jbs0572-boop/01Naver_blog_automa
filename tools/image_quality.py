@@ -296,30 +296,31 @@ def validate_image_map(
 ) -> JSONMap:
     body_entries: list[str] = []
     thumbnail_entries: list[str] = []
-    valid_paths = set(body_paths) | {thumbnail}
     for line in image_map.read_text(encoding="utf-8").splitlines():
         if "|" not in line:
             continue
         cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
-        markers = [
-            cell
-            for cell in cells
-            if cell == "[IMAGE]" or cell.startswith("[IMAGE:")
-        ]
-        thumbnail_markers = [cell for cell in cells if cell == "[THUMBNAIL]"]
-        references = [
-            match.group(1)
-            for match in re.finditer(r"`([^`]+)`", line)
-            if match.group(1) in valid_paths
-        ]
-        if markers:
-            if len(markers) != 1 or len(references) != 1:
+        values = [cell.strip("`").strip() for cell in cells]
+        if len(values) >= 4 and (
+            values[2] == "[IMAGE]" or values[2].startswith("[IMAGE:")
+        ):
+            if len(body_entries) >= len(body_paths):
                 raise ContractError("image map has an invalid body image row")
-            body_entries.append(references[0])
-        if thumbnail_markers:
-            if len(thumbnail_markers) != 1 or references != [thumbnail]:
+            file_path = values[3]
+            if file_path not in body_paths:
+                raise ContractError("image map has an unexpected body image path")
+            if values[3] != body_paths[len(body_entries)]:
+                raise ContractError("image map body image order does not match")
+            body_entries.append(file_path)
+        elif (
+            len(values) >= 3
+            and values[0] == "[THUMBNAIL]"
+            and values[1] == "[THUMBNAIL]"
+        ):
+            file_path = values[2]
+            if file_path != thumbnail:
                 raise ContractError("image map has an invalid thumbnail row")
-            thumbnail_entries.append(references[0])
+            thumbnail_entries.append(file_path)
     if body_entries != body_paths or thumbnail_entries != [thumbnail]:
         raise ContractError("image map does not exactly cover ordered assets")
     return {"body_images": len(body_entries), "thumbnail": thumbnail, "passed": True}
