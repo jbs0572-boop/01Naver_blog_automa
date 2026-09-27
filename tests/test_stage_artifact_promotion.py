@@ -368,7 +368,8 @@ def test_image_stage_restores_archived_assets_when_quarantine_fails(
             raise OSError("directory restore failed transiently")
         _ = real_replace(source, destination)
 
-    def fail_ledger(*_args: object, **_kwargs: object) -> None:
+    def fail_ledger(path: Path, *_args: object, **_kwargs: object) -> None:
+        _ = path.write_bytes(b"corrupt ledger")
         raise OSError("ledger write failed")
 
     monkeypatch.setattr("tools.stage_artifact_promotion.os.replace", replace)
@@ -436,7 +437,8 @@ def test_image_rollback_ignores_partial_rmtree_error_after_exact_directory_resto
             raise OSError("quarantine failed")
         _ = real_replace(source, destination)
 
-    def fail_ledger(*_args: object, **_kwargs: object) -> None:
+    def fail_ledger(path: Path, *_args: object, **_kwargs: object) -> None:
+        _ = path.write_bytes(b"corrupt ledger")
         raise OSError("ledger write failed")
 
     monkeypatch.setattr("tools.stage_artifact_promotion.shutil.rmtree", partial_rmtree)
