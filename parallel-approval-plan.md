@@ -174,7 +174,7 @@ pending | running | passed | failed | blocked | skipped
 
 | 파일 | 추가할 내용 |
 |---|---|
-| `AGENTS.md` | 불변 파이프라인, 병렬 허용 경계, 외부 쓰기 검증, 단일 작성자 원칙 |
+| `EXECUTION_AGENT.md` | 불변 파이프라인, 병렬 허용 경계, 외부 쓰기 검증, 단일 작성자 원칙 |
 | `archive/legacy-beta/docs/BETA-AGENTS.md` | 당시 최대 동시 작업 수, 네이버 호출 금지, 직렬 Notion 저장 범위 |
 | `researcher.md` | 읽기 전용 두 Lane, 반환 계약, 주 담당만 병합·기록 |
 | `image-maker.md` | 단계적 병렬화, 슬롯 소유권, 주 담당만 연결표·최종 판정 |

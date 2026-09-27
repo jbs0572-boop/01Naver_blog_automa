@@ -332,7 +332,7 @@ average_exposure_rank_28d
 | 순서 | 파일 | 작업 |
 |---:|---|---|
 | 1 | `topic-selector.md` | 본 계획의 입력·수집·선정·실패·결과 계약 반영 |
-| 2 | `AGENTS.md` | 두 입력 방식 모두 KST 기준일 필수, 자동 선정만 Creator Advisor 사용하도록 정합화 |
+| 2 | `EXECUTION_AGENT.md` | 두 입력 방식 모두 KST 기준일 필수, 자동 선정만 Creator Advisor 사용하도록 정합화 |
 | 3 | `tools/runner_types.py` | 기존 분야·독자·발행목적 문맥을 제거하고 기준일 중심 타입으로 변경 |
 | 4 | `tools/dashboard_manual_request.py` | 두 입력 payload 파싱과 KST 날짜 검증 변경 |
 | 5 | `tools/runner_cli.py` | 지정·자동 실행에서 `--as-of-date`를 필수 옵션으로 처리 |
@@ -401,7 +401,7 @@ average_exposure_rank_28d
 
 ### Gate A: 계약 확정
 
-- `topic-selector.md`와 `AGENTS.md`의 입력 방식·기준일·자동 선정 출처가 일치한다.
+- `topic-selector.md`와 `EXECUTION_AGENT.md`의 입력 방식·기준일·자동 선정 출처가 일치한다.
 - 분야·독자·발행목적이 신규 입력 계약에서 제거된다.
 
 ### Gate B: 수집 안정성

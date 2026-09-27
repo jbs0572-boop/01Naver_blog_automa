@@ -818,6 +818,38 @@ def test_notion_only_pipeline_reaches_ready_for_naver_without_confirmation(
     assert state["confirmation"] is None
 
 
+def test_active_contract_describes_dashboard_three_child_fanout() -> None:
+    contract = Path(__file__).parents[1] / "EXECUTION_AGENT.md"
+    text = contract.read_text(encoding="utf-8")
+    required_markers = (
+        "dashboard_auto_envelope=three_sequential_daily_generate_children",
+        "dashboard_user_envelope=one_daily_generate_child",
+        "child_lifecycle=q1_then_q2_then_confirmation",
+    )
+    assert all(marker in text for marker in required_markers)
+
+
+def test_topic_selector_contract_describes_shared_snapshot_reuse() -> None:
+    contract = Path(__file__).parents[1] / "topic-selector.md"
+    text = contract.read_text(encoding="utf-8")
+    required_markers = (
+        "snapshot_reuse=explicit_slot_context",
+        "capture_once -> reuse_only",
+        "ordinary daily-generate",
+    )
+    assert all(marker in text for marker in required_markers)
+
+
+def test_design_contract_forbids_bulk_confirmation() -> None:
+    contract = Path(__file__).parents[1] / "DESIGN.md"
+    text = contract.read_text(encoding="utf-8")
+    required_markers = (
+        "bulk_confirmation=forbidden",
+        "child_confirmation=independent",
+    )
+    assert all(marker in text for marker in required_markers)
+
+
 @pytest.mark.parametrize(
     "status",
     (

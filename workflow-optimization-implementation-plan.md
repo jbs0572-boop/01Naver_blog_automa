@@ -304,7 +304,7 @@ Q2 실패는 콘텐츠 품질 점수와 별개로 `storage_integrity=failed`로 
 | 실행 검증기 | Schema 검사, manifest 생성, digest 재계산, Notion·네이버 쓰기 선행 검증 |
 | Codex Hook | 외부 쓰기 전에 검증기 실행, 실패 시 도구 호출 차단 |
 | `metrics-spec.md` | Schema를 기준으로 이벤트·해시 규칙 정의 |
-| `AGENTS.md` | canonical manifest와 Q1·Q2 경계 |
+| `EXECUTION_AGENT.md` | canonical manifest와 Q1·Q2 경계 |
 | `archive/legacy-beta/docs/BETA-AGENTS.md` | 당시 Q1 → Notion → Q2 흐름 기록 |
 | `content-assembler.md` | 세 최종 파일과 이미지 manifest 생성 책임 |
 

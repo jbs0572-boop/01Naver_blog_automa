@@ -41,13 +41,15 @@ def stage_prompt(
     context: StageExecutionContext, instruction_path: Path, output_path: Path
 ) -> str:
     agents_path = context.root / "AGENTS.md"
+    execution_agents_path = context.root / "EXECUTION_AGENT.md"
     prompt = (
         f"Execute stage {context.stage} for run_id={context.run_id}, "
         f"topic_id={context.topic_id}, keyword={context.keyword or 'auto-topic'}. "
-        f"Read {agents_path} and {instruction_path}; treat only those two files as "
-        "project instructions and follow both. Mirror declared canonical relative artifact "
-        "paths under the staging workspace. Do not write to the source project. "
-        "Return those relative paths in the structured result. "
+        f"Read {agents_path}, {execution_agents_path}, and {instruction_path}; treat "
+        "only those three files as project instructions and follow all three. Mirror declared canonical relative artifact "
+        "paths under the staging workspace's artifacts/ directory. Use the workspace root "
+        "only for disposable helpers. Return canonical relative paths without the "
+        "artifacts/ prefix in the structured result. Do not write to the source project. "
         f"Do not include the internal protocol file {output_path} in artifacts. "
         f"The trusted work directory {context.work_dir} is read-only; never write there. "
         "Do not call external write tools unless "
