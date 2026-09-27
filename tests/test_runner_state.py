@@ -66,7 +66,7 @@ def test_stable_run_id_separates_batch_slots(tmp_path: Path) -> None:
     assert stable_run_id(first) != stable_run_id(second)
 
 
-def test_q3_evidence_updates_do_not_change_immutable_workflow_fingerprint(
+def test_post_q2_evidence_is_separate_from_hashed_producer_inputs(
     tmp_path: Path,
 ) -> None:
     request = RunnerRequest(
@@ -76,20 +76,28 @@ def test_q3_evidence_updates_do_not_change_immutable_workflow_fingerprint(
     )
     assets = tmp_path / "assets" / "fixture"
     assets.mkdir(parents=True)
-    quality = assets / "image-quality.jsonl"
-    mobile = assets / "q3-mobile.png"
+    producer_quality = assets / "image-quality.jsonl"
     image = assets / "body.png"
-    _ = quality.write_text('{"reviewed_at":"first"}\n', encoding="utf-8")
-    _ = mobile.write_bytes(b"mobile-evidence-v1")
+    _ = producer_quality.write_text('{"quality":"passed"}\n', encoding="utf-8")
     _ = image.write_bytes(b"original-image")
 
     initial = input_fingerprint(request)
-    _ = quality.write_text('{"reviewed_at":"post-q2"}\n', encoding="utf-8")
-    _ = mobile.write_bytes(b"mobile-evidence-v2")
+    q3_directory = tmp_path / "metadata" / "quality-reviews"
+    q3_directory.mkdir(parents=True)
+    _ = (q3_directory / "RUN-fixture-images.jsonl").write_text(
+        '{"reviewed_at":"post-q2"}\n', encoding="utf-8"
+    )
 
     assert input_fingerprint(request) == initial
-    _ = image.write_bytes(b"changed-image")
+    _ = producer_quality.write_text('{"quality":"changed"}\n', encoding="utf-8")
     assert input_fingerprint(request) != initial
+    after_q3 = input_fingerprint(request)
+    _ = (q3_directory / "RUN-fixture-images.jsonl").write_text(
+        '{"reviewed_at":"refreshed-post-q2"}\n', encoding="utf-8"
+    )
+    assert input_fingerprint(request) == after_q3
+    _ = image.write_bytes(b"changed-image")
+    assert input_fingerprint(request) != after_q3
 
 
 def test_request_from_state_accepts_legacy_context_without_batch_fields(tmp_path: Path) -> None:

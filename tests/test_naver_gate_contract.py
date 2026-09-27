@@ -13,6 +13,7 @@ from tools.article_quality import (
     assessment_digest,
     assessment_path,
 )
+from tools.image_quality import post_q2_image_review_path
 from tools.manifest import ManifestBuildInput
 from tools.workflow_contract import (
     PIPELINE_VERSION,
@@ -116,9 +117,7 @@ class NaverGateContractTests(unittest.TestCase):
         path = assessment_path(self.root, self.run_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         _ = path.write_text(json.dumps(report), encoding="utf-8")
-        image_quality_path = (
-            self.root / "assets" / self.keyword / "image-quality.jsonl"
-        )
+        image_quality_path = post_q2_image_review_path(self.root, self.run_id)
         image_records = [
             json.loads(line)
             for line in image_quality_path.read_text(encoding="utf-8").splitlines()

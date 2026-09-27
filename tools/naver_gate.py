@@ -136,11 +136,9 @@ def verify_article_quality(
     )
     if not assessment.passed:
         raise ArticleQualityFailure(assessment)
-    from tools.image_quality import validate_image_quality
+    from tools.image_quality import post_q2_image_review_path, validate_image_quality
 
-    image_quality_path = (
-        root / "assets" / _manifest_keyword(manifest) / "image-quality.jsonl"
-    )
+    image_quality_path = post_q2_image_review_path(root, manifest.run_id)
     image_result = validate_image_quality(image_quality_path)
     expected_images = [
         f"sha256:{entry.sha256}"
@@ -185,11 +183,6 @@ def verify_article_quality(
         "image_quality_records": image_result["records"],
         "image_quality_passed": image_result["passed"],
     }
-
-
-def _manifest_keyword(manifest: Manifest) -> str:
-    final = next(entry for entry in manifest.files if entry.role == "final_markdown")
-    return Path(final.path).stem
 
 
 def _load_image_quality_records(path: Path) -> list[JSONMap]:

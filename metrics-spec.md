@@ -89,7 +89,7 @@ Notion과 네이버 외부 쓰기는 별도 승인 이벤트를 기록하지 않
 
 `local_render` 레코드는 `generation_provider=pillow`, `generation_model=not_applicable`, `generation_snapshot=pillow-<renderer-version>`, `renderer_version`, `renderer_sha256`, `input_sha256`를 실제 실행과 연결해 기록한다. `ai_generation` 레코드는 실제 provider·model·snapshot과 호출 증거가 출력 해시와 연결된 경우에만 운영 근거로 인정한다. 기존 `production_method` 누락 레코드는 역사 기록으로 읽되 신규 제작의 신뢰 근거로 자동 승격하지 않는다. 구현 결과와 현재 검증 한계는 `docs/task-7-image-production-result.md`와 실행별 evidence artifact에 기록한다.
 
-자동 검수 결과와 사람 검수 결과는 `assets/[키워드]/image-quality.jsonl`에 원시값으로 남긴다. 사람 평가 항목은 계획서의 5개 점수 필드로 0~4점씩 기록하며 총점 16/20 이상, 개별 3점 미만 없음, 즉시 실패 없음, `mobile_viewport=390x844`의 실제 `mobile_render_path`와 `mobile_render_sha256` 재검증을 모두 만족해야 한다.
+image-maker의 산출물·자동 검사 결과는 `assets/[키워드]/image-quality.jsonl`에 기록한다. Q2 이후의 사람 이미지 검수는 `metadata/quality-reviews/<run_id>-images.jsonl`에 별도 기록해 run ID와 글 평가 digest에 연결하고, Q2 이후 검수 시각을 보존한다. 사람 평가 항목은 5개 점수 필드로 0~4점씩 기록하며 총점 16/20 이상, 개별 3점 미만 없음, 즉시 실패 없음, `mobile_viewport=390x844`의 실제 `mobile_render_path`와 `mobile_render_sha256` 재검증을 모두 만족해야 한다.
 
 ## Notion 기록 매핑
 

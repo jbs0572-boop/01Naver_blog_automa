@@ -17,6 +17,7 @@ from tools.article_quality import (
     assessment_path,
 )
 from tools.contract_types import PIPELINE_VERSION, JSONMap, JSONValue
+from tools.image_quality import post_q2_image_review_path
 from tools.manifest import ManifestBuildInput, build_manifest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -151,7 +152,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str]:
     quality_path = assessment_path(tmp_path, run_id)
     quality_path.parent.mkdir(parents=True, exist_ok=True)
     _ = quality_path.write_text(json.dumps(quality_report), encoding="utf-8")
-    image_quality_path = asset_dir / "image-quality.jsonl"
+    image_quality_path = post_q2_image_review_path(tmp_path, run_id)
     image_records = [
         json.loads(line)
         for line in image_quality_path.read_text(encoding="utf-8").splitlines()

@@ -23,6 +23,14 @@ SNAPSHOT: Final = "gpt-image-2.5-flare-2026-09-08"
 SCHEMA_PATH: Final = (
     Path(__file__).resolve().parents[1] / "schemas" / "workflow-contract.schema.json"
 )
+
+
+def post_q2_image_review_path(root: Path, run_id: str) -> Path:
+    if not run_id or Path(run_id).name != run_id or run_id in {".", ".."}:
+        raise ContractError("image review run_id is not a safe path component")
+    return root / "metadata" / "quality-reviews" / f"{run_id}-images.jsonl"
+
+
 METADATA_FIELDS: Final = (
     "generation_provider",
     "generation_model",

@@ -13,6 +13,7 @@ from tests.article_quality_fixtures import install_passing_quality_review
 from tools.article_quality import assessment_digest, assessment_path
 from tools.contract_types import ContractError, JSONMap, JSONValue
 from tools.external_adapter import ExternalWriteRequest
+from tools.image_quality import post_q2_image_review_path
 from tools.manifest import verify_manifest
 from tools.model_presets import default_stage_settings, model_config_snapshot
 from tools.notion_resume import NotionQ2Failure
@@ -1412,7 +1413,7 @@ def test_naver_preparation_requires_image_quality_records_for_current_images(
         naver_adapter=naver,
     )
     ready = run_job(request)
-    quality = tmp_path / "assets" / "fixture" / "image-quality.jsonl"
+    quality = post_q2_image_review_path(tmp_path, ready.run_id)
     assert quality.is_file()
     quality.unlink()
 
@@ -1451,7 +1452,7 @@ def test_naver_preparation_rejects_unbound_or_pre_q2_image_review(
         naver_adapter=naver,
     )
     ready = run_job(request)
-    quality_path = tmp_path / "assets" / "fixture" / "image-quality.jsonl"
+    quality_path = post_q2_image_review_path(tmp_path, ready.run_id)
     records = [json.loads(line) for line in quality_path.read_text().splitlines()]
     records[0][field] = value
     _ = quality_path.write_text(

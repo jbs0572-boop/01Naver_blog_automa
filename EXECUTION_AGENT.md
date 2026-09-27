@@ -88,7 +88,7 @@ canonical manifest 파일 순서는 `final/[키워드].md → final/[키워드]-
 
 - Q1: `content-assembler`가 근거·최신성·제목 약속·독자 질문·시각 계약·네 최종 파일·canonical manifest를 자동 검사한다. 실패 원인은 민감값을 제거한 뒤 같은 실행 ID의 다음 content-assembler 시도에만 전달하며, 이 단계는 동일 원인 반복을 포함해 총 3회까지만 재시도한다. 이전 producer와 Notion 쓰기는 Q1 통과 전 재호출하지 않으며, 3회가 소진되면 구체적 안전 원인으로 실패 처리한다.
 - Q2: `notion-rider`가 신규 페이지 저장 후 제목·본문·목록·표·링크·이미지·썸네일 순서, 첨부, 중복 `run_id`, 정규화 구조 digest를 재조회한다. 실패는 `storage_integrity=failed`로 기록하고 네이버 입력을 시작하지 않는다.
-- Q3: Notion Q2 재조회 후 `evaluation-rubric.md`에 따른 글·이미지 검수를 필수 수행한다. 결과는 `metadata/quality-reviews/<run_id>.json`에 rubric 버전, `run_id`, `topic_id`, `artifact_digest`, 검수자·시각, 영역별 점수·근거, 즉시 실패 코드, 원인 분류와 다음 조치를 기록한다. 85점 미만, 즉시 실패, 보고서 누락·오래됨·다른 산출물 연결이면 `naver-rider`의 준비 입력과 임시저장을 모두 차단한다. 저점수는 `quality_failed`로 기록하고 주제 부적합과 실행 결함을 구분한다. 실패 자료는 보존하며 정책·프롬프트를 자동 변경하지 않는다.
+- Q3: Notion Q2 재조회 후 `evaluation-rubric.md`에 따른 글·이미지 검수를 필수 수행한다. 글 평가는 `metadata/quality-reviews/<run_id>.json`에 rubric 버전, `run_id`, `topic_id`, `artifact_digest`, 검수자·시각, 영역별 점수·근거, 즉시 실패 코드, 원인 분류와 다음 조치를 기록한다. 이미지별 Q3는 별도 `metadata/quality-reviews/<run_id>-images.jsonl`에 현재 `run_id`, 글 평가 digest, Q2 이후 검수 시각, 이미지 SHA, 점수·자동 검사·모바일 캡처와 사람 판정을 기록한다. 85점 미만, 이미지 16/20 미만, 개별 이미지 기준 미달, 즉시 실패, 보고서 누락·오래됨·다른 산출물 연결이면 `naver-rider`의 준비 입력과 임시저장을 모두 차단한다. 저점수는 `quality_failed`로 기록하고 주제 부적합과 실행 결함을 구분한다. 실패 자료는 보존하며 정책·프롬프트를 자동 변경하지 않는다.
 
 Notion 쓰기는 Q1, 현재 manifest, 실행 로그, 설정과 실제 조회 결과가 같은 데이터 소스 ID임을 모두 확인한 뒤에만 시작한다. 허용되는 Notion 작업은 첨부 생성과 지정 데이터 소스의 신규 페이지 생성뿐이다. 기존 페이지 수정·복제·이동·삭제와 브라우저 우회 쓰기는 허용하지 않는다.
 

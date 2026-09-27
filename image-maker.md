@@ -101,7 +101,7 @@ python3 -m tools.workflow_verifier validate-image-metadata --metadata assets/<�
 python3 -m tools.workflow_verifier validate-image-quality --quality assets/<키워드>/image-quality.jsonl
 ```
 
-`image-quality.jsonl`에는 각 평가 대상 파일의 `image_sha256`를 먼저 기록하고, 자동 검사(`decode_check`, `duplicate_check`, `ocr_check`, `visual_contract_check`, `mobile_render_check`)와 사람 검수의 5개 0~4점, `immediate_failure`, `mobile_rendered`, 고정 viewport `mobile_viewport=390x844`, 실제 캡처의 안전한 상대 경로 `mobile_render_path`, 그 캡처의 `mobile_render_sha256`, `human_verdict`를 기록한다. 네이버 Gate는 본문 이미지와 썸네일을 포함해 현재 manifest의 모든 이미지에 대해 각각 정확히 한 개의 기록을 요구한다. 자동 점수가 통과해도 사람 점수 총점 16/20 미만, 개별 3점 미만, 모바일 캡처 파일·해시 누락, 이미지 해시 불일치, 즉시 실패가 하나라도 있으면 image-maker는 실패다.
+`assets/<키워드>/image-quality.jsonl`은 image-maker 단계의 산출물·자동 검사 근거다. 이 검증은 Q2 전에 실행되므로 사후 Q3 검수 시각이나 글 평가 digest를 기록하지 않는다. Q2 뒤의 필수 네이버 저장 전 사람 검수는 별도로 `metadata/quality-reviews/<run_id>-images.jsonl`에 기록한다. Q3 파일에는 현재 run의 `run_id`, 통과한 글 평가의 `article_quality_report_digest`, Q2 이후 `reviewed_at`, manifest의 각 본문 이미지와 썸네일을 식별하는 `image_sha256`, 사람 검수의 5개 0~4점, `immediate_failure`, 실제 모바일 캡처의 상대 경로·SHA-256, `human_verdict`를 넣는다. 캡처는 `metadata/quality-reviews/<run_id>-images/` 아래 둔다. 네이버 Gate는 이 사후 파일에서 manifest 이미지마다 정확히 한 건씩 요구한다. 자동 점수가 통과해도 사람 점수 총점 16/20 미만, 개별 3점 미만, Q2 이후 시각·run·글 평가 digest 연결 누락, 캡처 파일·해시 불일치, 즉시 실패가 하나라도 있으면 저장을 차단한다.
 
 ## 검수
 
