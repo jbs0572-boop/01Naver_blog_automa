@@ -203,6 +203,105 @@ def test_same_run_retry_replaces_only_unchanged_owned_destination(tmp_path: Path
     assert json.loads(ledger.read_text(encoding="utf-8"))["run_id"] == "RUN-1"
 
 
+def test_image_stage_archives_prior_run_assets_before_replacing_them(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    staging = tmp_path / "staging"
+    ledger = project / ".automation/work/RUN-2/image-maker/artifact-ownership.json"
+    asset_dir = project / "assets/topic"
+    asset_dir.mkdir(parents=True)
+    old_files = {
+        "image-map.md": b"old map",
+        "thumbnail.png": b"old thumbnail",
+        "image-01.png": b"old image",
+        "historical-note.txt": b"keep this too",
+    }
+    for name, value in old_files.items():
+        _ = (asset_dir / name).write_bytes(value)
+    staged_files = {
+        "image-map.md": b"new map",
+        "thumbnail.png": b"new thumbnail",
+        "image-01.png": b"new image",
+    }
+    for name, value in staged_files.items():
+        destination = staging / "assets/topic" / name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        _ = destination.write_bytes(value)
+
+    _ = promote_stage_artifacts(
+        stage="image-maker",
+        keyword="topic",
+        run_id="RUN-2",
+        staging_root=staging,
+        project_root=project,
+        declared=tuple(f"assets/topic/{name}" for name in staged_files),
+        ledger_path=ledger,
+    )
+
+    archive = project / ".automation/archive/image-assets/topic/RUN-2"
+    assert {p.name: p.read_bytes() for p in archive.iterdir()} == old_files
+    assert {
+        name: (asset_dir / name).read_bytes() for name in staged_files
+    } == staged_files
+    assert (asset_dir / "historical-note.txt").read_bytes() == old_files[
+        "historical-note.txt"
+    ]
+
+
+def test_image_stage_promotion_failure_restores_prior_assets_and_ledger(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = tmp_path / "project"
+    staging = tmp_path / "staging"
+    ledger = project / ".automation/work/RUN-2/image-maker/artifact-ownership.json"
+    asset_dir = project / "assets/topic"
+    asset_dir.mkdir(parents=True)
+    old_files = {"image-map.md": b"old map", "thumbnail.png": b"old thumbnail"}
+    for name, value in old_files.items():
+        _ = (asset_dir / name).write_bytes(value)
+    staged_files = {"image-map.md": b"new map", "thumbnail.png": b"new thumbnail"}
+    for name, value in staged_files.items():
+        destination = staging / "assets/topic" / name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        _ = destination.write_bytes(value)
+    old_ledger = json.dumps(
+        {"run_id": "RUN-2", "artifacts": {"assets/topic/old.png": "a" * 64}}
+    ).encode()
+    ledger.parent.mkdir(parents=True)
+    _ = ledger.write_bytes(old_ledger)
+    calls = 0
+
+    def fail_on_second_ledger(
+        path: Path, run_id: str, hashes: dict[str, str]
+    ) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("disk full")
+        _ = path.write_text(
+            json.dumps({"run_id": run_id, "artifacts": hashes}), encoding="utf-8"
+        )
+
+    monkeypatch.setattr(
+        "tools.stage_artifact_promotion._write_ledger", fail_on_second_ledger
+    )
+
+    with pytest.raises(OSError, match="disk full"):
+        _ = promote_stage_artifacts(
+            stage="image-maker",
+            keyword="topic",
+            run_id="RUN-2",
+            staging_root=staging,
+            project_root=project,
+            declared=tuple(f"assets/topic/{name}" for name in staged_files),
+            ledger_path=ledger,
+        )
+
+    assert {p.name: p.read_bytes() for p in asset_dir.iterdir()} == old_files
+    assert ledger.read_bytes() == old_ledger
+
+
 def test_ledger_failure_rolls_back_unowned_destination(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

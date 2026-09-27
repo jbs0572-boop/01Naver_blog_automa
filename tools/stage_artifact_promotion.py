@@ -104,11 +104,63 @@ def _owned_hashes(request: PromotionRequest) -> dict[str, str]:
     return values
 
 
+def _image_archive_path(request: PromotionRequest) -> Path | None:
+    if request.stage != "image-maker" or request.keyword is None:
+        return None
+    for value in (request.keyword, request.run_id):
+        if not value or Path(value).name != value or value in {".", ".."}:
+            raise ContractError("image asset archive path is unsafe")
+    return (
+        request.project_root
+        / ".automation"
+        / "archive"
+        / "image-assets"
+        / request.keyword
+        / request.run_id
+    )
+
+
+def _archive_existing_image_assets(request: PromotionRequest) -> Path | None:
+    archive = _image_archive_path(request)
+    if archive is None or request.keyword is None:
+        return None
+    asset_dir = request.project_root / "assets" / request.keyword
+    if not asset_dir.exists():
+        return None
+    if asset_dir.is_symlink() or not asset_dir.is_dir():
+        raise ContractError("existing image asset directory is not a regular directory")
+    for path in asset_dir.rglob("*"):
+        if path.is_symlink():
+            raise ContractError(f"existing image asset cannot be a symlink: {path}")
+    if not archive.exists():
+        _ = archive.parent.mkdir(parents=True, exist_ok=True)
+        _ = shutil.copytree(asset_dir, archive)
+        return archive
+    if archive.is_symlink() or not archive.is_dir():
+        raise ContractError("image asset archive is not a regular directory")
+    owned = _owned_hashes(request)
+    for path in asset_dir.rglob("*"):
+        if not path.is_file():
+            continue
+        relative = path.relative_to(asset_dir).as_posix()
+        owned_path = f"assets/{request.keyword}/{relative}"
+        if owned.get(owned_path) == _sha256(path):
+            continue
+        archived = archive / relative
+        if not archived.is_file() or _sha256(archived) != _sha256(path):
+            raise ContractError(
+                f"existing image asset is not preserved in the run archive: {relative}"
+            )
+    return archive
+
+
 def _object_dict(value: object) -> TypeGuard[dict[object, object]]:
     return isinstance(value, dict)
 
 
-def _validate(request: PromotionRequest) -> tuple[tuple[Path, Path, str], ...]:
+def _validate(
+    request: PromotionRequest, archive: Path | None
+) -> tuple[tuple[Path, Path, str], ...]:
     declared_paths = tuple(_relative_path(value) for value in request.declared)
     declared = {path.as_posix() for path in declared_paths}
     if not declared or declared != _staged_files(request.staging_root):
@@ -139,8 +191,20 @@ def _validate(request: PromotionRequest) -> tuple[tuple[Path, Path, str], ...]:
         destination = request.project_root / relative
         if destination.exists():
             expected = owned.get(value)
-            if expected is None or not destination.is_file() or _sha256(destination) != expected:
-                raise ContractError(f"existing artifact is not owned by this run: {value}")
+            current_run_owned = (
+                expected is not None
+                and destination.is_file()
+                and _sha256(destination) == expected
+            )
+            archived_previous = (
+                archive is not None
+                and destination.is_file()
+                and (archive / relative.relative_to(Path("assets") / str(request.keyword))).is_file()
+                and _sha256(destination)
+                == _sha256(archive / relative.relative_to(Path("assets") / str(request.keyword)))
+            )
+            if not current_run_owned and not archived_previous:
+                raise ContractError(f"existing artifact is not owned or archived: {value}")
         validated.append((source, destination, value))
     return tuple(validated)
 
@@ -186,6 +250,21 @@ def _write_ledger(path: Path, run_id: str, hashes: dict[str, str]) -> None:
         temporary_path.unlink(missing_ok=True)
 
 
+def _restore_ledger(path: Path, previous: bytes | None) -> None:
+    if previous is None:
+        path.unlink(missing_ok=True)
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handle, temporary = tempfile.mkstemp(prefix=".ownership-restore-", dir=path.parent)
+    os.close(handle)
+    temporary_path = Path(temporary)
+    try:
+        _ = temporary_path.write_bytes(previous)
+        os.replace(temporary_path, path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
+
+
 def promote_stage_artifacts(
     *,
     stage: str,
@@ -199,18 +278,25 @@ def promote_stage_artifacts(
     request = PromotionRequest(
         stage, keyword, run_id, staging_root, project_root, declared, ledger_path
     )
-    validated = _validate(request)
+    archive = _archive_existing_image_assets(request)
+    validated = _validate(request, archive)
     hashes = _owned_hashes(request)
-    for source, destination, relative in validated:
-        previous = destination.read_bytes() if destination.is_file() else None
-        _atomic_copy(source, destination)
-        candidate = {**hashes, relative: _sha256(destination)}
-        try:
+    previous_files: dict[Path, bytes | None] = {}
+    previous_ledger = ledger_path.read_bytes() if ledger_path.is_file() else None
+    try:
+        for source, destination, relative in validated:
+            previous_files[destination] = (
+                destination.read_bytes() if destination.is_file() else None
+            )
+            _atomic_copy(source, destination)
+            candidate = {**hashes, relative: _sha256(destination)}
             _write_ledger(ledger_path, run_id, candidate)
-        except OSError:
+            hashes = candidate
+    except Exception:
+        for destination, previous in reversed(tuple(previous_files.items())):
             _restore(destination, previous)
-            raise
-        hashes = candidate
+        _restore_ledger(ledger_path, previous_ledger)
+        raise
     return tuple(relative for _source, _destination, relative in validated)
 
 
