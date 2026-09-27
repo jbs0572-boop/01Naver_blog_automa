@@ -58,6 +58,12 @@ class NotionGateContractTests(unittest.TestCase):
         _ = (final_dir / f"{self.keyword}-naver-copy.md").write_text(
             "# Copy\n", encoding="utf-8"
         )
+        _ = (final_dir / f"{self.keyword}-naver-input.md").write_text(
+            "# Copy\n", encoding="utf-8"
+        )
+        _ = (final_dir / f"{self.keyword}-naver-input.md").write_text(
+            "# Input\n", encoding="utf-8"
+        )
         self.manifest = build_manifest(self._manifest_input())
         self.manifest_path = self.root / "manifest.json"
         _ = self.manifest_path.write_text(
@@ -154,6 +160,7 @@ class NotionGateContractTests(unittest.TestCase):
             run_id=self.run_id,
             topic_id=self.topic_id,
             artifact_digest=artifact_digest,
+            manifest=self.manifest,
             reviewed_at=verified_at,
         )
         events = [

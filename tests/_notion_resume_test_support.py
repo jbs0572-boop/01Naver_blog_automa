@@ -26,7 +26,7 @@ def _request(tmp_path: Path) -> tuple[ExternalWriteRequest, JSONMap]:
     _ = (final_dir / f"{keyword}.md").write_text(
         "![body](../assets/topic/body.png)\n", encoding="utf-8"
     )
-    for suffix in ("-naver-layout.md", "-naver-copy.md"):
+    for suffix in ("-naver-layout.md", "-naver-copy.md", "-naver-input.md"):
         _ = (final_dir / f"{keyword}{suffix}").write_text("# file\n", encoding="utf-8")
     _ = (tmp_path / "notion-config.md").write_text(
         "- 데이터 소스 ID: `datasource-resume`\n", encoding="utf-8"

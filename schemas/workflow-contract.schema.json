@@ -153,13 +153,14 @@
         "topic_id": { "type": "string", "minLength": 1 },
         "mode": { "$ref": "#/$defs/mode" },
         "created_at": { "$ref": "#/$defs/isoDateTime" },
-        "files": { "type": "array", "minItems": 5, "items": { "$ref": "#/$defs/manifestFile" }, "uniqueItems": true },
+        "files": { "type": "array", "minItems": 6, "items": { "$ref": "#/$defs/manifestFile" }, "uniqueItems": true },
         "artifact_digest": { "$ref": "#/$defs/artifactDigest" }
       },
       "allOf": [
         { "contains": { "properties": { "role": { "const": "final_markdown" } }, "required": ["role"] } },
         { "contains": { "properties": { "role": { "const": "naver_layout" } }, "required": ["role"] } },
         { "contains": { "properties": { "role": { "const": "naver_copy" } }, "required": ["role"] } },
+        { "contains": { "properties": { "role": { "const": "naver_input" } }, "required": ["role"] } },
         { "contains": { "properties": { "role": { "const": "image_map" } }, "required": ["role"] } },
         { "contains": { "properties": { "role": { "const": "thumbnail" } }, "required": ["role"] } }
       ],
@@ -206,8 +207,9 @@
     },
     "imageQuality": {
       "type": "object",
-      "required": ["automated_checks", "scores", "immediate_failure", "mobile_rendered", "mobile_viewport", "mobile_render_path", "mobile_render_sha256", "human_verdict"],
+      "required": ["image_sha256", "automated_checks", "scores", "immediate_failure", "mobile_rendered", "mobile_viewport", "mobile_render_path", "mobile_render_sha256", "human_verdict"],
       "properties": {
+        "image_sha256": { "$ref": "#/$defs/artifactDigest" },
         "automated_checks": {
           "type": "object",
           "required": ["decode_check", "duplicate_check", "ocr_check", "visual_contract_check", "mobile_render_check"],

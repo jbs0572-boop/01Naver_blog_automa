@@ -8,19 +8,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Final
 
+from tools.contract_types import ContractError, JSONMap, JSONValue, SchemaError
 from tools.image_contract import (
     AUTOMATED_CHECKS,
     MOBILE_VIEWPORT,
     SCORE_FIELDS,
     has_image_signature,
 )
-from tools.workflow_contract import (
-    ContractError,
-    JSONMap,
-    JSONValue,
-    SchemaError,
-    validate_instance,
-)
+from tools.schema_validation import validate_instance
 
 HASH_RE: Final = re.compile(r"^sha256:[0-9a-f]{64}$")
 SIZE_RE: Final = re.compile(r"^[1-9][0-9]*x[1-9][0-9]*$")

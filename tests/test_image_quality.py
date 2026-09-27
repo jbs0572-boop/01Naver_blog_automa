@@ -114,6 +114,7 @@ class ImageQualityTests(unittest.TestCase):
         quality = self._write_jsonl(
             "image-quality.jsonl",
             {
+                "image_sha256": "sha256:" + "f" * 64,
                 "automated_checks": {
                     "decode_check": "passed",
                     "duplicate_check": "passed",

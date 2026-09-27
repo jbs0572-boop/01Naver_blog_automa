@@ -101,7 +101,12 @@ class FixtureExecutor:
             )
             for suffix in ("-naver-layout.md", "-naver-copy.md", "-naver-input.md"):
                 _ = (final_dir / f"{keyword}{suffix}").write_text(
-                    f"# {keyword}\n", encoding="utf-8"
+                    f"[TITLE]{keyword} title[/TITLE]\n"
+                    + "[IMAGE file=\"thumbnail.png\" alt=\"대표\" representative=true]\n"
+                    + "[ALT]대표 이미지[/ALT]\n"
+                    + "[IMAGE file=\"body.png\" alt=\"본문\" representative=false]\n"
+                    + "[ALT]본문 이미지[/ALT]\n[TEXT]Fixture body[/TEXT]\n",
+                    encoding="utf-8",
                 )
             artifacts = tuple(
                 f"final/{keyword}{suffix}"
@@ -117,6 +122,20 @@ class FixtureExecutor:
         )
 
 
+class MismatchedNaverInputExecutor(FixtureExecutor):
+    @override
+    def execute(self, context: StageExecutionContext) -> StageResult:
+        result = super().execute(context)
+        if context.stage == "content-assembler" and context.keyword is not None:
+            path = context.root / "final" / f"{context.keyword}-naver-input.md"
+            source = path.read_text(encoding="utf-8")
+            _ = path.write_text(
+                source.replace("Fixture body", "Different unreviewed body"),
+                encoding="utf-8",
+            )
+        return result
+
+
 class FixtureNotion:
     def write_and_verify(self, request: ExternalWriteRequest) -> JSONMap:
         from tools.manifest import verify_manifest
@@ -128,6 +147,7 @@ class FixtureNotion:
             run_id=request.run_id,
             topic_id=manifest.topic_id,
             artifact_digest=digest,
+            manifest={"files": [entry.as_json() for entry in manifest.files]},
             reviewed_at=NOW.isoformat(),
         )
         content_digest = "sha256:" + "1" * 64
@@ -594,6 +614,46 @@ def test_cli_reinjects_deferred_notion_adapter_for_resumable_live_runs(
     assert len(created) == expected_calls
     assert len(captured) == 1
     assert captured[0].notion_adapter is (notion if expected_calls else None)
+
+
+def test_cli_forwards_naver_confirmation_nonce_and_adapter(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[ConfirmationInput] = []
+    adapter = FixtureNaver()
+
+    def confirm(confirmation: ConfirmationInput) -> RunnerResult:
+        captured.append(confirmation)
+        return RunnerResult(
+            "RUN-cli-confirm",
+            RunStatus.DRAFT_SAVED,
+            tmp_path / "state.json",
+            tmp_path / "run.jsonl",
+            (),
+            "saved",
+        )
+
+    monkeypatch.setattr("tools.runner_cli.confirm_job", confirm)
+    result = runner_main(
+        [
+            "automation-runner",
+            "confirm",
+            "--root",
+            str(tmp_path),
+            "--run-id",
+            "RUN-cli-confirm",
+            "--action",
+            "naver-draft-save",
+            "--confirmation-nonce",
+            "nonce-from-current-preview",
+        ],
+        naver_adapter_factory=lambda _root: adapter,
+    )
+
+    assert result == 0
+    assert captured[0].confirmation_nonce == "nonce-from-current-preview"
+    assert captured[0].naver_adapter is adapter
 
 
 def test_recover_preserves_injected_notion_adapter_after_state_reconstruction(
@@ -1273,6 +1333,61 @@ def test_q2_completion_pauses_before_naver_until_explicit_resume(
 
     assert resumed.status is RunStatus.AWAITING_USER_CONFIRMATION
     assert naver.prepare_calls == 1
+    assert naver.save_calls == 0
+
+
+def test_naver_preparation_rejects_input_different_from_q2_reviewed_copy(
+    tmp_path: Path,
+) -> None:
+    _ = (tmp_path / "notion-config.md").write_text(
+        "- 데이터 소스 ID: `datasource-fixture`\n", encoding="utf-8"
+    )
+    naver = CountingNaver()
+    result = _run_through_q3_fixture(
+        RunnerRequest(
+            root=tmp_path,
+            job="daily-generate",
+            keyword="fixture",
+            now=NOW,
+            selection_context=DATE_CONTEXT,
+            executor=MismatchedNaverInputExecutor(),
+            notion_adapter=FixtureNotion(),
+            naver_adapter=naver,
+        )
+    )
+
+    assert result.status is RunStatus.FAILED
+    assert "differs from the Q2-reviewed copy" in result.message
+    assert naver.prepare_calls == 0
+    assert naver.save_calls == 0
+
+
+def test_naver_preparation_requires_image_quality_records_for_current_images(
+    tmp_path: Path,
+) -> None:
+    _ = (tmp_path / "notion-config.md").write_text(
+        "- 데이터 소스 ID: `datasource-fixture`\n", encoding="utf-8"
+    )
+    naver = CountingNaver()
+    request = RunnerRequest(
+        root=tmp_path,
+        job="daily-generate",
+        keyword="fixture",
+        now=NOW,
+        selection_context=DATE_CONTEXT,
+        executor=FixtureExecutor(),
+        notion_adapter=FixtureNotion(),
+        naver_adapter=naver,
+    )
+    ready = run_job(request)
+    quality = tmp_path / "assets" / "fixture" / "image-quality.jsonl"
+    assert quality.is_file()
+    quality.unlink()
+
+    result = resume_job(replace(request, run_id=ready.run_id, resume=True))
+
+    assert result.status in {RunStatus.BLOCKED, RunStatus.FAILED}
+    assert naver.prepare_calls == 0
     assert naver.save_calls == 0
 
 

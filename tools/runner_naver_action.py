@@ -9,6 +9,7 @@ from tools.gate import GateRequest, verify_gate
 from tools.manifest import verify_manifest
 from tools.naver_adapter import StructuredNaverBrowserAdapter
 from tools.notion_copy_grammar import closed_tag
+from tools.notion_copy_parser import parse_naver_copy_text
 from tools.runner_stages import now
 from tools.runner_state import atomic_write_json, read_state, state_paths
 from tools.runner_types import (
@@ -58,6 +59,22 @@ def _verify_naver_gate(
     roundtrip_digest = state.get("notion_roundtrip_digest")
     q2_artifact_digest = state.get("artifact_digest")
     manifest = verify_manifest(context.request.root, manifest_path)
+    input_entry = next(
+        (item for item in manifest.files if item.role == "naver_input"), None
+    )
+    copy_entry = next(
+        (item for item in manifest.files if item.role == "naver_copy"), None
+    )
+    if input_entry is None or copy_entry is None:
+        raise ContractError("Q2-reviewed Naver copy or canonical input is missing")
+    input_document = parse_naver_copy_text(
+        (context.request.root / input_entry.path).read_text(encoding="utf-8")
+    )
+    q2_document = parse_naver_copy_text(
+        (context.request.root / copy_entry.path).read_text(encoding="utf-8")
+    )
+    if input_document != q2_document:
+        raise ContractError("canonical Naver input differs from the Q2-reviewed copy")
     if (
         not isinstance(expected_digest, str)
         or not isinstance(content_digest, str)

@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from tests.article_quality_fixtures import install_passing_quality_review
 from tools.article_quality import (
     QUALITY_REPORT_VERSION,
     RUBRIC_VERSION,
@@ -80,7 +81,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str]:
     _ = (final_dir / f"{keyword}.md").write_text(
         "![body](../assets/naver-hook/body.png)\n", encoding="utf-8"
     )
-    for suffix in ("naver-layout", "naver-copy"):
+    for suffix in ("naver-layout", "naver-copy", "naver-input"):
         _ = (final_dir / f"{keyword}-{suffix}.md").write_text(
             f"# {suffix}\n", encoding="utf-8"
         )
@@ -123,6 +124,14 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str]:
     _ = manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     digest = manifest["artifact_digest"]
     assert isinstance(digest, str)
+    _ = install_passing_quality_review(
+        tmp_path,
+        run_id=run_id,
+        topic_id=topic_id,
+        artifact_digest=digest,
+        manifest=manifest,
+        reviewed_at="2026-08-31T00:03:00+00:00",
+    )
     quality_report: JSONMap = {
         "report_version": QUALITY_REPORT_VERSION,
         "rubric_version": RUBRIC_VERSION,

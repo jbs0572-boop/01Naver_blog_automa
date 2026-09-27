@@ -55,6 +55,9 @@ class WorkflowContractTests(unittest.TestCase):
         _ = (final_dir / f"{self.keyword}-naver-copy.md").write_text(
             "# Copy\n", encoding="utf-8"
         )
+        _ = (final_dir / f"{self.keyword}-naver-input.md").write_text(
+            "# Input\n", encoding="utf-8"
+        )
         self.manifest = build_manifest(self._manifest_input())
         self.manifest_path = self.root / "manifest.json"
         _ = self.manifest_path.write_text(
@@ -87,7 +90,7 @@ class WorkflowContractTests(unittest.TestCase):
         with self.assertRaises(ContractError):
             _ = build_manifest(self._manifest_input())
 
-    def test_manifest_includes_naver_input_when_present(self) -> None:
+    def test_manifest_includes_required_naver_input(self) -> None:
         input_path = self.root / "final" / f"{self.keyword}-naver-input.md"
         _ = input_path.write_text("# Naver input\n", encoding="utf-8")
 
@@ -105,6 +108,11 @@ class WorkflowContractTests(unittest.TestCase):
                 self.fail("manifest file path must be a string")
             paths.append(path)
         self.assertIn(f"final/{self.keyword}-naver-input.md", paths)
+
+    def test_manifest_rejects_missing_naver_input(self) -> None:
+        (self.root / "final" / f"{self.keyword}-naver-input.md").unlink()
+        with self.assertRaises(ContractError):
+            _ = build_manifest(self._manifest_input())
 
     def test_manifest_requires_final_markdown(self) -> None:
         final_path = self.root / "final" / f"{self.keyword}.md"

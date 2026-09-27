@@ -177,6 +177,7 @@ class CountingQ1Notion:
             run_id=request.run_id,
             topic_id=manifest.topic_id,
             artifact_digest=digest,
+            manifest={"files": [entry.as_json() for entry in manifest.files]},
             reviewed_at=NOW.isoformat(),
         )
         content_digest = "sha256:" + "1" * 64

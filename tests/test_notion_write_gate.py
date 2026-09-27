@@ -32,6 +32,9 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str]:
     _ = (final_dir / f"{keyword}-naver-copy.md").write_text(
         "# copy\n", encoding="utf-8"
     )
+    _ = (final_dir / f"{keyword}-naver-input.md").write_text(
+        "# copy\n", encoding="utf-8"
+    )
     manifest = build_manifest(ManifestBuildInput(
         tmp_path,
         keyword,

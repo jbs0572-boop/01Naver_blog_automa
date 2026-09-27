@@ -122,6 +122,7 @@ def _manifest_from_json(data: JSONMap) -> Manifest:
         "final_markdown",
         "naver_layout",
         "naver_copy",
+        "naver_input",
         "image_map",
         "thumbnail",
     }
@@ -211,8 +212,7 @@ def build_manifest(source: ManifestBuildInput) -> JSONMap:
         _record(root, "naver_copy", 3, root / "final" / f"{keyword}-naver-copy.md"),
     ]
     naver_input = root / "final" / f"{keyword}-naver-input.md"
-    if naver_input.is_file():
-        entries.append(_record(root, "naver_input", 4, naver_input))
+    entries.append(_record(root, "naver_input", 4, naver_input))
     entries.append(
         _record(root, "image_map", len(entries) + 1, asset_dir / "image-map.md")
     )

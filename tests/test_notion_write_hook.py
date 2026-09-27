@@ -33,6 +33,9 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str]:
     _ = (final_dir / f"{keyword}-naver-copy.md").write_text(
         "# copy\n", encoding="utf-8"
     )
+    _ = (final_dir / f"{keyword}-naver-input.md").write_text(
+        "# copy\n", encoding="utf-8"
+    )
     _ = (tmp_path / "notion-config.md").write_text(
         "- 데이터 소스 ID: `datasource-notion-hook`\n", encoding="utf-8"
     )

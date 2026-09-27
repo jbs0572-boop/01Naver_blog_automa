@@ -63,7 +63,10 @@ class NaverGateContractTests(unittest.TestCase):
             "# Layout\n", encoding="utf-8"
         )
         _ = (final_dir / f"{self.keyword}-naver-copy.md").write_text(
-            "# Copy\n", encoding="utf-8"
+            "[TITLE]Fixture title[/TITLE]\n[TEXT]Fixture body[/TEXT]\n", encoding="utf-8"
+        )
+        _ = (final_dir / f"{self.keyword}-naver-input.md").write_text(
+            "[TITLE]Fixture title[/TITLE]\n[TEXT]Fixture body[/TEXT]\n", encoding="utf-8"
         )
         self.manifest = build_manifest(self._manifest_input())
         self.manifest_path = self.root / "manifest.json"
@@ -83,6 +86,16 @@ class NaverGateContractTests(unittest.TestCase):
         )
 
     def _install_quality_review(self, verified_at: str) -> None:
+        from tests.article_quality_fixtures import install_passing_quality_review
+
+        _ = install_passing_quality_review(
+            self.root,
+            run_id=self.run_id,
+            topic_id=self.topic_id,
+            artifact_digest=str(self.manifest["artifact_digest"]),
+            manifest=self.manifest,
+            reviewed_at=verified_at,
+        )
         scores: JSONMap = {name: value for name, value in SCORE_MAXIMA.items()}
         report: JSONMap = {
             "report_version": QUALITY_REPORT_VERSION,

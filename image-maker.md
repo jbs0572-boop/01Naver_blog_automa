@@ -101,7 +101,7 @@ python3 -m tools.workflow_verifier validate-image-metadata --metadata assets/<�
 python3 -m tools.workflow_verifier validate-image-quality --quality assets/<키워드>/image-quality.jsonl
 ```
 
-`image-quality.jsonl`에는 자동 검사(`decode_check`, `duplicate_check`, `ocr_check`, `visual_contract_check`, `mobile_render_check`)와 사람 검수의 5개 0~4점, `immediate_failure`, `mobile_rendered`, 고정 viewport `mobile_viewport=390x844`, 실제 캡처의 안전한 상대 경로 `mobile_render_path`, 그 캡처의 `mobile_render_sha256`, `human_verdict`를 기록한다. 자동 점수가 통과해도 사람 점수 총점 16/20 미만, 개별 3점 미만, 모바일 캡처 파일·해시 누락, 즉시 실패가 하나라도 있으면 image-maker는 실패다.
+`image-quality.jsonl`에는 각 평가 대상 파일의 `image_sha256`를 먼저 기록하고, 자동 검사(`decode_check`, `duplicate_check`, `ocr_check`, `visual_contract_check`, `mobile_render_check`)와 사람 검수의 5개 0~4점, `immediate_failure`, `mobile_rendered`, 고정 viewport `mobile_viewport=390x844`, 실제 캡처의 안전한 상대 경로 `mobile_render_path`, 그 캡처의 `mobile_render_sha256`, `human_verdict`를 기록한다. 네이버 Gate는 본문 이미지와 썸네일을 포함해 현재 manifest의 모든 이미지에 대해 각각 정확히 한 개의 기록을 요구한다. 자동 점수가 통과해도 사람 점수 총점 16/20 미만, 개별 3점 미만, 모바일 캡처 파일·해시 누락, 이미지 해시 불일치, 즉시 실패가 하나라도 있으면 image-maker는 실패다.
 
 ## 검수
 

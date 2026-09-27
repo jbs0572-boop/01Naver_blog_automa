@@ -453,7 +453,7 @@ Notion Q2 통과 뒤 네이버 입력·임시저장 전에 동일한 최종 산�
 | T04 | packet·실행 snapshot 계약 | T01 | 미착수 |
 | T05 | 결정적 renderer와 기존 문법 동등성 | T04 | 미착수 |
 | T06 | Q1 의미 검수·로그·Gate 연결 | T05 | 미착수 |
-| T06a | 글 품질 점수·실패 피드백과 네이버 저장 Gate 연결 | 기존 Q1/Q2; 신규 T06은 후속 연계 | 구현 완료·로컬 회귀 1181개 통과(1개 환경 제한 skip); PR 자동 리뷰·운영 수용 미완료 |
+| T06a | 글 품질 점수·실패 피드백과 네이버 저장 Gate 연결 | 기존 Q1/Q2; 신규 T06은 후속 연계 | 구현 완료·로컬 회귀 통과; PR 자동 리뷰·운영 수용 미완료 |
 | T07 | researcher·writer의 packet 생성 연결 | T02, T04, T06, T06a | 미착수 |
 | T08 | 이미지 템플릿·제작기 연결 | T03, T07 | 미착수 |
 | T09 | GPT-6 모델 후보와 설정 연결 | T06 | 미착수 |
@@ -799,8 +799,8 @@ CI 성공은 실제 원격 실행이 있을 때만 적는다. PR을 생성하지
 
 ## 14. 구현 진행 기록 — 2026-09-28
 
-**T06a 품질 Gate — 로컬 구현됨, 통합 완료 전.** Q2 이후의 검수 보고서를 `metadata/quality-reviews/<run_id>.json`에서 읽고, 루브릭 버전·run/topic ID·artifact digest·Q2 검증 시각·7개 영역 점수와 근거·즉시 실패·원인과 다음 조치를 검증한다. 85점 미만·즉시 실패·보고서 누락/오래됨/불일치이면 Naver 준비 입력과 저장을 차단한다. 저점수는 `quality_failed`로 남겨 점수와 개선 조치를 추적한다. 보고서 없는 과거 run은 통과로 추정하지 않는다.
+**T06a 품질 Gate — 구현 및 로컬 통합 완료, 운영 수용 전.** Q2 이후의 검수 보고서를 `metadata/quality-reviews/<run_id>.json`에서 읽고, rubric 버전·run/topic ID·artifact digest·Q2 검증 시각·7개 영역 점수와 근거·즉시 실패·원인과 다음 조치를 검증한다. 85점 미만·즉시 실패·보고서 누락/오래됨/불일치이면 Naver 준비 입력과 저장을 차단한다. 저점수는 `quality_failed`로 남겨 점수와 개선 조치를 추적한다. 보고서 없는 과거 run은 통과로 추정하지 않는다. 추가로 Q2 확인본과 canonical Naver input의 제목·블록·본문 이미지 순서를 비교하고, 현재 manifest의 본문 이미지와 썸네일 각각에 Q3 점수·자동 검사·모바일 캡처·사람 통과 기록이 모두 있을 때만 저장 Gate를 통과시킨다. 모든 네 최종 Markdown 산출물을 manifest 필수 구성으로 고정하고, CLI 확인은 현재 nonce와 설정된 Aside 기반 Naver adapter를 전달한다.
 
-현재 검증: PR 작업본에서 `pytest -q tests benchmarks` 1189개 통과·1개 환경 제한 skip, Ruff 통과, basedpyright 0 오류, Node UI 테스트 23개 통과. 1개 skip은 `tests/test_topic_feedback_e2e.py`에서 현재 실행환경이 device node 생성을 허용하지 않아 발생했다. 이전 Codex 리뷰 지적 일곱 건(Q3 중단 경계, LaunchAgent 인자, 예약 누락 이력, 계약 문서 CI 경로, 어댑터 오류 시 대시보드 중단, 타임아웃 자식 프로세스 잔존, 벤치마크 테스트 CI 누락)을 수정했다. 벤치마크 회귀 시험은 운영 자료 대신 작은 합성 입력으로 실행되며 실제 시간 비교 도구는 기존 원본 자료가 있는 프로젝트 루트에서만 실행한다. 이 수정 revision의 원격 CI·Codex 자동 리뷰 및 실제 Naver 운영 검증은 아직 확인 전이다. 이 단계는 실제 글의 점수 통과나 임시저장 성공을 뜻하지 않는다.
+현재 검증: PR 작업본에서 `pytest -q tests benchmarks` 1193개 통과·1개 환경 제한 skip, Ruff 통과, basedpyright 0 오류, Node UI 테스트 23개 통과. 1개 skip은 `tests/test_topic_feedback_e2e.py`에서 현재 실행환경이 device node 생성을 허용하지 않아 발생했다. 이전 Codex 리뷰 지적 일곱 건(Q3 중단 경계, LaunchAgent 인자, 예약 누락 이력, 계약 문서 CI 경로, 어댑터 오류 시 대시보드 중단, 타임아웃 자식 프로세스 잔존, 벤치마크 테스트 CI 누락)을 수정했다. 후속 리뷰 지적 네 건(Q2 검수본과 Naver 입력 동등성, 이미지별 Q3 증거 강제, manifest의 Naver input 필수화, CLI 확인 nonce/adapter 전달)도 수정하고 입력 불일치·Q3 기록 누락·CLI nonce 회귀를 추가 검증했다. 벤치마크 회귀 시험은 운영 자료 대신 작은 합성 입력으로 실행되며 실제 시간 비교 도구는 기존 원본 자료가 있는 프로젝트 루트에서만 실행한다. 최신 revision의 원격 CI·Codex 자동 리뷰 및 실제 Naver 운영 검증은 아직 확인 전이다. 이 단계는 실제 글의 점수 통과나 임시저장 성공을 뜻하지 않는다.
 
 다음: 이번 수정 revision을 기존 PR에 반영하고 원격 CI와 Codex 자동 리뷰 완료를 확인한다. 남은 0.6절 안정화 항목을 검증한 뒤 새 주제 한 건을 시작한다. 실제 운영 글은 rubric과 원문·이미지를 검토하고 85점 이상을 확인한 뒤에도, 임시저장 버튼 직전 대상·제목·이미지를 보여주고 사용자 확인을 받은 경우에만 저장한다.

@@ -38,6 +38,9 @@ def _root(
         _ = (final_dir / f"{keyword}-naver-copy.md").write_text(
             "# copy\n", encoding="utf-8"
         )
+        _ = (final_dir / f"{keyword}-naver-input.md").write_text(
+            "# copy\n", encoding="utf-8"
+        )
     return tmp_path
 
 

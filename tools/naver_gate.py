@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -7,6 +8,7 @@ from tools.article_quality import ArticleQualityFailure, load_assessment
 from tools.contract_types import ContractError, JSONMap
 from tools.gate_models import GateRequest, parse_aware_datetime
 from tools.manifest import Manifest
+from tools.manifest_parsing import as_map
 from tools.naver_adapter import NaverConfig
 
 
@@ -134,12 +136,58 @@ def verify_article_quality(
     )
     if not assessment.passed:
         raise ArticleQualityFailure(assessment)
+    from tools.image_quality import validate_image_quality
+
+    image_quality_path = (
+        root / "assets" / _manifest_keyword(manifest) / "image-quality.jsonl"
+    )
+    image_result = validate_image_quality(image_quality_path)
+    expected_images = [
+        f"sha256:{entry.sha256}"
+        for entry in manifest.files
+        if entry.role in {"body_image", "thumbnail"}
+    ]
+    image_records = _load_image_quality_records(image_quality_path)
+    image_digests = [record.get("image_sha256") for record in image_records]
+    string_image_digests = {
+        digest for digest in image_digests if isinstance(digest, str)
+    }
+    if (
+        any(not isinstance(digest, str) for digest in image_digests)
+        or len(image_digests) != len(expected_images)
+        or len(string_image_digests) != len(image_digests)
+        or string_image_digests != set(expected_images)
+        or len(set(expected_images)) != len(expected_images)
+    ):
+        raise ContractError(
+            "Q3 image assessments do not match the current manifest images"
+        )
     return {
         "article_quality_score": assessment.total_score,
         "article_quality_rubric_version": "article-quality-v1",
         "article_quality_reviewer": assessment.reviewer,
         "article_quality_report_digest": assessment.report_digest,
+        "image_quality_records": image_result["records"],
+        "image_quality_passed": image_result["passed"],
     }
+
+
+def _manifest_keyword(manifest: Manifest) -> str:
+    final = next(entry for entry in manifest.files if entry.role == "final_markdown")
+    return Path(final.path).stem
+
+
+def _load_image_quality_records(path: Path) -> list[JSONMap]:
+    records: list[JSONMap] = []
+    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError as error:
+            raise ContractError(f"invalid Q3 image record at {path}:{line_number}") from error
+        records.append(as_map(record, f"Q3 image record at {path}:{line_number}"))
+    return records
 
 
 def canonical_naver_input(manifest: Manifest, root: Path) -> NaverCanonicalInput:
