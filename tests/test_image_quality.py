@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import final, override
 
 from tools.image_quality import (
+    validate_image_map,
     validate_image_metadata,
     validate_image_quality,
     validate_image_stage_assets,
@@ -40,6 +41,34 @@ class ImageQualityTests(unittest.TestCase):
         path = self.root / name
         _ = path.write_text(json.dumps(value) + "\n", encoding="utf-8")
         return path
+
+    def test_image_map_requires_exact_ordered_asset_references(self) -> None:
+        image_map = self.root / "image-map.md"
+        _ = image_map.write_text(
+            "| [IMAGE] | `copy-image-01.png` |\n"
+            + "| [THUMBNAIL] | `thumbnail.png` |\n",
+            encoding="utf-8",
+        )
+
+        with self.assertRaises(ContractError):
+            _ = validate_image_map(
+                image_map,
+                ["image-01.png", "copy-image-01.png"],
+                "thumbnail.png",
+            )
+
+        _ = image_map.write_text(
+            "| [IMAGE] | `image-01.png` |\n"
+            + "| [IMAGE] | `copy-image-01.png` |\n"
+            + "| [THUMBNAIL] | `thumbnail.png` |\n",
+            encoding="utf-8",
+        )
+        result = validate_image_map(
+            image_map,
+            ["image-01.png", "copy-image-01.png"],
+            "thumbnail.png",
+        )
+        self.assertEqual(result["body_images"], 2)
 
     def _image_bytes(self) -> bytes:
         return base64.b64decode(

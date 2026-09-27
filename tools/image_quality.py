@@ -291,6 +291,40 @@ def validate_image_quality(path: Path) -> JSONMap:
     return {"quality": str(path), "records": len(records), "passed": True}
 
 
+def validate_image_map(
+    image_map: Path, body_paths: list[str], thumbnail: str
+) -> JSONMap:
+    body_entries: list[str] = []
+    thumbnail_entries: list[str] = []
+    valid_paths = set(body_paths) | {thumbnail}
+    for line in image_map.read_text(encoding="utf-8").splitlines():
+        if "|" not in line:
+            continue
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        markers = [
+            cell
+            for cell in cells
+            if cell == "[IMAGE]" or cell.startswith("[IMAGE:")
+        ]
+        thumbnail_markers = [cell for cell in cells if cell == "[THUMBNAIL]"]
+        references = [
+            match.group(1)
+            for match in re.finditer(r"`([^`]+)`", line)
+            if match.group(1) in valid_paths
+        ]
+        if markers:
+            if len(markers) != 1 or len(references) != 1:
+                raise ContractError("image map has an invalid body image row")
+            body_entries.append(references[0])
+        if thumbnail_markers:
+            if len(thumbnail_markers) != 1 or references != [thumbnail]:
+                raise ContractError("image map has an invalid thumbnail row")
+            thumbnail_entries.append(references[0])
+    if body_entries != body_paths or thumbnail_entries != [thumbnail]:
+        raise ContractError("image map does not exactly cover ordered assets")
+    return {"body_images": len(body_entries), "thumbnail": thumbnail, "passed": True}
+
+
 def validate_image_stage_assets(asset_dir: Path, draft_path: Path) -> JSONMap:
     image_map = asset_dir / "image-map.md"
     metadata_path = asset_dir / "image-generation.jsonl"
@@ -351,9 +385,11 @@ def validate_image_stage_assets(asset_dir: Path, draft_path: Path) -> JSONMap:
     }
     if actual_files != expected_files:
         raise ContractError("image-maker produced undeclared or incomplete assets")
-    map_text = image_map.read_text(encoding="utf-8")
-    if "[THUMBNAIL]" not in map_text or any(value not in map_text for value in paths):
-        raise ContractError("image map does not reference every generated asset")
+    _ = validate_image_map(
+        image_map,
+        [path for path in paths if path != thumbnail],
+        thumbnail,
+    )
     return {
         "body_markers": len(paths) - 1,
         "outputs": len(paths),
