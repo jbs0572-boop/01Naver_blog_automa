@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from tools.contract_types import ContractError
+from tools.contract_types import ContractError, JSONMap
 from tools.stage_artifact_promotion import promote_stage_artifacts
 
 
@@ -204,8 +204,14 @@ def test_same_run_retry_replaces_only_unchanged_owned_destination(tmp_path: Path
 
 
 def test_image_stage_archives_prior_run_assets_before_replacing_them(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    def accept_contract(_asset_dir: Path, _draft_path: Path) -> JSONMap:
+        return {}
+
+    monkeypatch.setattr(
+        "tools.stage_artifact_promotion.validate_image_stage_assets", accept_contract
+    )
     project = tmp_path / "project"
     staging = tmp_path / "staging"
     ledger = project / ".automation/work/RUN-2/image-maker/artifact-ownership.json"
@@ -239,19 +245,26 @@ def test_image_stage_archives_prior_run_assets_before_replacing_them(
         ledger_path=ledger,
     )
 
-    archive = project / ".automation/archive/image-assets/topic/RUN-2"
-    assert {p.name: p.read_bytes() for p in archive.iterdir()} == old_files
+    archives = list(
+        (project / ".automation/archive/image-assets/topic/RUN-2").iterdir()
+    )
+    assert len(archives) == 1
+    assert {p.name: p.read_bytes() for p in archives[0].iterdir()} == old_files
     assert {
         name: (asset_dir / name).read_bytes() for name in staged_files
     } == staged_files
-    assert (asset_dir / "historical-note.txt").read_bytes() == old_files[
-        "historical-note.txt"
-    ]
+    assert not (asset_dir / "historical-note.txt").exists()
 
 
 def test_image_stage_promotion_failure_restores_prior_assets_and_ledger(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    def accept_contract(_asset_dir: Path, _draft_path: Path) -> JSONMap:
+        return {}
+
+    monkeypatch.setattr(
+        "tools.stage_artifact_promotion.validate_image_stage_assets", accept_contract
+    )
     project = tmp_path / "project"
     staging = tmp_path / "staging"
     ledger = project / ".automation/work/RUN-2/image-maker/artifact-ownership.json"
@@ -272,19 +285,19 @@ def test_image_stage_promotion_failure_restores_prior_assets_and_ledger(
     _ = ledger.write_bytes(old_ledger)
     calls = 0
 
-    def fail_on_second_ledger(
+    def fail_on_ledger(
         path: Path, run_id: str, hashes: dict[str, str]
     ) -> None:
         nonlocal calls
         calls += 1
-        if calls == 2:
+        if calls == 1:
             raise OSError("disk full")
         _ = path.write_text(
             json.dumps({"run_id": run_id, "artifacts": hashes}), encoding="utf-8"
         )
 
     monkeypatch.setattr(
-        "tools.stage_artifact_promotion._write_ledger", fail_on_second_ledger
+        "tools.stage_artifact_promotion._write_ledger", fail_on_ledger
     )
 
     with pytest.raises(OSError, match="disk full"):
@@ -300,6 +313,43 @@ def test_image_stage_promotion_failure_restores_prior_assets_and_ledger(
 
     assert {p.name: p.read_bytes() for p in asset_dir.iterdir()} == old_files
     assert ledger.read_bytes() == old_ledger
+
+
+def test_image_stage_rejects_partial_artifacts_before_archiving_prior_assets(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    staging = tmp_path / "staging"
+    ledger = project / ".automation/work/RUN-2/image-maker/artifact-ownership.json"
+    asset_dir = project / "assets/topic"
+    asset_dir.mkdir(parents=True)
+    _ = (asset_dir / "thumbnail.png").write_bytes(b"old thumbnail")
+    draft = project / "drafts/topic.md"
+    draft.parent.mkdir(parents=True)
+    _ = draft.write_text("[IMAGE: body image]", encoding="utf-8")
+    staged_files = {
+        "image-map.md": b"[THUMBNAIL] thumbnail.png\nbody.png",
+        "thumbnail.png": b"new thumbnail",
+        "body.png": b"new body",
+    }
+    for name, value in staged_files.items():
+        destination = staging / "assets/topic" / name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        _ = destination.write_bytes(value)
+
+    with pytest.raises(ContractError, match="missing required records"):
+        _ = promote_stage_artifacts(
+            stage="image-maker",
+            keyword="topic",
+            run_id="RUN-2",
+            staging_root=staging,
+            project_root=project,
+            declared=tuple(f"assets/topic/{name}" for name in staged_files),
+            ledger_path=ledger,
+        )
+
+    assert (asset_dir / "thumbnail.png").read_bytes() == b"old thumbnail"
+    assert not (project / ".automation/archive/image-assets/topic/RUN-2").exists()
 
 
 def test_ledger_failure_rolls_back_unowned_destination(
@@ -330,6 +380,47 @@ def test_ledger_failure_rolls_back_unowned_destination(
         )
 
     assert not (project / "drafts" / "topic.md").exists()
+
+
+def test_promotion_attempts_ledger_restore_after_file_restore_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = tmp_path / "project"
+    staging = tmp_path / "staging"
+    ledger = project / ".automation/work/RUN-1/artifact-ownership.json"
+    source = staging / "drafts" / "topic.md"
+    source.parent.mkdir(parents=True)
+    _ = source.write_text("draft", encoding="utf-8")
+    ledger_restore_attempts: list[bytes | None] = []
+
+    def fail_ledger(*_args: object, **_kwargs: object) -> None:
+        raise OSError("disk full")
+
+    def fail_file_restore(*_args: object, **_kwargs: object) -> None:
+        raise OSError("read-only filesystem")
+
+    def restore_ledger(path: Path, previous: bytes | None) -> None:
+        ledger_restore_attempts.append(previous)
+        path.unlink(missing_ok=True)
+
+    monkeypatch.setattr("tools.stage_artifact_promotion._write_ledger", fail_ledger)
+    monkeypatch.setattr("tools.stage_artifact_promotion._restore", fail_file_restore)
+    monkeypatch.setattr(
+        "tools.stage_artifact_promotion._restore_ledger", restore_ledger
+    )
+
+    with pytest.raises(ContractError, match="rollback is incomplete"):
+        _ = promote_stage_artifacts(
+            stage="writer",
+            keyword="topic",
+            run_id="RUN-1",
+            staging_root=staging,
+            project_root=project,
+            declared=("drafts/topic.md",),
+            ledger_path=ledger,
+        )
+
+    assert ledger_restore_attempts == [None]
 
 
 def test_content_assembler_rejects_manifest_and_incomplete_final_set(

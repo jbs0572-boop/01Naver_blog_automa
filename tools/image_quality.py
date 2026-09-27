@@ -289,3 +289,75 @@ def validate_image_quality(path: Path) -> JSONMap:
         ):
             raise ContractError(f"image quality record {index} has not passed Q3")
     return {"quality": str(path), "records": len(records), "passed": True}
+
+
+def validate_image_stage_assets(asset_dir: Path, draft_path: Path) -> JSONMap:
+    image_map = asset_dir / "image-map.md"
+    metadata_path = asset_dir / "image-generation.jsonl"
+    quality_path = asset_dir / "image-quality.jsonl"
+    required = (image_map, metadata_path, quality_path)
+    missing = [path.name for path in required if not path.is_file()]
+    if missing:
+        raise ContractError(
+            "image-maker is missing required records: " + ", ".join(missing)
+        )
+    if not draft_path.is_file():
+        raise ContractError("image-maker draft input is missing")
+    thumbnail_names = ("thumbnail.png", "thumbnail.jpg", "thumbnail.jpeg")
+    thumbnails = [asset_dir / name for name in thumbnail_names if (asset_dir / name).is_file()]
+    if len(thumbnails) != 1:
+        raise ContractError("image-maker must produce exactly one canonical thumbnail")
+
+    _ = validate_image_metadata(metadata_path)
+    _ = validate_image_quality(quality_path)
+    metadata = _records(metadata_path)
+    quality = _records(quality_path)
+    output_paths = [record.get("output_path") for record in metadata]
+    output_digests = [record.get("output_sha256") for record in metadata]
+    if any(not isinstance(value, str) for value in output_paths):
+        raise ContractError("image metadata contains an invalid output path")
+    if any(not isinstance(value, str) for value in output_digests):
+        raise ContractError("image metadata contains an invalid output hash")
+    paths = [str(value) for value in output_paths]
+    digests = [str(value) for value in output_digests]
+    if len(set(paths)) != len(paths) or len(set(digests)) != len(digests):
+        raise ContractError("image metadata contains duplicate asset outputs")
+    if any(Path(value).name != value for value in paths):
+        raise ContractError("image metadata outputs must be direct topic assets")
+    thumbnail = thumbnails[0].name
+    if paths.count(thumbnail) != 1 or len(paths) - 1 != draft_path.read_text(
+        encoding="utf-8"
+    ).count("[IMAGE:"):
+        raise ContractError("image outputs do not match draft markers and thumbnail")
+
+    quality_digests = [record.get("image_sha256") for record in quality]
+    if any(not isinstance(value, str) for value in quality_digests):
+        raise ContractError("image quality record contains an invalid image hash")
+    quality_values = [str(value) for value in quality_digests]
+    if len(quality_values) != len(digests) or set(quality_values) != set(digests):
+        raise ContractError("image quality records do not cover every generated asset")
+    mobile_paths = [str(record["mobile_render_path"]) for record in quality]
+    if set(paths) & set(mobile_paths):
+        raise ContractError("mobile render evidence cannot replace a generated asset")
+    expected_files = set(paths) | set(mobile_paths) | {
+        image_map.name,
+        metadata_path.name,
+        quality_path.name,
+    }
+    actual_files = {
+        path.relative_to(asset_dir).as_posix()
+        for path in asset_dir.rglob("*")
+        if path.is_file()
+    }
+    if actual_files != expected_files:
+        raise ContractError("image-maker produced undeclared or incomplete assets")
+    map_text = image_map.read_text(encoding="utf-8")
+    if "[THUMBNAIL]" not in map_text or any(value not in map_text for value in paths):
+        raise ContractError("image map does not reference every generated asset")
+    return {
+        "body_markers": len(paths) - 1,
+        "outputs": len(paths),
+        "thumbnail": thumbnail,
+        "image_quality_records": len(quality),
+        "passed": True,
+    }

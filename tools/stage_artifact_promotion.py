@@ -8,8 +8,10 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, TypeGuard
+from uuid import uuid4
 
 from tools.contract_types import ContractError
+from tools.image_quality import validate_image_stage_assets
 
 IGNORED_STAGING_FILES: Final = frozenset({"stage-result.json"})
 
@@ -117,6 +119,7 @@ def _image_archive_path(request: PromotionRequest) -> Path | None:
         / "image-assets"
         / request.keyword
         / request.run_id
+        / uuid4().hex
     )
 
 
@@ -132,25 +135,8 @@ def _archive_existing_image_assets(request: PromotionRequest) -> Path | None:
     for path in asset_dir.rglob("*"):
         if path.is_symlink():
             raise ContractError(f"existing image asset cannot be a symlink: {path}")
-    if not archive.exists():
-        _ = archive.parent.mkdir(parents=True, exist_ok=True)
-        _ = shutil.copytree(asset_dir, archive)
-        return archive
-    if archive.is_symlink() or not archive.is_dir():
-        raise ContractError("image asset archive is not a regular directory")
-    owned = _owned_hashes(request)
-    for path in asset_dir.rglob("*"):
-        if not path.is_file():
-            continue
-        relative = path.relative_to(asset_dir).as_posix()
-        owned_path = f"assets/{request.keyword}/{relative}"
-        if owned.get(owned_path) == _sha256(path):
-            continue
-        archived = archive / relative
-        if not archived.is_file() or _sha256(archived) != _sha256(path):
-            raise ContractError(
-                f"existing image asset is not preserved in the run archive: {relative}"
-            )
+    _ = archive.parent.mkdir(parents=True, exist_ok=True)
+    _ = shutil.copytree(asset_dir, archive)
     return archive
 
 
@@ -265,6 +251,75 @@ def _restore_ledger(path: Path, previous: bytes | None) -> None:
         temporary_path.unlink(missing_ok=True)
 
 
+def _replace_image_asset_set(
+    request: PromotionRequest,
+    validated: tuple[tuple[Path, Path, str], ...],
+    archive: Path | None,
+) -> tuple[str, ...]:
+    if request.keyword is None:
+        raise ContractError("image-maker keyword is missing")
+    asset_dir = request.project_root / "assets" / request.keyword
+    _ = asset_dir.parent.mkdir(parents=True, exist_ok=True)
+    temporary_root = Path(
+        tempfile.mkdtemp(prefix=".image-stage-replace-", dir=asset_dir.parent)
+    )
+    staged_asset_dir = temporary_root / "staged"
+    previous_asset_dir = temporary_root / "previous"
+    failed_asset_dir = temporary_root / "failed"
+    source_asset_dir = request.staging_root / "assets" / request.keyword
+    previous_ledger = request.ledger_path.read_bytes() if request.ledger_path.is_file() else None
+    previous_moved = False
+    new_installed = False
+    ledger_write_attempted = False
+    try:
+        _ = shutil.copytree(source_asset_dir, staged_asset_dir)
+        if asset_dir.exists():
+            os.replace(asset_dir, previous_asset_dir)
+            previous_moved = True
+        os.replace(staged_asset_dir, asset_dir)
+        new_installed = True
+        hashes = {
+            relative: _sha256(request.project_root / relative)
+            for _source, _destination, relative in validated
+        }
+        ledger_write_attempted = True
+        _write_ledger(request.ledger_path, request.run_id, hashes)
+    except Exception as error:
+        rollback_errors: list[OSError] = []
+        if new_installed and asset_dir.exists():
+            try:
+                os.replace(asset_dir, failed_asset_dir)
+            except OSError as rollback_error:
+                rollback_errors.append(rollback_error)
+        if previous_moved and previous_asset_dir.exists() and not asset_dir.exists():
+            try:
+                os.replace(previous_asset_dir, asset_dir)
+            except OSError as rollback_error:
+                rollback_errors.append(rollback_error)
+        if ledger_write_attempted:
+            try:
+                _restore_ledger(request.ledger_path, previous_ledger)
+            except OSError as rollback_error:
+                rollback_errors.append(rollback_error)
+        if rollback_errors:
+            raise ContractError(
+                "image asset replacement failed and rollback is incomplete; "
+                + f"prior assets are archived at {archive}; "
+                + f"recoverable files remain at {temporary_root}"
+            ) from error
+        try:
+            shutil.rmtree(temporary_root)
+        except OSError:
+            pass
+        raise
+    try:
+        shutil.rmtree(temporary_root)
+    except OSError:
+        # The canonical set and ledger are committed; a leftover backup is recoverable.
+        pass
+    return tuple(relative for _source, _destination, relative in validated)
+
+
 def promote_stage_artifacts(
     *,
     stage: str,
@@ -278,8 +333,17 @@ def promote_stage_artifacts(
     request = PromotionRequest(
         stage, keyword, run_id, staging_root, project_root, declared, ledger_path
     )
+    if stage == "image-maker":
+        if keyword is None:
+            raise ContractError("image-maker keyword is missing")
+        _ = validate_image_stage_assets(
+            staging_root / "assets" / keyword,
+            project_root / "drafts" / f"{keyword}.md",
+        )
     archive = _archive_existing_image_assets(request)
     validated = _validate(request, archive)
+    if stage == "image-maker":
+        return _replace_image_asset_set(request, validated, archive)
     hashes = _owned_hashes(request)
     previous_files: dict[Path, bytes | None] = {}
     previous_ledger = ledger_path.read_bytes() if ledger_path.is_file() else None
@@ -292,10 +356,22 @@ def promote_stage_artifacts(
             candidate = {**hashes, relative: _sha256(destination)}
             _write_ledger(ledger_path, run_id, candidate)
             hashes = candidate
-    except Exception:
+    except Exception as error:
+        rollback_errors: list[OSError] = []
         for destination, previous in reversed(tuple(previous_files.items())):
-            _restore(destination, previous)
-        _restore_ledger(ledger_path, previous_ledger)
+            try:
+                _restore(destination, previous)
+            except OSError as rollback_error:
+                rollback_errors.append(rollback_error)
+        try:
+            _restore_ledger(ledger_path, previous_ledger)
+        except OSError as rollback_error:
+            rollback_errors.append(rollback_error)
+        if rollback_errors:
+            raise ContractError(
+                "artifact promotion failed and rollback is incomplete; "
+                + f"preserve recoverable files under {project_root}"
+            ) from error
         raise
     return tuple(relative for _source, _destination, relative in validated)
 
