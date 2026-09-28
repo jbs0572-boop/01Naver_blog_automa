@@ -435,7 +435,11 @@ class ImageQualityTests(unittest.TestCase):
         asset_dir.mkdir(parents=True)
         draft = self.root / "drafts" / "topic.md"
         draft.parent.mkdir(parents=True)
-        _ = draft.write_text("[IMAGE: body image]", encoding="utf-8")
+        _ = draft.write_text(
+            "[IMAGE: body image; fallback: [IMAGE:example]]\n"
+            + "The literal [IMAGE: example] is explanatory text, not another slot.",
+            encoding="utf-8",
+        )
         outputs = {
             "body.png": self._image_bytes() + b"body",
             "thumbnail.png": self._image_bytes() + b"thumbnail",

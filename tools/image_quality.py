@@ -512,9 +512,9 @@ def validate_image_stage_assets(asset_dir: Path, draft_path: Path) -> JSONMap:
     if any(Path(value).name != value for value in paths):
         raise ContractError("image metadata outputs must be direct topic assets")
     thumbnail = thumbnails[0].name
-    if paths.count(thumbnail) != 1 or len(paths) - 1 != draft_path.read_text(
-        encoding="utf-8"
-    ).count("[IMAGE:"):
+    draft_text = draft_path.read_text(encoding="utf-8")
+    image_marker_count = len(re.findall(r"(?m)^\[IMAGE:", draft_text))
+    if paths.count(thumbnail) != 1 or len(paths) - 1 != image_marker_count:
         raise ContractError("image outputs do not match draft markers and thumbnail")
 
     quality_digests = [record.get("image_sha256") for record in quality]
