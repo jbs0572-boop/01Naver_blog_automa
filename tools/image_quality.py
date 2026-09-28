@@ -7,6 +7,7 @@ import re
 from datetime import datetime
 from pathlib import Path
 from typing import Final
+from urllib.parse import urlsplit
 
 from tools.contract_types import ContractError, JSONMap, JSONValue, SchemaError
 from tools.image_contract import (
@@ -313,6 +314,24 @@ def validate_image_map(
                 raise ContractError("image map has an unexpected body image path")
             if values[3] != body_paths[len(body_entries)]:
                 raise ContractError("image map body image order does not match")
+            marker = values[2]
+            provenance = _parse_asset_provenance(
+                values[12] if len(values) > 12 else ""
+            )
+            if "source_policy=official_or_licensed" in marker and (
+                provenance.get("origin") not in {"official", "licensed"}
+                or not _is_https_source(provenance.get("source_url"))
+            ):
+                raise ContractError(
+                    "official_or_licensed image lacks official or licensed source provenance"
+                )
+            if "asset_type=map" in marker and (
+                provenance.get("origin") != "official"
+                or not _is_https_source(provenance.get("source_url"))
+            ):
+                raise ContractError(
+                    "map assets require an official map source URL; generated route diagrams are not maps"
+                )
             body_entries.append(file_path)
         elif (
             len(values) >= 3
@@ -326,6 +345,22 @@ def validate_image_map(
     if body_entries != body_paths or thumbnail_entries != [thumbnail]:
         raise ContractError("image map does not exactly cover ordered assets")
     return {"body_images": len(body_entries), "thumbnail": thumbnail, "passed": True}
+
+
+def _parse_asset_provenance(value: str) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    for part in value.strip().strip("`").split(";"):
+        key, separator, field_value = part.strip().partition("=")
+        if separator and key and field_value:
+            fields[key] = field_value
+    return fields
+
+
+def _is_https_source(value: str | None) -> bool:
+    if value is None:
+        return False
+    parsed = urlsplit(value)
+    return parsed.scheme == "https" and bool(parsed.hostname)
 
 
 def validate_image_stage_assets(asset_dir: Path, draft_path: Path) -> JSONMap:

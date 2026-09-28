@@ -109,6 +109,53 @@ class ImageQualityTests(unittest.TestCase):
                 "thumbnail.png",
             )
 
+    def test_generated_route_diagram_cannot_claim_official_map_slot(self) -> None:
+        image_map = self.root / "image-map.md"
+        _ = image_map.write_text(
+            "| 1 | VIS-01 | `[IMAGE: asset_type=map; source_policy=official_or_licensed]` | `image-01.png` | x | x | x | x | x | x | x | x | `origin=generated; Pillow local_render` | x |\n"
+            + "| [THUMBNAIL] | `[THUMBNAIL]` | `thumbnail.png` |\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(ContractError, "official or licensed source provenance"):
+            _ = validate_image_map(image_map, ["image-01.png"], "thumbnail.png")
+
+    def test_official_map_requires_source_url_and_original_origin(self) -> None:
+        image_map = self.root / "image-map.md"
+        marker = "`[IMAGE: asset_type=map; source_policy=official_or_licensed]`"
+        tail = "| [THUMBNAIL] | `[THUMBNAIL]` | `thumbnail.png` |\n"
+        for provenance in (
+            "`origin=official`",
+            "`origin=licensed; source_url=https://example.com/license`",
+            "`origin=official; source_url=http://example.com/map.png`",
+            "`origin=generated; source_url=https://example.com/source`",
+        ):
+            _ = image_map.write_text(
+                f"| 1 | VIS-01 | {marker} | `image-01.png` | x | x | x | x | x | x | x | x | {provenance} | x |\n"
+                + tail,
+                encoding="utf-8",
+            )
+            with self.subTest(provenance=provenance), self.assertRaises(ContractError):
+                _ = validate_image_map(image_map, ["image-01.png"], "thumbnail.png")
+
+        _ = image_map.write_text(
+            f"| 1 | VIS-01 | {marker} | `image-01.png` | x | x | x | x | x | x | x | x | `origin=official; source_url=https://example.com/official-map.png` | x |\n"
+            + tail,
+            encoding="utf-8",
+        )
+        result = validate_image_map(image_map, ["image-01.png"], "thumbnail.png")
+        self.assertEqual(result["body_images"], 1)
+
+    def test_official_or_licensed_asset_requires_source_metadata(self) -> None:
+        image_map = self.root / "image-map.md"
+        marker = "`[IMAGE: asset_type=photograph; source_policy=official_or_licensed]`"
+        _ = image_map.write_text(
+            f"| 1 | VIS-01 | {marker} | `image-01.png` | x | x | x | x | x | x | x | x | `origin=generated; Pillow local_render` | x |\n"
+            + "| [THUMBNAIL] | `[THUMBNAIL]` | `thumbnail.png` |\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(ContractError, "official or licensed source provenance"):
+            _ = validate_image_map(image_map, ["image-01.png"], "thumbnail.png")
+
     def _image_bytes(self) -> bytes:
         return base64.b64decode(
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="

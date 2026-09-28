@@ -449,7 +449,7 @@ Notion Q2 통과 뒤 네이버 입력·임시저장 전에 동일한 최종 산�
 | T00d | 로컬 producer 취소·재시도·실행 예산 정리(0.6절) | T00 현재 상태 재확인 | 계획 작성·미착수 |
 | T01 | 데이터 조사·품질·분석·모델·대시보드 MVP | T00 | 진행 중 |
 | T02 | 원문 수집과 산출물 경계 안정화 | T00 | 기존 테스트 통과·수용성 미감사 |
-| T03 | 이미지 제작 증명과 품질 판정 정리 | T00 | 기존 테스트 통과·P1 수용 차단 |
+| T03 | 이미지 제작 증명과 품질 판정 정리 | T00 | 진행 중·지도 슬롯과 생성 출처 불일치 사례 발견, provenance 회귀 검사 추가 |
 | T04 | packet·실행 snapshot 계약 | T01 | 미착수 |
 | T05 | 결정적 renderer와 기존 문법 동등성 | T04 | 미착수 |
 | T06 | Q1 의미 검수·로그·Gate 연결 | T05 | 미착수 |
@@ -535,7 +535,7 @@ researcher 완료 직후 readiness를 검사해 다음 producer 호출 전에 �
 
 구 metadata는 역사 기록으로 읽을 수 있게 하되 신규 optimized 자산의 제작 증명으로 재승격하지 않는다. 실제 사람 평가와 모델 평가를 분리하고 Q3 선택 규칙은 유지한다. 신규 운영 Gate가 요구할 자동 검사는 source·파일·의미·모바일 증거를 포함한다.
 
-**검증:** `tests/test_image_quality.py`, `tests/test_workflow_contract.py`. 실제 local-render 산출물 통과, 다른 output hash·위조 호출 증거·잘못된 크기·1px 이미지 차단, 사람이 평가하지 않은 결과의 human pass 차단.
+**검증:** `tests/test_image_quality.py`, `tests/test_workflow_contract.py`. 실제 local-render 산출물 통과, 다른 output hash·위조 호출 증거·잘못된 크기·1px 이미지 차단, 사람이 평가하지 않은 결과의 human pass 차단. 이미지 연결표의 `asset_type`·`source_policy`·`origin`·원본 URL이 모순되는 사례와, 생성 경로 도식을 공식 지도 슬롯에 넣는 사례도 Q1에서 차단한다.
 
 **완료 조건:** 실제 파일에 연결된 제작 증명과 정확한 평가 주체가 남는다. 과거 약한 테스트의 생산 준비 판정은 역사 읽기 테스트와 신규 운영 차단 테스트로 분리하고, 검증을 없애서 통과시키지 않는다.
 
