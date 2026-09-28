@@ -469,7 +469,14 @@ def test_writer_regenerates_existing_draft_when_run_has_fresh_research_revision(
     assert result.execution is StageExecution.PRODUCED
     assert draft.read_text(encoding="utf-8") == "fresh draft"
     assert (
-        tmp_path / "drafts" / "revisions" / "RUN-test" / "test.previous.md"
+        tmp_path
+        / ".automation"
+        / "archive"
+        / "stage-artifacts"
+        / "writer"
+        / "test"
+        / "RUN-test"
+        / "test.md.previous"
     ).read_text(encoding="utf-8") == "stale draft"
     assert len(prompts) == 1
     assert str(revision) in prompts[0]

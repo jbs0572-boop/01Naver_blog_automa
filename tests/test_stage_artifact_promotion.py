@@ -169,6 +169,141 @@ def test_rejects_existing_historical_destination(tmp_path: Path) -> None:
     assert destination.read_text(encoding="utf-8") == "historical"
 
 
+def test_writer_refresh_rolls_back_archive_with_failed_promotion(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = tmp_path / "project"
+    staging = tmp_path / "staging"
+    ledger = tmp_path / "ledger.json"
+    source = staging / "drafts" / "topic.md"
+    destination = project / "drafts" / "topic.md"
+    source.parent.mkdir(parents=True)
+    destination.parent.mkdir(parents=True)
+    _ = source.write_text("fresh", encoding="utf-8")
+    _ = destination.write_text("previous", encoding="utf-8")
+
+    def fail_ledger(*_args: object, **_kwargs: object) -> None:
+        raise OSError("ledger unavailable")
+
+    monkeypatch.setattr("tools.stage_artifact_promotion._write_ledger", fail_ledger)
+
+    with pytest.raises(OSError, match="ledger unavailable"):
+        _ = promote_stage_artifacts(
+            stage="writer",
+            keyword="topic",
+            run_id="RUN-1",
+            staging_root=staging,
+            project_root=project,
+            declared=("drafts/topic.md",),
+            ledger_path=ledger,
+            replace_existing=True,
+        )
+
+    assert destination.read_text(encoding="utf-8") == "previous"
+    assert not (
+        project
+        / ".automation"
+        / "archive"
+        / "stage-artifacts"
+        / "writer"
+        / "topic"
+        / "RUN-1"
+        / "topic.md.previous"
+    ).exists()
+    assert not ledger.exists()
+
+
+def test_content_assembler_refreshes_and_archives_all_four_canonical_files(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    staging = tmp_path / "staging"
+    ledger = tmp_path / "ledger.json"
+    suffixes = (".md", "-naver-layout.md", "-naver-copy.md", "-naver-input.md")
+    declared = tuple(f"final/topic{suffix}" for suffix in suffixes)
+    for relative in declared:
+        source = staging / relative
+        destination = project / relative
+        source.parent.mkdir(parents=True, exist_ok=True)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        _ = source.write_text("fresh " + relative, encoding="utf-8")
+        _ = destination.write_text("previous " + relative, encoding="utf-8")
+
+    promoted = promote_stage_artifacts(
+        stage="content-assembler",
+        keyword="topic",
+        run_id="RUN-1",
+        staging_root=staging,
+        project_root=project,
+        declared=declared,
+        ledger_path=ledger,
+        replace_existing=True,
+    )
+
+    assert promoted == declared
+    for relative in declared:
+        basename = Path(relative).name
+        assert (project / relative).read_text(encoding="utf-8") == "fresh " + relative
+        assert (
+            project
+            / ".automation"
+            / "archive"
+            / "stage-artifacts"
+            / "content-assembler"
+            / "topic"
+            / "RUN-1"
+            / f"{basename}.previous"
+        ).read_text(encoding="utf-8") == "previous " + relative
+
+
+def test_content_assembler_refresh_removes_archives_and_restores_finals_on_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = tmp_path / "project"
+    staging = tmp_path / "staging"
+    ledger = tmp_path / "ledger.json"
+    suffixes = (".md", "-naver-layout.md", "-naver-copy.md", "-naver-input.md")
+    declared = tuple(f"final/topic{suffix}" for suffix in suffixes)
+    for relative in declared:
+        source = staging / relative
+        destination = project / relative
+        source.parent.mkdir(parents=True, exist_ok=True)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        _ = source.write_text("fresh " + relative, encoding="utf-8")
+        _ = destination.write_text("previous " + relative, encoding="utf-8")
+
+    def fail_ledger(*_args: object, **_kwargs: object) -> None:
+        raise OSError("ledger unavailable")
+
+    monkeypatch.setattr("tools.stage_artifact_promotion._write_ledger", fail_ledger)
+
+    with pytest.raises(OSError, match="ledger unavailable"):
+        _ = promote_stage_artifacts(
+            stage="content-assembler",
+            keyword="topic",
+            run_id="RUN-1",
+            staging_root=staging,
+            project_root=project,
+            declared=declared,
+            ledger_path=ledger,
+            replace_existing=True,
+        )
+
+    for relative in declared:
+        assert (project / relative).read_text(encoding="utf-8") == "previous " + relative
+        assert not (
+            project
+            / ".automation"
+            / "archive"
+            / "stage-artifacts"
+            / "content-assembler"
+            / "topic"
+            / "RUN-1"
+            / f"{Path(relative).name}.previous"
+        ).exists()
+    assert not ledger.exists()
+
+
 def test_same_run_retry_replaces_only_unchanged_owned_destination(tmp_path: Path) -> None:
     # Given: this run owns the canonical file and its hash still matches the ledger.
     project = tmp_path / "project"

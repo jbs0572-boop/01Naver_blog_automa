@@ -276,7 +276,7 @@ class CodexStageExecutor:
             validate_stage_model_config(model_config)
         research_evidence: JSONValue = None
         research_artifact_path: Path | None = None
-        replace_existing_writer = False
+        replace_existing_outputs = False
         if keyword is not None and result_path is None:
             if stage in {"writer", "image-maker", "content-assembler"}:
                 research_path = _research_path(root, keyword, run_id)
@@ -295,17 +295,14 @@ class CodexStageExecutor:
                 reuse_message = "기존 자료조사 산출물 재사용"
             fresh_research_revision = (
                 root / "research" / "revisions" / run_id / f"{keyword}.md"
-                if stage == "writer"
+                if stage in {"writer", "content-assembler"}
                 else None
             )
-            replace_existing_writer = (
-                fresh_research_revision is not None
-                and fresh_research_revision.is_file()
-            )
+            replace_existing_outputs = fresh_research_revision is not None and fresh_research_revision.is_file()
             if (
                 existing_artifact is not None
                 and existing_artifact.is_file()
-                and not replace_existing_writer
+                and not replace_existing_outputs
             ):
                 if stage == "researcher":
                     selection = context.selection_context
@@ -528,7 +525,7 @@ class CodexStageExecutor:
                 project_root=root,
                 declared=declared,
                 ledger_path=context.work_dir / "artifact-ownership.json",
-                replace_existing=replace_existing_writer,
+                replace_existing=replace_existing_outputs,
             )
             if stage == "researcher" and keyword is not None:
                 selection = context.selection_context

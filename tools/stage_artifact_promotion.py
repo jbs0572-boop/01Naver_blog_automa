@@ -193,10 +193,11 @@ def _validate(
                 and _sha256(destination)
                 == _sha256(archive / relative.relative_to(Path("assets") / str(request.keyword)))
             )
+            refresh_allowed = request.stage in {"writer", "content-assembler"} and request.replace_existing
             if (
                 not current_run_owned
                 and not archived_previous
-                and not (request.stage == "writer" and request.replace_existing)
+                and not refresh_allowed
             ):
                 raise ContractError(f"existing artifact is not owned or archived: {value}")
         validated.append((source, destination, value))
@@ -429,22 +430,12 @@ def promote_stage_artifacts(
             staging_root / "assets" / keyword,
             project_root / "drafts" / f"{keyword}.md",
         )
-    if stage == "writer" and replace_existing and keyword is not None:
+    if stage in {"writer", "content-assembler"} and replace_existing:
+        if keyword is None:
+            raise ContractError("stage refresh keyword is missing")
         for value in (keyword, run_id):
             if not value or Path(value).name != value or value in {".", ".."}:
-                raise ContractError("writer refresh archive path is unsafe")
-        existing = project_root / "drafts" / f"{keyword}.md"
-        if existing.is_file():
-            archive = (
-                project_root
-                / "drafts"
-                / "revisions"
-                / run_id
-                / f"{keyword}.previous.md"
-            )
-            if archive.exists():
-                raise ContractError("writer refresh archive already exists")
-            _atomic_copy(existing, archive)
+                raise ContractError("stage refresh archive path is unsafe")
     archive = _archive_existing_image_assets(request)
     validated = _validate(request, archive)
     if stage == "image-maker":
@@ -452,7 +443,28 @@ def promote_stage_artifacts(
     hashes = _owned_hashes(request)
     previous_files: dict[Path, bytes | None] = {}
     previous_ledger = ledger_path.read_bytes() if ledger_path.is_file() else None
+    replacement_archives: list[Path] = []
     try:
+        if replace_existing and stage in {"writer", "content-assembler"}:
+            if keyword is None:
+                raise ContractError("stage refresh keyword is missing")
+            for _source, destination, relative in validated:
+                if not destination.is_file():
+                    continue
+                replacement = (
+                    project_root
+                    / ".automation"
+                    / "archive"
+                    / "stage-artifacts"
+                    / stage
+                    / keyword
+                    / run_id
+                    / f"{Path(relative).name}.previous"
+                )
+                if replacement.exists():
+                    raise ContractError("stage refresh archive already exists")
+                _atomic_copy(destination, replacement)
+                replacement_archives.append(replacement)
         for source, destination, relative in validated:
             previous_files[destination] = (
                 destination.read_bytes() if destination.is_file() else None
@@ -472,6 +484,11 @@ def promote_stage_artifacts(
             _restore_ledger(ledger_path, previous_ledger)
         except OSError as rollback_error:
             rollback_errors.append(rollback_error)
+        for replacement in reversed(replacement_archives):
+            try:
+                replacement.unlink(missing_ok=True)
+            except OSError as rollback_error:
+                rollback_errors.append(rollback_error)
         if rollback_errors:
             raise ContractError(
                 "artifact promotion failed and rollback is incomplete; "
