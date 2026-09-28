@@ -462,7 +462,11 @@ def promote_stage_artifacts(
                     / f"{Path(relative).name}.previous"
                 )
                 if replacement.exists():
-                    raise ContractError("stage refresh archive already exists")
+                    if not replacement.is_file() or replacement.is_symlink():
+                        raise ContractError("stage refresh archive is not a regular file")
+                    # A prior successful refresh in this run owns this archive.
+                    # Keep its original rollback source across bounded Q1 repairs.
+                    continue
                 _atomic_copy(destination, replacement)
                 replacement_archives.append(replacement)
         for source, destination, relative in validated:

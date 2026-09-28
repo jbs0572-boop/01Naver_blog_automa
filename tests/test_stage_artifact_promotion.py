@@ -256,6 +256,63 @@ def test_content_assembler_refreshes_and_archives_all_four_canonical_files(
         ).read_text(encoding="utf-8") == "previous " + relative
 
 
+def test_content_assembler_retry_reuses_same_run_original_archive(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    staging = tmp_path / "staging"
+    ledger = tmp_path / "ledger.json"
+    declared = tuple(
+        f"final/topic{suffix}"
+        for suffix in (".md", "-naver-layout.md", "-naver-copy.md", "-naver-input.md")
+    )
+    for value in declared:
+        source = staging / value
+        destination = project / value
+        source.parent.mkdir(parents=True, exist_ok=True)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        _ = source.write_text("first attempt " + value, encoding="utf-8")
+        _ = destination.write_text("original " + value, encoding="utf-8")
+    archive = (
+        project
+        / ".automation"
+        / "archive"
+        / "stage-artifacts"
+        / "content-assembler"
+        / "topic"
+        / "RUN-1"
+        / "topic.md.previous"
+    )
+
+    _ = promote_stage_artifacts(
+        stage="content-assembler",
+        keyword="topic",
+        run_id="RUN-1",
+        staging_root=staging,
+        project_root=project,
+        declared=declared,
+        ledger_path=ledger,
+        replace_existing=True,
+    )
+    for value in declared:
+        _ = (staging / value).write_text("repaired attempt " + value, encoding="utf-8")
+    _ = promote_stage_artifacts(
+        stage="content-assembler",
+        keyword="topic",
+        run_id="RUN-1",
+        staging_root=staging,
+        project_root=project,
+        declared=declared,
+        ledger_path=ledger,
+        replace_existing=True,
+    )
+
+    for value in declared:
+        assert (project / value).read_text(encoding="utf-8") == "repaired attempt " + value
+        previous = archive.with_name(Path(value).name + ".previous")
+        assert previous.read_text(encoding="utf-8") == "original " + value
+
+
 def test_content_assembler_refresh_removes_archives_and_restores_finals_on_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
