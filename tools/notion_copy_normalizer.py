@@ -100,7 +100,14 @@ def _normalize_table(
     else:
         title = ""
     if all(_is_canonical_row(row) for row in rows):
-        return ([lines[start], *lines[start + 1 : index + 1]], index + 1)
+        if not title:
+            title = "핵심 정보"
+        normalized = [
+            f"[TABLE title={_quoted(title)}]",
+            *(f"[ROW]{row}[/ROW]" for row in rows),
+            "[/TABLE]",
+        ]
+        return (normalized, index + 1)
     headers = _pipe_cells(rows[0])
     if not title:
         title = " / ".join(headers)

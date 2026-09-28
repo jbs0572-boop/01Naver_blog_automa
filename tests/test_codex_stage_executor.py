@@ -751,7 +751,11 @@ def test_naver_copy_normalizer_preserves_key_value_table_without_title(
 
     normalized = normalize_naver_copy_text(source, tmp_path)
 
-    assert normalized == source
+    assert normalized == """[TABLE title=\"핵심 정보\"]
+[ROW]기간=2026년 10월 16일~18일[/ROW]
+[ROW]장소=변산해수욕장[/ROW]
+[/TABLE]
+"""
 
 
 def _writer_stage_files(root: Path) -> None:
