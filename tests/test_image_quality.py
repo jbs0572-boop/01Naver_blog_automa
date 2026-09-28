@@ -45,7 +45,7 @@ class ImageQualityTests(unittest.TestCase):
     def test_image_map_requires_exact_ordered_asset_references(self) -> None:
         image_map = self.root / "image-map.md"
         _ = image_map.write_text(
-            "| 1 | VIS-01 | [IMAGE: slot 1] | `copy-image-01.png` |\n"
+            "| 1 | VIS-01 | [IMAGE: slot 1] | `copy-image-01.png` | identify | original_photo | title_promise | generated_allowed | scope | section | fallback | info | `origin=generated; method=local_render` | 통과 |\n"
             + "| [THUMBNAIL] | `[THUMBNAIL]` | `thumbnail.png` |\n",
             encoding="utf-8",
         )
@@ -58,8 +58,8 @@ class ImageQualityTests(unittest.TestCase):
             )
 
         _ = image_map.write_text(
-            "| 1 | VIS-01 | [IMAGE: slot 1] | `image-01.png` |\n"
-            + "| 2 | VIS-02 | [IMAGE: slot 2] | `copy-image-01.png` |\n"
+            "| 1 | VIS-01 | [IMAGE: slot 1] | `image-01.png` | identify | original_photo | title_promise | generated_allowed | scope | section | fallback | info | `origin=generated; method=local_render` | 통과 |\n"
+            + "| 2 | VIS-02 | [IMAGE: slot 2] | `copy-image-01.png` | identify | original_photo | title_promise | generated_allowed | scope | section | fallback | info | `origin=generated; method=local_render` | 통과 |\n"
             + "| [THUMBNAIL] | `[THUMBNAIL]` | `thumbnail.png` |\n",
             encoding="utf-8",
         )
@@ -72,16 +72,16 @@ class ImageQualityTests(unittest.TestCase):
 
         invalid_order_rows = (
             (
-                "| 2 | VIS-01 | [IMAGE: slot 1] | `image-01.png` |\n"
-                + "| 2 | VIS-02 | [IMAGE: slot 2] | `copy-image-01.png` |\n"
+                "| 2 | VIS-01 | [IMAGE: slot 1] | `image-01.png` | identify | original_photo | title_promise | generated_allowed | scope | section | fallback | info | `origin=generated; method=local_render` | 통과 |\n"
+                + "| 2 | VIS-02 | [IMAGE: slot 2] | `copy-image-01.png` | identify | original_photo | title_promise | generated_allowed | scope | section | fallback | info | `origin=generated; method=local_render` | 통과 |\n"
             ),
             (
-                "| second | VIS-01 | [IMAGE: slot 1] | `image-01.png` |\n"
-                + "| 2 | VIS-02 | [IMAGE: slot 2] | `copy-image-01.png` |\n"
+                "| second | VIS-01 | [IMAGE: slot 1] | `image-01.png` | identify | original_photo | title_promise | generated_allowed | scope | section | fallback | info | `origin=generated; method=local_render` | 통과 |\n"
+                + "| 2 | VIS-02 | [IMAGE: slot 2] | `copy-image-01.png` | identify | original_photo | title_promise | generated_allowed | scope | section | fallback | info | `origin=generated; method=local_render` | 통과 |\n"
             ),
             (
-                "| 2 | VIS-01 | [IMAGE: slot 1] | `image-01.png` |\n"
-                + "| 1 | VIS-02 | [IMAGE: slot 2] | `copy-image-01.png` |\n"
+                "| 2 | VIS-01 | [IMAGE: slot 1] | `image-01.png` | identify | original_photo | title_promise | generated_allowed | scope | section | fallback | info | `origin=generated; method=local_render` | 통과 |\n"
+                + "| 1 | VIS-02 | [IMAGE: slot 2] | `copy-image-01.png` | identify | original_photo | title_promise | generated_allowed | scope | section | fallback | info | `origin=generated; method=local_render` | 통과 |\n"
             ),
         )
         for rows in invalid_order_rows:
@@ -97,8 +97,8 @@ class ImageQualityTests(unittest.TestCase):
                 )
 
         _ = image_map.write_text(
-            "| 1 | VIS-01 | [IMAGE: slot 1] | `missing.png` |\n"
-            + "| 2 | VIS-02 | [IMAGE: slot 2] | `copy-image-01.png` | `image-01.png` |\n"
+            "| 1 | VIS-01 | [IMAGE: slot 1] | `missing.png` | identify | original_photo | title_promise | generated_allowed | scope | section | fallback | info | `origin=generated; method=local_render` | 통과 |\n"
+            + "| 2 | VIS-02 | [IMAGE: slot 2] | `copy-image-01.png` | identify | original_photo | title_promise | generated_allowed | scope | section | fallback | info | `origin=generated; method=local_render` | 통과 | `image-01.png` |\n"
             + "| [THUMBNAIL] | `[THUMBNAIL]` | `thumbnail.png` |\n",
             encoding="utf-8",
         )
@@ -112,7 +112,7 @@ class ImageQualityTests(unittest.TestCase):
     def test_generated_route_diagram_cannot_claim_official_map_slot(self) -> None:
         image_map = self.root / "image-map.md"
         _ = image_map.write_text(
-            "| 1 | VIS-01 | `[IMAGE: asset_type=map; source_policy=official_or_licensed]` | `image-01.png` | identify | map | title_promise | official_or_licensed | scope | section | fallback | info | `origin=generated; Pillow local_render` | pending |\n"
+            "| 1 | VIS-01 | `[IMAGE: asset_type=map; source_policy=official_or_licensed]` | `image-01.png` | identify | map | title_promise | official_or_licensed | scope | section | fallback | info | `origin=generated; Pillow local_render` | 통과 |\n"
             + "| [THUMBNAIL] | `[THUMBNAIL]` | `thumbnail.png` |\n",
             encoding="utf-8",
         )
@@ -130,7 +130,7 @@ class ImageQualityTests(unittest.TestCase):
             "`origin=generated; source_url=https://example.com/source`",
         ):
             _ = image_map.write_text(
-                f"| 1 | VIS-01 | {marker} | `image-01.png` | identify | map | title_promise | official_or_licensed | scope | section | fallback | info | {provenance} | pending |\n"
+                f"| 1 | VIS-01 | {marker} | `image-01.png` | identify | map | title_promise | official_or_licensed | scope | section | fallback | info | {provenance} | 통과 |\n"
                 + tail,
                 encoding="utf-8",
             )
@@ -138,7 +138,7 @@ class ImageQualityTests(unittest.TestCase):
                 _ = validate_image_map(image_map, ["image-01.png"], "thumbnail.png")
 
         _ = image_map.write_text(
-            f"| 1 | VIS-01 | {marker} | `image-01.png` | identify | map | title_promise | official_or_licensed | scope | section | fallback | info | `origin=official; source_url=https://example.com/official-map.png` | pending |\n"
+            f"| 1 | VIS-01 | {marker} | `image-01.png` | identify | map | title_promise | official_or_licensed | scope | section | fallback | info | `origin=official; source_url=https://example.com/official-map.png` | 통과 |\n"
             + tail,
             encoding="utf-8",
         )
@@ -149,7 +149,7 @@ class ImageQualityTests(unittest.TestCase):
         image_map = self.root / "image-map.md"
         marker = "`[IMAGE: asset_type=original_photo; source_policy=official_or_licensed]`"
         _ = image_map.write_text(
-            f"| 1 | VIS-01 | {marker} | `image-01.png` | identify | original_photo | title_promise | official_or_licensed | scope | section | fallback | info | `origin=generated; Pillow local_render` | pending |\n"
+            f"| 1 | VIS-01 | {marker} | `image-01.png` | identify | original_photo | title_promise | official_or_licensed | scope | section | fallback | info | `origin=generated; Pillow local_render` | 통과 |\n"
             + "| [THUMBNAIL] | `[THUMBNAIL]` | `thumbnail.png` |\n",
             encoding="utf-8",
         )
@@ -159,7 +159,7 @@ class ImageQualityTests(unittest.TestCase):
     def test_declared_columns_enforce_official_map_provenance(self) -> None:
         image_map = self.root / "image-map.md"
         row = (
-            "| 1 | VIS-01 | `[IMAGE: slot 1]` | `image-01.png` | identify | map | title_promise | official_or_licensed | scope | section | fallback | info | `origin=generated; Pillow local_render` | pending |\n"
+            "| 1 | VIS-01 | `[IMAGE: slot 1]` | `image-01.png` | identify | map | title_promise | official_or_licensed | scope | section | fallback | info | `origin=generated; Pillow local_render` | 통과 |\n"
             + "| [THUMBNAIL] | `[THUMBNAIL]` | `thumbnail.png` |\n"
         )
         _ = image_map.write_text(row, encoding="utf-8")
@@ -169,7 +169,7 @@ class ImageQualityTests(unittest.TestCase):
     def test_image_map_rejects_conflicting_marker_and_columns(self) -> None:
         image_map = self.root / "image-map.md"
         _ = image_map.write_text(
-            "| 1 | VIS-01 | `[IMAGE: asset_type=map]` | `image-01.png` | identify | photograph | title_promise | generated_allowed | scope | section | fallback | info | `origin=official; source_url=https://example.com/map.png` | pending |\n"
+            "| 1 | VIS-01 | `[IMAGE: asset_type=map]` | `image-01.png` | identify | photograph | title_promise | generated_allowed | scope | section | fallback | info | `origin=official; source_url=https://example.com/map.png` | 통과 |\n"
             + "| [THUMBNAIL] | `[THUMBNAIL]` | `thumbnail.png` |\n",
             encoding="utf-8",
         )
@@ -187,7 +187,7 @@ class ImageQualityTests(unittest.TestCase):
             "https://example.com:invalid/map.png",
         ):
             _ = image_map.write_text(
-                f"| 1 | VIS-01 | {marker} | `image-01.png` | identify | photograph | title_promise | official_or_licensed | scope | section | fallback | info | `origin=official; source_url={source_url}` | pending |\n"
+                f"| 1 | VIS-01 | {marker} | `image-01.png` | identify | photograph | title_promise | official_or_licensed | scope | section | fallback | info | `origin=official; source_url={source_url}` | 통과 |\n"
                 + tail,
                 encoding="utf-8",
             )
@@ -204,7 +204,7 @@ class ImageQualityTests(unittest.TestCase):
             ("x", "x"),
         ):
             _ = image_map.write_text(
-                f"| 1 | VIS-01 | `[IMAGE: asset_type={asset_type}; source_policy={source_policy}]` | `image-01.png` | identify | {asset_type} | title_promise | {source_policy} | scope | section | fallback | info | `origin=generated; Pillow local_render` | pending |\n"
+                f"| 1 | VIS-01 | `[IMAGE: asset_type={asset_type}; source_policy={source_policy}]` | `image-01.png` | identify | {asset_type} | title_promise | {source_policy} | scope | section | fallback | info | `origin=generated; Pillow local_render` | 통과 |\n"
                 + tail,
                 encoding="utf-8",
             )
@@ -225,7 +225,7 @@ class ImageQualityTests(unittest.TestCase):
             "https://example.com/image.png\x90",
         ):
             _ = image_map.write_text(
-                f"| 1 | VIS-01 | `[IMAGE: slot 1]` | `image-01.png` | identify | original_photo | title_promise | official_or_licensed | scope | section | fallback | info | `origin=official; source_url={source_url}` | pending |\n"
+                f"| 1 | VIS-01 | `[IMAGE: slot 1]` | `image-01.png` | identify | original_photo | title_promise | official_or_licensed | scope | section | fallback | info | `origin=official; source_url={source_url}` | 통과 |\n"
                 + tail,
                 encoding="utf-8",
             )
@@ -236,7 +236,7 @@ class ImageQualityTests(unittest.TestCase):
             "https://[2001:db8::1]/image.png",
         ):
             _ = image_map.write_text(
-                f"| 1 | VIS-01 | `[IMAGE: slot 1]` | `image-01.png` | identify | original_photo | title_promise | official_or_licensed | scope | section | fallback | info | `origin=official; source_url={source_url}` | pending |\n"
+                f"| 1 | VIS-01 | `[IMAGE: slot 1]` | `image-01.png` | identify | original_photo | title_promise | official_or_licensed | scope | section | fallback | info | `origin=official; source_url={source_url}` | 통과 |\n"
                 + tail,
                 encoding="utf-8",
             )
@@ -246,11 +246,19 @@ class ImageQualityTests(unittest.TestCase):
     def test_image_map_rejects_raw_pipe_in_official_source_url(self) -> None:
         image_map = self.root / "image-map.md"
         _ = image_map.write_text(
-            "| 1 | VIS-01 | `[IMAGE: slot 1]` | `image-01.png` | identify | original_photo | title_promise | official_or_licensed | scope | section | fallback | info | `origin=official; source_url=https://example.com/image|bad.png` | pending |\n"
+            "| 1 | VIS-01 | `[IMAGE: slot 1]` | `image-01.png` | identify | original_photo | title_promise | official_or_licensed | scope | section | fallback | info | `origin=official; source_url=https://example.com/image|bad.png` | 통과 |\n"
             + "| [THUMBNAIL] | `[THUMBNAIL]` | `thumbnail.png` |\n",
             encoding="utf-8",
         )
-        with self.assertRaisesRegex(ContractError, "unexpected extra columns"):
+        with self.assertRaisesRegex(ContractError, "exactly 14 columns"):
+            _ = validate_image_map(image_map, ["image-01.png"], "thumbnail.png")
+
+        _ = image_map.write_text(
+            "| 1 | VIS-01 | `[IMAGE: slot 1]` | `image-01.png` | identify | original_photo | title_promise | official_or_licensed | scope | section | fallback | info | `origin=official; source_url=https://example.com/image|bad.png` |\n"
+            + "| [THUMBNAIL] | `[THUMBNAIL]` | `thumbnail.png` |\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(ContractError, "has not passed image review"):
             _ = validate_image_map(image_map, ["image-01.png"], "thumbnail.png")
 
     def _image_bytes(self) -> bytes:
@@ -480,7 +488,7 @@ class ImageQualityTests(unittest.TestCase):
             encoding="utf-8",
         )
         _ = (asset_dir / "image-map.md").write_text(
-            "| 1 | VIS-01 | [IMAGE: body image] | `body.png` |\n"
+            "| 1 | VIS-01 | [IMAGE: body image] | `body.png` | identify | original_photo | title_promise | generated_allowed | scope | section | fallback | info | `origin=generated; method=local_render` | 통과 |\n"
             + "| [THUMBNAIL] | `[THUMBNAIL]` | `thumbnail.png` |\n",
             encoding="utf-8",
         )

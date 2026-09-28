@@ -327,8 +327,10 @@ def validate_image_map(
         if len(values) >= 4 and (
             values[2] == "[IMAGE]" or values[2].startswith("[IMAGE:")
         ):
-            if len(values) > 14:
-                raise ContractError("image map row has unexpected extra columns")
+            if len(values) != 14:
+                raise ContractError("image map row must have exactly 14 columns")
+            if values[13] != "통과":
+                raise ContractError("image map row has not passed image review")
             if len(body_entries) >= len(body_paths):
                 raise ContractError("image map has an invalid body image row")
             if values[0] != str(len(body_entries) + 1):
@@ -345,7 +347,7 @@ def validate_image_map(
             marker_metadata = _parse_image_marker_metadata(marker)
             asset_type = values[5].strip("`").strip() if len(values) > 5 else ""
             source_policy = values[7].strip("`").strip() if len(values) > 7 else ""
-            canonical_row = len(values) >= 14
+            canonical_row = True
             for field, column_value in (
                 ("asset_type", asset_type),
                 ("source_policy", source_policy),
