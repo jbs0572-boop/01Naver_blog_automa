@@ -19,6 +19,7 @@ from tools.codex_stage_executor import (
 from tools.contract_types import ContractError, JSONMap
 from tools.notion_copy_normalizer import normalize_naver_copy_text
 from tools.notion_copy_parser import parse_naver_copy
+from tools.research_readiness import ResearchReadiness
 from tools.runner_types import (
     RunStatus,
     StageExecution,
@@ -430,8 +431,13 @@ def test_writer_regenerates_existing_draft_when_run_has_fresh_research_revision(
     revision.parent.mkdir(parents=True)
     _ = revision.write_text("fresh research", encoding="utf-8")
     prompts: list[str] = []
+
+    def current_revision_is_ready(_path: Path) -> ResearchReadiness:
+        return ResearchReadiness("ready", 1, ())
+
     monkeypatch.setattr(
-        "tools.codex_stage_executor.require_research_readiness", lambda _path: None
+        "tools.codex_stage_executor.require_research_readiness",
+        current_revision_is_ready,
     )
 
     def produce_fresh_draft(
