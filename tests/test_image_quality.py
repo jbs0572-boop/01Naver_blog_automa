@@ -253,6 +253,16 @@ class ImageQualityTests(unittest.TestCase):
         with self.assertRaisesRegex(ContractError, "exactly 14 columns"):
             _ = validate_image_map(image_map, ["image-01.png"], "thumbnail.png")
 
+    def test_image_map_rejects_unquoted_provenance_suffix(self) -> None:
+        image_map = self.root / "image-map.md"
+        _ = image_map.write_text(
+            "| 1 | VIS-01 | `[IMAGE: slot 1]` | `image-01.png` | identify | original_photo | title_promise | official_or_licensed | scope | section | fallback | info | `origin=official; source_url=https://example.com/image;` unquoted-note ` | 통과 |\n"
+            + "| [THUMBNAIL] | `[THUMBNAIL]` | `thumbnail.png` |\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(ContractError, "exactly 14 columns"):
+            _ = validate_image_map(image_map, ["image-01.png"], "thumbnail.png")
+
         _ = image_map.write_text(
             "| 1 | VIS-01 | `[IMAGE: slot 1]` | `image-01.png` | identify | original_photo | title_promise | official_or_licensed | scope | section | fallback | info | `origin=official; source_url=https://example.com/image|bad.png` |\n"
             + "| [THUMBNAIL] | `[THUMBNAIL]` | `thumbnail.png` |\n",

@@ -327,10 +327,12 @@ def validate_image_map(
         if len(values) >= 4 and (
             values[2] == "[IMAGE]" or values[2].startswith("[IMAGE:")
         ):
+            provenance_cell = cells[12].strip() if len(cells) > 12 else ""
             if (
                 len(values) != 14
-                or not cells[12].strip().startswith("`")
-                or not cells[12].strip().endswith("`")
+                or not provenance_cell.startswith("`")
+                or not provenance_cell.endswith("`")
+                or provenance_cell.count("`") != 2
                 or cells[13].strip() != "통과"
             ):
                 raise ContractError("image map row must have exactly 14 columns")
