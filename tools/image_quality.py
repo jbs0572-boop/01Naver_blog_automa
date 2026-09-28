@@ -2,6 +2,7 @@ from __future__ import annotations
 
 # pyright: reportAny=false
 import hashlib
+import ipaddress
 import json
 import re
 from datetime import datetime
@@ -318,14 +319,34 @@ def validate_image_map(
             provenance = _parse_asset_provenance(
                 values[12] if len(values) > 12 else ""
             )
-            if "source_policy=official_or_licensed" in marker and (
+            marker_metadata = _parse_image_marker_metadata(marker)
+            asset_type = values[5].strip("`").strip() if len(values) > 5 else ""
+            source_policy = values[7].strip("`").strip() if len(values) > 7 else ""
+            if asset_type.lower() in {"", "x"}:
+                asset_type = ""
+            if source_policy.lower() in {"", "x"}:
+                source_policy = ""
+            for field, column_value in (
+                ("asset_type", asset_type),
+                ("source_policy", source_policy),
+            ):
+                marker_value = marker_metadata.get(field)
+                if marker_value and column_value and marker_value != column_value:
+                    raise ContractError(
+                        f"image map {field} conflicts with its marker metadata"
+                    )
+            effective_asset_type = asset_type or marker_metadata.get("asset_type", "")
+            effective_source_policy = source_policy or marker_metadata.get(
+                "source_policy", ""
+            )
+            if effective_source_policy == "official_or_licensed" and (
                 provenance.get("origin") not in {"official", "licensed"}
                 or not _is_https_source(provenance.get("source_url"))
             ):
                 raise ContractError(
                     "official_or_licensed image lacks official or licensed source provenance"
                 )
-            if "asset_type=map" in marker and (
+            if effective_asset_type == "map" and (
                 provenance.get("origin") != "official"
                 or not _is_https_source(provenance.get("source_url"))
             ):
@@ -356,11 +377,47 @@ def _parse_asset_provenance(value: str) -> dict[str, str]:
     return fields
 
 
+def _parse_image_marker_metadata(marker: str) -> dict[str, str]:
+    content = marker.strip().strip("`").strip()
+    if content.startswith("[IMAGE:") and content.endswith("]"):
+        return _parse_asset_provenance(content[len("[IMAGE:") : -1])
+    return {}
+
+
 def _is_https_source(value: str | None) -> bool:
-    if value is None:
+    if value is None or not value or any(char.isspace() for char in value):
         return False
-    parsed = urlsplit(value)
-    return parsed.scheme == "https" and bool(parsed.hostname)
+    try:
+        parsed = urlsplit(value)
+        hostname = parsed.hostname
+        _ = parsed.port
+    except ValueError:
+        return False
+    if (
+        parsed.scheme != "https"
+        or not hostname
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
+        return False
+    try:
+        _ = ipaddress.ip_address(hostname)
+        return True
+    except ValueError:
+        pass
+    try:
+        ascii_host = hostname.encode("idna").decode("ascii")
+    except UnicodeError:
+        return False
+    if len(ascii_host) > 253 or "." not in ascii_host:
+        return False
+    labels = ascii_host.rstrip(".").split(".")
+    return all(
+        label
+        and len(label) <= 63
+        and re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?", label)
+        for label in labels
+    )
 
 
 def validate_image_stage_assets(asset_dir: Path, draft_path: Path) -> JSONMap:

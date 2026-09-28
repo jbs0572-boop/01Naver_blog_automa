@@ -156,6 +156,44 @@ class ImageQualityTests(unittest.TestCase):
         with self.assertRaisesRegex(ContractError, "official or licensed source provenance"):
             _ = validate_image_map(image_map, ["image-01.png"], "thumbnail.png")
 
+    def test_declared_columns_enforce_official_map_provenance(self) -> None:
+        image_map = self.root / "image-map.md"
+        row = (
+            "| 1 | VIS-01 | `[IMAGE: slot 1]` | `image-01.png` | identify | map | title_promise | official_or_licensed | scope | section | fallback | info | `origin=generated; Pillow local_render` | pending |\n"
+            + "| [THUMBNAIL] | `[THUMBNAIL]` | `thumbnail.png` |\n"
+        )
+        _ = image_map.write_text(row, encoding="utf-8")
+        with self.assertRaisesRegex(ContractError, "official or licensed source provenance"):
+            _ = validate_image_map(image_map, ["image-01.png"], "thumbnail.png")
+
+    def test_image_map_rejects_conflicting_marker_and_columns(self) -> None:
+        image_map = self.root / "image-map.md"
+        _ = image_map.write_text(
+            "| 1 | VIS-01 | `[IMAGE: asset_type=map]` | `image-01.png` | identify | photograph | title_promise | generated_allowed | scope | section | fallback | info | `origin=official; source_url=https://example.com/map.png` | pending |\n"
+            + "| [THUMBNAIL] | `[THUMBNAIL]` | `thumbnail.png` |\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(ContractError, "conflicts with its marker metadata"):
+            _ = validate_image_map(image_map, ["image-01.png"], "thumbnail.png")
+
+    def test_official_source_rejects_malformed_https_authorities(self) -> None:
+        image_map = self.root / "image-map.md"
+        marker = "`[IMAGE: slot 1]`"
+        tail = "| [THUMBNAIL] | `[THUMBNAIL]` | `thumbnail.png` |\n"
+        for source_url in (
+            "https://not a url/map.png",
+            "https://./map.png",
+            "https://https://x/map.png",
+            "https://example.com:invalid/map.png",
+        ):
+            _ = image_map.write_text(
+                f"| 1 | VIS-01 | {marker} | `image-01.png` | identify | photograph | title_promise | official_or_licensed | scope | section | fallback | info | `origin=official; source_url={source_url}` | pending |\n"
+                + tail,
+                encoding="utf-8",
+            )
+            with self.subTest(source_url=source_url), self.assertRaises(ContractError):
+                _ = validate_image_map(image_map, ["image-01.png"], "thumbnail.png")
+
     def _image_bytes(self) -> bytes:
         return base64.b64decode(
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
