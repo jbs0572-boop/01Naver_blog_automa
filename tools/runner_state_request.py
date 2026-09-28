@@ -72,6 +72,20 @@ def input_fingerprint(
         ):
             raise ContractError("keyword must be a single safe path component")
         keyword_dir = request.root / "assets" / request.keyword
+        research_revision = (
+            request.root
+            / "research"
+            / "revisions"
+            / request.run_id
+            / f"{request.keyword}.md"
+            if request.run_id is not None
+            else None
+        )
+        research_artifact = (
+            research_revision
+            if research_revision is not None and research_revision.is_file()
+            else request.root / "research" / f"{request.keyword}.md"
+        )
         candidates = [
             request.root / "research" / f"topic-selection-{request.keyword}.md",
         ]
@@ -79,7 +93,7 @@ def input_fingerprint(
             completed = completed_stages or {}
             passed = {"passed", "validated"}
             if completed.get("researcher") in passed:
-                candidates.append(request.root / "research" / f"{request.keyword}.md")
+                candidates.append(research_artifact)
             if completed.get("writer") in passed:
                 candidates.append(request.root / "drafts" / f"{request.keyword}.md")
             if completed.get("content-assembler") in passed:
@@ -109,7 +123,7 @@ def input_fingerprint(
         else:
             candidates.extend(
                 (
-                    request.root / "research" / f"{request.keyword}.md",
+                    research_artifact,
                     request.root / "drafts" / f"{request.keyword}.md",
                     request.root / "final" / f"{request.keyword}.md",
                     request.root / "final" / f"{request.keyword}-naver-layout.md",

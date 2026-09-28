@@ -1394,6 +1394,29 @@ def test_content_assembler_prompt_disambiguates_staging_artifact_prefix(
     assert "never write to final/ directly" in prompt
 
 
+def test_researcher_prompt_targets_a_run_scoped_revision_when_requested(
+    tmp_path: Path,
+) -> None:
+    context = StageExecutionContext(
+        root=tmp_path,
+        stage="researcher",
+        run_id="RUN-current",
+        topic_id="TOPIC-test",
+        keyword="축제 주제",
+        work_dir=tmp_path / ".automation" / "work",
+    )
+
+    prompt = stage_prompt(
+        context,
+        tmp_path / "researcher.md",
+        tmp_path / "result.json",
+        research_artifact_path="research/revisions/RUN-current/축제 주제.md",
+    )
+
+    assert "Canonical output path: research/revisions/RUN-current/축제 주제.md" in prompt
+    assert "artifacts/research/revisions/RUN-current/축제 주제.md" in prompt
+
+
 def test_content_assembler_prompt_limits_canonical_image_attributes(
     tmp_path: Path,
 ) -> None:

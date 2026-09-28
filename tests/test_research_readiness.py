@@ -50,6 +50,27 @@ def test_official_document_evidence_must_be_connected_to_each_claim(
     assert assess_research_readiness(path).status == "ready"
 
 
+def test_consecutive_evidence_records_keep_each_source_id(tmp_path: Path) -> None:
+    path = tmp_path / "research.md"
+    text = (
+        "---\nofficial_source_required: true\n---\n# 조사\n"
+        + "자료 확인 " * 60
+        + "\n## 주장 원장\n| claim_id | claim | source_ids | evidence_status |\n"
+        + "| --- | --- | --- | --- |\n"
+        + "| CLAIM-1 | 일정 | SRC-1 | confirmed |\n"
+        + "| CLAIM-2 | 장소 | SRC-1 | confirmed |\n"
+        + "## 출처 목록\n| source_id | source_kind | url | evidence_status |\n"
+        + "| --- | --- | --- | --- |\n"
+        + "| SRC-1 | official_document | https://official.example/event | confirmed |\n"
+        + "## 원문 증거\n"
+        + "- source_id: SRC-1\n  observed_text: 일정 원문\n  captured_at: 2026-09-28T09:00:00+09:00\n"
+        + "- source_id: SRC-1\n  observed_text: 장소 원문\n  captured_at: 2026-09-28T09:00:00+09:00\n"
+    )
+    _ = path.write_text(text, encoding="utf-8")
+
+    assert assess_research_readiness(path).status == "ready"
+
+
 def test_unknown_source_id_cannot_make_research_ready(tmp_path: Path) -> None:
     path = tmp_path / "research.md"
     text = (

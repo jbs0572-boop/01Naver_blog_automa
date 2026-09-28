@@ -4,6 +4,9 @@
     {"id": "naver-search", "kind": "search", "host": "search.naver.com", "fetcher": "aside"},
     {"id": "naver-main", "kind": "official", "host": "www.naver.com", "fetcher": "aside"},
     {"id": "naver-blog", "kind": "supporting", "host": "blog.naver.com", "fetcher": "aside"},
+    {"id": "buan-county", "kind": "official", "host": "www.buan.go.kr", "fetcher": "aside"},
+    {"id": "buan-festival", "kind": "official", "host": "www.buanmasil.com", "fetcher": "aside"},
+    {"id": "visitkorea-festival", "kind": "supporting", "host": "korean.visitkorea.or.kr", "fetcher": "aside"},
     {"id": "yangju-city-www", "kind": "official", "host": "www.yangju.go.kr", "fetcher": "aside"},
     {"id": "yangju-city", "kind": "official", "host": "yangju.go.kr", "fetcher": "aside"},
     {"id": "instagram-public", "kind": "supporting", "host": "www.instagram.com", "fetcher": "aside", "requires_credentials": false}

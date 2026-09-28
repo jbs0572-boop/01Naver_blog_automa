@@ -35,6 +35,27 @@ def test_profiles_allow_only_configured_aside_hosts() -> None:
         profile_for_url("https://www.instagram.com/example/", profiles).source_id
         == "instagram-public"
     )
+    assert (
+        profile_for_url(
+            "https://www.buan.go.kr/tour/board/list.buan?boardId=BBS_0000295&menuCd=DOM_000000210001005000",
+            profiles,
+        ).source_id
+        == "buan-county"
+    )
+    assert (
+        profile_for_url(
+            "https://www.buanmasil.com/buansunset/pages/program/neighbor.php",
+            profiles,
+        ).source_id
+        == "buan-festival"
+    )
+    assert (
+        profile_for_url(
+            "https://korean.visitkorea.or.kr/kfes/detail/fstvlDetail.do?fstvlCntntsId=event-id",
+            profiles,
+        ).source_id
+        == "visitkorea-festival"
+    )
     assert instagram_capture_status(False, True) == "public_only"
 
 

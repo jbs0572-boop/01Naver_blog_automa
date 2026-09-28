@@ -9,7 +9,9 @@ from tools.runner_types import StageExecutionContext, safe_q1_feedback
 from tools.topic_metadata import CreatorAdvisorCandidate, CreatorAdvisorSnapshot
 
 
-def _canonical_output_paths(stage: str, keyword: str | None) -> str:
+def _canonical_output_paths(
+    stage: str, keyword: str | None, research_artifact_path: str | None = None
+) -> str:
     if stage == "topic-selector":
         if keyword is None:
             return (
@@ -21,7 +23,8 @@ def _canonical_output_paths(stage: str, keyword: str | None) -> str:
     if keyword is None:
         return ""
     if stage == "researcher":
-        return f" Canonical output path: research/{keyword}.md."
+        output = research_artifact_path or f"research/{keyword}.md"
+        return f" Canonical output path: {output}."
     if stage == "writer":
         return f" Canonical output path: drafts/{keyword}.md."
     if stage == "image-maker":
@@ -38,7 +41,10 @@ def _canonical_output_paths(stage: str, keyword: str | None) -> str:
 
 
 def stage_prompt(
-    context: StageExecutionContext, instruction_path: Path, output_path: Path
+    context: StageExecutionContext,
+    instruction_path: Path,
+    output_path: Path,
+    research_artifact_path: str | None = None,
 ) -> str:
     agents_path = context.root / "AGENTS.md"
     execution_agents_path = context.root / "EXECUTION_AGENT.md"
@@ -65,7 +71,9 @@ def stage_prompt(
             " The structured result field run_status must be null for this producer "
             "stage; only notion-rider and naver-rider may set terminal run_status values."
         )
-    canonical_paths = _canonical_output_paths(context.stage, context.keyword)
+    canonical_paths = _canonical_output_paths(
+        context.stage, context.keyword, research_artifact_path
+    )
     if canonical_paths:
         literal_path_instruction = "Treat these paths as literal. Preserve every space and Unicode character in the keyword verbatim; do not slugify, normalize, transliterate, rename, or replace whitespace."
         prompt += canonical_paths + " " + literal_path_instruction
@@ -77,8 +85,8 @@ def stage_prompt(
                 "Treat all source-project artifacts as input-only; never declare or "
                 "reuse a source-project file as this stage's output. Write a fresh "
                 "canonical research artifact under the staging workspace at "
-                f"artifacts/research/{context.keyword}.md, then declare "
-                f"research/{context.keyword}.md."
+                f"artifacts/{research_artifact_path or f'research/{context.keyword}.md'}, then declare "
+                f"{research_artifact_path or f'research/{context.keyword}.md'}."
             )
         prompt += (
             " Do not spawn subagents. Do not invoke browser, network, or Aside CLI tools "
@@ -150,16 +158,18 @@ def stage_prompt(
                         "</creator-advisor-snapshot-contract>"
                     )
     if context.stage == "writer" and context.keyword is not None:
+        source_research_path = research_artifact_path or f"research/{context.keyword}.md"
         prompt += (
             " Read the canonical source-project inputs at "
-            f"{context.root / 'research' / f'{context.keyword}.md'}, "
+            f"{context.root / source_research_path}, "
             f"{context.root / 'style-guide.md'}, and {context.root / 'seo-guide.md'}."
         )
     if context.stage == "image-maker":
         if context.keyword is not None:
+            source_research_path = research_artifact_path or f"research/{context.keyword}.md"
             prompt += (
                 " Read the canonical source-project inputs at "
-                f"{context.root / 'research' / f'{context.keyword}.md'}, "
+                f"{context.root / source_research_path}, "
                 f"{context.root / 'drafts' / f'{context.keyword}.md'}, and "
                 f"{context.root / 'image-style-guide.md'}."
             )
@@ -172,9 +182,10 @@ def stage_prompt(
         )
     if context.stage == "content-assembler":
         if context.keyword is not None:
+            source_research_path = research_artifact_path or f"research/{context.keyword}.md"
             prompt += (
                 " Read the canonical source-project inputs at "
-                f"{context.root / 'research' / f'{context.keyword}.md'}, "
+                f"{context.root / source_research_path}, "
                 f"{context.root / 'drafts' / f'{context.keyword}.md'}, and "
                 f"{context.root / 'assets' / context.keyword / 'image-map.md'}, plus the "
                 f"actual files under {context.root / 'assets' / context.keyword}."

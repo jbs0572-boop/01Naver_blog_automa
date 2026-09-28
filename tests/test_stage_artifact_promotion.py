@@ -609,3 +609,37 @@ def test_content_assembler_rejects_manifest_and_incomplete_final_set(
             declared=(*finals, "manifests/RUN-1-workflow-manifest.json"),
             ledger_path=ledger,
         )
+
+
+def test_researcher_can_promote_only_its_run_scoped_revision(tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    staging = tmp_path / "staging"
+    ledger = tmp_path / "ledger.json"
+    revision = "research/revisions/RUN-123/topic.md"
+    source = staging / revision
+    source.parent.mkdir(parents=True)
+    project.mkdir()
+    _ = source.write_text("fresh research", encoding="utf-8")
+
+    promoted = promote_stage_artifacts(
+        stage="researcher",
+        keyword="topic",
+        run_id="RUN-123",
+        staging_root=staging,
+        project_root=project,
+        declared=(revision,),
+        ledger_path=ledger,
+    )
+
+    assert promoted == (revision,)
+    assert (project / revision).read_text(encoding="utf-8") == "fresh research"
+    with pytest.raises(ContractError, match="outside allowed output"):
+        _ = promote_stage_artifacts(
+            stage="researcher",
+            keyword="topic",
+            run_id="RUN-456",
+            staging_root=staging,
+            project_root=project,
+            declared=(revision,),
+            ledger_path=tmp_path / "other-ledger.json",
+        )

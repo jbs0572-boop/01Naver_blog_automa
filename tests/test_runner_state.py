@@ -66,6 +66,22 @@ def test_stable_run_id_separates_batch_slots(tmp_path: Path) -> None:
     assert stable_run_id(first) != stable_run_id(second)
 
 
+def test_input_fingerprint_binds_run_scoped_research_revision(tmp_path: Path) -> None:
+    run_id = "RUN-revision"
+    revision = tmp_path / "research" / "revisions" / run_id / "topic.md"
+    revision.parent.mkdir(parents=True)
+    _ = revision.write_text("first revision", encoding="utf-8")
+    request = RunnerRequest(
+        root=tmp_path, job="daily-generate", keyword="topic", run_id=run_id
+    )
+    completed = {"researcher": "passed"}
+
+    first = input_fingerprint(request, completed_stages=completed)
+    _ = revision.write_text("updated revision", encoding="utf-8")
+
+    assert input_fingerprint(request, completed_stages=completed) != first
+
+
 def test_post_q2_evidence_is_separate_from_hashed_producer_inputs(
     tmp_path: Path,
 ) -> None:

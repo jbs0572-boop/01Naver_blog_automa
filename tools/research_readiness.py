@@ -143,6 +143,15 @@ def _evidence_rows(text: str) -> list[tuple[str, str, str]]:
     for line in text.splitlines() + [""]:
         match = re.match(r"\s*-?\s*(source_id|observed_text|captured_at):\s*(.+)", line)
         if match:
+            if match.group(1) == "source_id" and current.get("source_id"):
+                result.append(
+                    (
+                        current.get("source_id", ""),
+                        current.get("observed_text", ""),
+                        current.get("captured_at", ""),
+                    )
+                )
+                current = {}
             current[match.group(1)] = match.group(2).strip(" `")
         elif current:
             result.append(

@@ -77,7 +77,19 @@ def _artifact_prefix(stage: str, keyword: str | None) -> str | None:
     return None
 
 
-def _artifact_is_allowed(stage: str, relative: str, keyword: str | None) -> bool:
+def _research_path(root: Path, keyword: str, run_id: str) -> Path:
+    revision = root / "research" / "revisions" / run_id / f"{keyword}.md"
+    return revision if revision.is_file() else root / "research" / f"{keyword}.md"
+
+
+def _artifact_is_allowed(
+    stage: str, relative: str, keyword: str | None, run_id: str
+) -> bool:
+    if stage == "researcher" and keyword is not None:
+        return relative in {
+            f"research/{keyword}.md",
+            f"research/revisions/{run_id}/{keyword}.md",
+        }
     if stage == "topic-selector" and relative.startswith("metadata/creator-advisor/"):
         return relative.endswith(".json")
     if stage == "content-assembler":
@@ -158,6 +170,7 @@ def _parse_result(
     raw: JSONValue,
     root: Path,
     keyword: str | None,
+    run_id: str,
     result_path: Path,
 ) -> StageResult:
     if not isinstance(raw, dict):
@@ -186,7 +199,7 @@ def _parse_result(
         absolute = (root / path).resolve()
         if absolute == result_path.resolve():
             continue
-        if not _artifact_is_allowed(stage, relative, keyword):
+        if not _artifact_is_allowed(stage, relative, keyword, run_id):
             raise StageExecutionError(
                 stage, f"artifact is outside allowed output: {relative}"
             )
@@ -262,9 +275,10 @@ class CodexStageExecutor:
         if model_config is not None:
             validate_stage_model_config(model_config)
         research_evidence: JSONValue = None
+        research_artifact_path: Path | None = None
         if keyword is not None and result_path is None:
-            if stage in {"writer", "image-maker"}:
-                research_path = root / "research" / f"{keyword}.md"
+            if stage in {"writer", "image-maker", "content-assembler"}:
+                research_path = _research_path(root, keyword, run_id)
                 if research_path.is_file():
                     _ = require_research_readiness(research_path)
             existing_artifact: Path | None = None
@@ -286,19 +300,20 @@ class CodexStageExecutor:
                             "research_refresh_required: as_of_date is missing; "
                             + f"original={existing_artifact}"
                         )
-                    freshness_request = ResearchFreshnessRequest(
-                        root,
-                        run_id,
-                        keyword,
-                        selection.as_of_date,
-                        existing_artifact,
-                        root / "research" / f"topic-selection-{keyword}.md",
-                        instruction_path,
-                    )
                     current_metadata = (
                         root / "metadata/research-freshness" / f"{run_id}.json"
                     )
                     if current_metadata.is_file():
+                        research_artifact_path = _research_path(root, keyword, run_id)
+                        freshness_request = ResearchFreshnessRequest(
+                            root,
+                            run_id,
+                            keyword,
+                            selection.as_of_date,
+                            research_artifact_path,
+                            root / "research" / f"topic-selection-{keyword}.md",
+                            instruction_path,
+                        )
                         _ = assess_research_reuse(freshness_request, None)
                     else:
                         research_evidence = capture_research_sources(
@@ -308,14 +323,51 @@ class CodexStageExecutor:
                             selection.as_of_date,
                             root / "research" / f"topic-selection-{keyword}.md",
                         )
-                        _ = assess_research_reuse(freshness_request, research_evidence)
-                return StageResult(
-                    RunStatus.PASSED,
-                    StageExecution.PRODUCED,
-                    reuse_message,
-                    (),
-                    keyword,
-                )
+                        freshness_request = ResearchFreshnessRequest(
+                            root,
+                            run_id,
+                            keyword,
+                            selection.as_of_date,
+                            existing_artifact,
+                            root / "research" / f"topic-selection-{keyword}.md",
+                            instruction_path,
+                        )
+                        try:
+                            _ = assess_research_reuse(
+                                freshness_request, research_evidence
+                            )
+                        except ContractError as error:
+                            if not str(error).startswith(
+                                "research_refresh_required:"
+                            ):
+                                raise
+                            research_artifact_path = (
+                                root
+                                / "research"
+                                / "revisions"
+                                / run_id
+                                / f"{keyword}.md"
+                            )
+                            if research_artifact_path.exists():
+                                raise ContractError(
+                                    "research revision exists without matching freshness metadata"
+                                ) from error
+                        else:
+                            return StageResult(
+                                RunStatus.PASSED,
+                                StageExecution.PRODUCED,
+                                reuse_message,
+                                (),
+                                keyword,
+                            )
+                else:
+                    return StageResult(
+                        RunStatus.PASSED,
+                        StageExecution.PRODUCED,
+                        reuse_message,
+                        (),
+                        keyword,
+                    )
         with tempfile.TemporaryDirectory(prefix="naver-stage-") as staging:
             workspace_root = Path(staging)
             if stage in PRODUCER_STAGES:
@@ -338,7 +390,22 @@ class CodexStageExecutor:
                 context, evidence
             )
             prompt = codex_topic_selection.append_evidence(
-                stage_prompt(context, instruction_path, output_path), evidence
+                stage_prompt(
+                    context,
+                    instruction_path,
+                    output_path,
+                    research_artifact_path=(
+                        research_artifact_path.relative_to(root).as_posix()
+                        if research_artifact_path is not None
+                        else (
+                            _research_path(root, keyword, run_id).relative_to(root).as_posix()
+                            if keyword is not None
+                            and stage in {"writer", "image-maker", "content-assembler"}
+                            else None
+                        )
+                    ),
+                ),
+                evidence,
             )
             prompt = codex_topic_decision.append_decision(
                 prompt, prepared_selection.decision
@@ -458,7 +525,8 @@ class CodexStageExecutor:
                         run_id,
                         keyword,
                         selection.as_of_date,
-                        root / "research" / f"{keyword}.md",
+                        research_artifact_path
+                        or root / "research" / f"{keyword}.md",
                         root / "research" / f"topic-selection-{keyword}.md",
                         instruction_path,
                     ),
@@ -467,7 +535,7 @@ class CodexStageExecutor:
         raw["artifacts"] = list(promoted)
         if result_path is not None:
             _ = result_path.write_text(json.dumps(raw), encoding="utf-8")
-        return _parse_result(stage, raw, root, keyword, output_path)
+        return _parse_result(stage, raw, root, keyword, run_id, output_path)
 
 
 __all__ = ["CodexStageExecutor", "StageExecutionError", "reject_error_report"]

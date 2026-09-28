@@ -2,7 +2,7 @@
 
 ## 역할
 
-`topic-selector`가 선정한 주제와 우선순위 결과를 바탕으로 네이버 블로그 글 작성에 필요한 검증된 리서치 결과를 만든다. 입력은 `research/topic-selection-[키워드].md`, 출력은 `research/[키워드].md`다.
+`topic-selector`가 선정한 주제와 우선순위 결과를 바탕으로 네이버 블로그 글 작성에 필요한 검증된 리서치 결과를 만든다. 입력은 `research/topic-selection-[키워드].md`, 기본 출력은 `research/[키워드].md`다. 같은 주제의 기존 조사 결과가 최신 관측과 맞지 않으면 기존 파일은 보존하고 실행별 새 revision 경로를 사용한다.
 
 다음 세 가지를 수행한다.
 
@@ -71,7 +71,7 @@ selection_evidence:
 
 각 Lane은 주 담당 researcher에게 Lane ID, 완료 상태, 원문 URL과 확인 시각, 채택 가능한 주장과 근거 상태, 시각 자료의 출처·권리 상태, 확인하지 못한 항목과 한계를 반환한다. 반환 결과는 주장 원장과 시각 자산 원장에 병합할 수 있는 정보만 포함한다.
 
-주 담당 researcher만 두 Lane의 결과를 충돌 검토한 뒤 research/[키워드].md를 기록하고 기존 품질 Gate를 수행한다. Lane 결과가 없거나 서로 충돌하면 추측으로 보완하지 말고 기준일·조건·표현 제한 또는 미확인 상태를 기록한다. writer, image-maker와 같은 다음 단계는 이 병합과 Gate 통과 후에만 호출한다.
+주 담당 researcher만 두 Lane의 결과를 충돌 검토한 뒤 지정된 research 경로를 기록하고 기존 품질 Gate를 수행한다. Lane 결과가 없거나 서로 충돌하면 추측으로 보완하지 말고 기준일·조건·표현 제한 또는 미확인 상태를 기록한다. writer, image-maker와 같은 다음 단계는 이 병합과 Gate 통과 후에만 호출한다.
 
 ## 총정리·독창성 조사
 
@@ -150,7 +150,7 @@ selection_evidence:
 
 ### 4. 결과와 파일 저장
 
-입력의 literal 키워드를 그대로 파일명에 사용해 staging 전용 경로 `artifacts/research/[키워드].md`에 저장하고, 구조화 결과에는 canonical 상대 경로 `research/[키워드].md`를 기록한다.
+입력의 literal 키워드를 그대로 파일명에 사용해 staging 전용 경로에 저장하고, 구조화 결과에는 지정된 상대 경로를 기록한다. 갱신이 필요한 기존 조사 파일이 있으면 `artifacts/research/revisions/[run_id]/[키워드].md`와 `research/revisions/[run_id]/[키워드].md`를 사용한다.
 
 - `research/` 폴더가 없으면 생성한다.
 - 키워드의 공백·한글·Unicode를 보존하며 slug 변환·정규화·음역·이름 변경을 하지 않는다. 파일명 계약을 어기는 입력은 명확한 오류로 반환한다.
@@ -159,7 +159,7 @@ selection_evidence:
 
 ## 필수 결과 형식
 
-`research/[키워드].md`는 다음 구조를 따른다.
+조사 산출물은 다음 구조를 따른다.
 
 ```markdown
 ---

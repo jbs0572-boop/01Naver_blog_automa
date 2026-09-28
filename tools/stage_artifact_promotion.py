@@ -27,7 +27,7 @@ class PromotionRequest:
     ledger_path: Path
 
 
-def _allowed(stage: str, path: str, keyword: str | None) -> bool:
+def _allowed(stage: str, path: str, keyword: str | None, run_id: str) -> bool:
     match stage:
         case "topic-selector":
             return path.startswith("research/topic-selection-") or (
@@ -35,7 +35,10 @@ def _allowed(stage: str, path: str, keyword: str | None) -> bool:
                 and path.endswith(".json")
             )
         case "researcher":
-            return keyword is not None and path == f"research/{keyword}.md"
+            return keyword is not None and path in {
+                f"research/{keyword}.md",
+                f"research/revisions/{run_id}/{keyword}.md",
+            }
         case "writer":
             return keyword is not None and path == f"drafts/{keyword}.md"
         case "image-maker":
@@ -169,7 +172,7 @@ def _validate(
     validated: list[tuple[Path, Path, str]] = []
     for relative in declared_paths:
         value = relative.as_posix()
-        if not _allowed(request.stage, value, request.keyword):
+        if not _allowed(request.stage, value, request.keyword, request.run_id):
             raise ContractError(f"artifact is outside allowed output: {value}")
         source = request.staging_root / relative
         if not source.is_file() or source.stat().st_size == 0:
