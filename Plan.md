@@ -525,7 +525,7 @@ researcher 완료 직후 readiness를 검사해 다음 producer 호출 전에 �
 
 ### T03. 이미지 제작 증명과 품질 판정 정리
 
-**대상:** `tools/image_quality.py`, `tools/image_contract.py`, `schemas/workflow-contract.schema.json`, `image-maker.md`, `image-style-guide.md`, `evaluation-rubric.md`, `docs/task-7-image-production-result.md`.
+**대상:** `tools/image_quality.py`, `tools/image_contract.py`, `tools/research_browser_capture.py`, `tools/research_crawler_bridge.py`, `schemas/workflow-contract.schema.json`, `researcher.md`, `image-maker.md`, `image-style-guide.md`, `evaluation-rubric.md`, `docs/task-7-image-production-result.md`.
 
 **수행:** T07 문서의 local-render 실패를 현재 코드에서 재현한다. snapshot·renderer version, 실제 파일 크기·decode·해시 검사를 올바르게 연결한다. metadata 문자열만으로 실제 제작 방식·호출 성공을 인정하지 않는다.
 
@@ -534,6 +534,8 @@ researcher 완료 직후 readiness를 검사해 다음 producer 호출 전에 �
 기존 도구가 모델 snapshot·quality를 제어하지 못하면 `locked`를 만들어 쓰지 않는다. 제어 가능한 기존 허용 경로의 존재를 먼저 확인하고, 없으면 이미지 운영 경로를 미완료로 보고한다. 이 계획을 근거로 새 유료 API 계약이나 임의 공급자로 전환하지 않는다.
 
 구 metadata는 역사 기록으로 읽을 수 있게 하되 신규 optimized 자산의 제작 증명으로 재승격하지 않는다. 실제 사람 평가와 모델 평가를 분리하고 Q3 선택 규칙은 유지한다. 신규 운영 Gate가 요구할 자동 검사는 source·파일·의미·모바일 증거를 포함한다.
+
+공식 이미지 탐색 회귀도 막는다. 과거 부안 축제 실행에서는 Aside의 접근성 스냅샷이 본문 사실은 보존했지만 이미지 `src`/`currentSrc`를 버려, image-maker가 공식 포스터를 후보로 볼 수 없었다. 원문 캡처가 관련 이미지 메타데이터를 수집하고, 같은 출처 호스트 또는 설정된 미디어 호스트의 검증된 원본만 실행 전용 경로에 저장해 research와 image-maker에 전달한다. 주제와 관련 있는 저장 원본이 있으면 생성 자산이 이를 대체하지 못하게 하며, 미검증 CDN·실패 다운로드는 공식 자산으로 취급하지 않는다.
 
 **검증:** `tests/test_image_quality.py`, `tests/test_workflow_contract.py`. 실제 local-render 산출물 통과, 다른 output hash·위조 호출 증거·잘못된 크기·1px 이미지 차단, 사람이 평가하지 않은 결과의 human pass 차단. 이미지 연결표의 `asset_type`·`source_policy`·`origin`·원본 URL이 모순되는 사례와, 생성 경로 도식을 공식 지도 슬롯에 넣는 사례도 Q1에서 차단한다.
 

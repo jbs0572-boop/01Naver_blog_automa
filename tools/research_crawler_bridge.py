@@ -15,6 +15,7 @@ class SourceProfile:
     host: str
     fetcher: str
     requires_credentials: bool
+    media_hosts: tuple[str, ...] = ()
 
 
 def load_source_profiles(path: Path | None = None) -> tuple[SourceProfile, ...]:
@@ -37,13 +38,40 @@ def load_source_profiles(path: Path | None = None) -> tuple[SourceProfile, ...]:
         host = item.get("host")
         fetcher = item.get("fetcher")
         credentials = item.get("requires_credentials", False)
-        if not isinstance(source_id, str) or not isinstance(kind, str) or not isinstance(host, str) or not isinstance(fetcher, str) or not isinstance(credentials, bool):
+        raw_media_hosts = item.get("media_hosts", [])
+        if (
+            not isinstance(source_id, str)
+            or not isinstance(kind, str)
+            or not isinstance(host, str)
+            or not isinstance(fetcher, str)
+            or not isinstance(credentials, bool)
+        ):
             raise ContractError("research source profile malformed")
+        if not isinstance(raw_media_hosts, list) or not all(
+            isinstance(media_host, str)
+            and media_host == media_host.strip().lower()
+            and "/" not in media_host
+            and ":" not in media_host
+            for media_host in raw_media_hosts
+        ):
+            raise ContractError("research source media hosts are malformed")
+        media_hosts = tuple(
+            media_host for media_host in raw_media_hosts if isinstance(media_host, str)
+        )
         if fetcher != "aside":
             raise ContractError("research source profile must use Aside")
         if kind not in {"search", "official", "supporting"}:
             raise ContractError("research source profile kind is invalid")
-        profiles.append(SourceProfile(source_id, kind, host, fetcher, credentials))
+        profiles.append(
+            SourceProfile(
+                source_id,
+                kind,
+                host,
+                fetcher,
+                credentials,
+                media_hosts,
+            )
+        )
     return tuple(profiles)
 
 
@@ -63,4 +91,9 @@ def instagram_capture_status(credentials_present: bool, public_account: bool) ->
     return "public_only"
 
 
-__all__ = ["SourceProfile", "instagram_capture_status", "load_source_profiles", "profile_for_url"]
+__all__ = [
+    "SourceProfile",
+    "instagram_capture_status",
+    "load_source_profiles",
+    "profile_for_url",
+]

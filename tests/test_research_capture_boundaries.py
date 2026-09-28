@@ -59,6 +59,23 @@ def test_profiles_allow_only_configured_aside_hosts() -> None:
     assert instagram_capture_status(False, True) == "public_only"
 
 
+def test_profiles_allow_explicit_official_image_cdn_hosts(tmp_path: Path) -> None:
+    _copy_capture_config(tmp_path)
+    path = tmp_path / "config/research-source-profiles.json"
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    buan = next(source for source in raw["sources"] if source["id"] == "buan-county")
+    buan["media_hosts"] = ["media.buan.go.kr"]
+    _ = path.write_text(json.dumps(raw), encoding="utf-8")
+
+    profile = next(
+        value
+        for value in load_source_profiles(path)
+        if value.source_id == "buan-county"
+    )
+
+    assert profile.media_hosts == ("media.buan.go.kr",)
+
+
 def test_readiness_requires_substantive_source_backed_research(tmp_path: Path) -> None:
     path = tmp_path / "research.md"
     _ = path.write_text("짧은 메모", encoding="utf-8")
@@ -122,6 +139,138 @@ def test_capture_keeps_explicit_document_observation_separate_from_search(
     assert isinstance(second, dict)
     assert first["source_kind"] == "search_results"
     assert second["source_kind"] == "official_document"
+
+
+def test_capture_preserves_and_caches_verified_official_page_image(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import base64
+    import binascii
+    import struct
+    import zlib
+
+    def png_chunk(kind: bytes, payload: bytes) -> bytes:
+        body = kind + payload
+        return (
+            struct.pack(">I", len(payload))
+            + body
+            + struct.pack(">I", binascii.crc32(body) & 0xFFFFFFFF)
+        )
+
+    pixel_rows = b"".join(b"\0" + bytes([255, 0, 0]) * 400 for _ in range(600))
+    png_bytes = (
+        b"\x89PNG\r\n\x1a\n"
+        + png_chunk(b"IHDR", struct.pack(">IIBBBBB", 400, 600, 8, 2, 0, 0, 0))
+        + png_chunk(b"IDAT", zlib.compress(pixel_rows))
+        + png_chunk(b"IEND", b"")
+    )
+    encoded_image = base64.b64encode(png_bytes).decode("ascii")
+    observed: JSONMap = {
+        "requested_keyword": "부안 축제",
+        "requested_url": "https://search.naver.com/search.naver?query=%EB%B6%80%EC%95%88+%EC%B6%95%EC%A0%9C",
+        "source_url": "https://search.naver.com/search.naver?query=%EB%B6%80%EC%95%88+%EC%B6%95%EC%A0%9C",
+        "tree": "검색 결과",
+        "document_observations": [
+            {
+                "source_kind": "official_document",
+                "requested_url": "https://www.buan.go.kr/tour/festival",
+                "source_url": "https://www.buan.go.kr/tour/festival",
+                "tree": "공식 축제 페이지",
+                "media_candidates": [
+                    {
+                        "image_url": "https://www.buan.go.kr/upload_data/festival.png",
+                        "alt": "축제 공식 포스터",
+                        "width": 400,
+                        "height": 600,
+                        "content_type": "image/png",
+                        "fetch_status": "downloaded",
+                        "content_base64": encoded_image,
+                    },
+                    {
+                        "image_url": "https://media.buan.go.kr/festival.png",
+                        "alt": "축제 공식 이미지 CDN",
+                        "width": 400,
+                        "height": 600,
+                        "content_type": "image/png",
+                        "fetch_status": "downloaded",
+                        "content_base64": encoded_image,
+                    },
+                    {
+                        "image_url": "https://unverified.example/festival.png",
+                        "alt": "외부 이미지",
+                        "width": 400,
+                        "height": 600,
+                        "content_type": "image/png",
+                        "fetch_status": "downloaded",
+                        "content_base64": encoded_image,
+                    },
+                    {
+                        "image_url": "https://www.buan.go.kr/redirected.png",
+                        "final_image_url": "https://unverified.example/festival.png",
+                        "alt": "외부로 리다이렉트된 이미지",
+                        "width": 400,
+                        "height": 600,
+                        "content_type": "image/png",
+                        "fetch_status": "downloaded",
+                        "content_base64": encoded_image,
+                    },
+                ],
+            }
+        ],
+    }
+
+    def fake_capture(_keyword: str) -> JSONMap:
+        return observed
+
+    monkeypatch.setattr("tools.research_browser_capture._capture", fake_capture)
+    _copy_capture_config(tmp_path)
+    profiles_path = tmp_path / "config/research-source-profiles.json"
+    profiles = json.loads(profiles_path.read_text(encoding="utf-8"))
+    buan_profile = next(
+        value for value in profiles["sources"] if value["id"] == "buan-county"
+    )
+    buan_profile["media_hosts"] = ["media.buan.go.kr"]
+    _ = profiles_path.write_text(json.dumps(profiles), encoding="utf-8")
+
+    evidence = capture_research_sources(
+        "부안 축제", tmp_path, "RUN-OFFICIAL", "2026-09-28"
+    )
+    observations = evidence["observations"]
+    assert isinstance(observations, list)
+    official = next(
+        item
+        for item in observations
+        if isinstance(item, dict) and item.get("source_kind") == "official_document"
+    )
+    candidates = official["media_candidates"]
+    assert isinstance(candidates, list)
+    candidate = candidates[0]
+    assert isinstance(candidate, dict)
+    assert candidate["image_url"] == "https://www.buan.go.kr/upload_data/festival.png"
+    assert candidate["source_profile_id"] == "buan-county"
+    assert candidate["provenance_status"] == "official_same_origin"
+    local_path = tmp_path / str(candidate["local_path"])
+    assert local_path.is_file()
+    assert local_path.read_bytes() == png_bytes
+    assert "content_base64" not in candidate
+    raw_evidence_path = tmp_path / str(evidence["raw_evidence_path"])
+    raw_evidence = raw_evidence_path.read_text(encoding="utf-8")
+    assert "content_base64" not in raw_evidence
+    assert encoded_image not in raw_evidence
+    allowlisted = candidates[1]
+    assert isinstance(allowlisted, dict)
+    assert allowlisted["provenance_status"] == "official_allowlisted_media_host"
+    assert allowlisted["fetch_status"] == "cached_verified"
+    assert (tmp_path / str(allowlisted["local_path"])).is_file()
+    unverified = candidates[2]
+    assert isinstance(unverified, dict)
+    assert unverified["provenance_status"] == "unverified_media_host"
+    assert "local_path" not in unverified
+    assert "content_base64" not in unverified
+    redirected = candidates[3]
+    assert isinstance(redirected, dict)
+    assert redirected["provenance_status"] == "unverified_media_host"
+    assert "local_path" not in redirected
 
 
 def test_capture_reuses_only_an_exactly_bound_ledger_entry(

@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import base64
+import binascii
+import hashlib
 import json
 import re
+import struct
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -20,9 +24,180 @@ from tools.research_capture_store import (
     persist_raw_capture,
     reserve_capture_attempt,
 )
-from tools.research_crawler_bridge import load_source_profiles, profile_for_url
+from tools.research_crawler_bridge import (
+    SourceProfile,
+    load_source_profiles,
+    profile_for_url,
+)
 
 _KST: Final = ZoneInfo("Asia/Seoul")
+_MAX_MEDIA_BYTES: Final = 4 * 1024 * 1024
+_PNG_SIGNATURE: Final = b"\x89PNG\r\n\x1a\n"
+
+
+def _image_extension(content_type: str, payload: bytes) -> str | None:
+    if content_type == "image/png" and payload.startswith(_PNG_SIGNATURE):
+        if (
+            len(payload) < 33
+            or payload[12:16] != b"IHDR"
+            or b"IEND" not in payload[-12:]
+        ):
+            return None
+        width, height = struct.unpack(">II", payload[16:24])
+        if width * height > 50_000_000:
+            return None
+        return ".png"
+    if (
+        content_type == "image/jpeg"
+        and payload.startswith(b"\xff\xd8\xff")
+        and payload.endswith(b"\xff\xd9")
+    ):
+        return ".jpg"
+    if (
+        content_type == "image/webp"
+        and payload.startswith(b"RIFF")
+        and payload[8:12] == b"WEBP"
+    ):
+        return ".webp"
+    return None
+
+
+def _capture_media_candidates(
+    raw_document: JSONMap,
+    source_kind: str,
+    profiles: tuple[SourceProfile, ...],
+    root: Path | None,
+    run_id: str | None,
+) -> list[JSONValue]:
+    raw_candidates = raw_document.get("media_candidates", [])
+    if not isinstance(raw_candidates, list):
+        raise ContractError("research media candidates must be a list")
+    source_url = raw_document.get("source_url")
+    if not isinstance(source_url, str):
+        raise ContractError("research media source page URL is missing")
+    source_profile = profile_for_url(source_url, profiles)
+    trusted_hosts = {source_profile.host, *source_profile.media_hosts}
+    candidates: list[JSONValue] = []
+    for value in raw_candidates:
+        if not isinstance(value, dict):
+            raise ContractError("research media candidate is malformed")
+        candidate: JSONMap = {
+            key: field for key, field in value.items() if key != "content_base64"
+        }
+        image_url = value.get("image_url")
+        if not isinstance(image_url, str):
+            raise ContractError("research media candidate URL is missing")
+        parsed_image_url = urlparse(image_url)
+        final_image_url = value.get("final_image_url", image_url)
+        parsed_final_image_url = (
+            urlparse(final_image_url) if isinstance(final_image_url, str) else None
+        )
+        verified = (
+            parsed_image_url.scheme == "https"
+            and parsed_image_url.hostname is not None
+            and parsed_image_url.hostname.lower() in trusted_hosts
+            and parsed_image_url.username is None
+            and parsed_image_url.password is None
+            and parsed_final_image_url is not None
+            and parsed_final_image_url.scheme == "https"
+            and parsed_final_image_url.hostname is not None
+            and parsed_final_image_url.hostname.lower() in trusted_hosts
+            and parsed_final_image_url.username is None
+            and parsed_final_image_url.password is None
+        )
+        candidate["source_page_url"] = source_url
+        candidate["source_profile_id"] = source_profile.source_id
+        page_host = urlparse(source_url).hostname
+        if not verified:
+            candidate["provenance_status"] = "unverified_media_host"
+        elif parsed_image_url.hostname == page_host:
+            candidate["provenance_status"] = f"{source_kind}_same_origin"
+        else:
+            candidate["provenance_status"] = f"{source_kind}_allowlisted_media_host"
+        encoded = value.get("content_base64")
+        fetch_status = value.get("fetch_status")
+        if not verified or not isinstance(encoded, str) or fetch_status != "downloaded":
+            candidate["fetch_status"] = fetch_status or "not_cached"
+            candidates.append(candidate)
+            continue
+        if root is None or run_id is None:
+            candidate["fetch_status"] = "not_cached_no_run_context"
+            candidates.append(candidate)
+            continue
+        if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", run_id) is None:
+            raise ContractError("research media run id is unsafe")
+        try:
+            payload = base64.b64decode(encoded, validate=True)
+        except (binascii.Error, ValueError) as error:
+            raise ContractError("research media payload is not valid base64") from error
+        if not payload or len(payload) > _MAX_MEDIA_BYTES:
+            candidate["fetch_status"] = "over_size_limit"
+            candidates.append(candidate)
+            continue
+        content_type = value.get("content_type")
+        extension = (
+            _image_extension(content_type, payload)
+            if isinstance(content_type, str)
+            else None
+        )
+        width = value.get("width")
+        height = value.get("height")
+        png_dimensions_match = True
+        if extension == ".png" and isinstance(width, int) and isinstance(height, int):
+            png_dimensions_match = struct.unpack(">II", payload[16:24]) == (
+                width,
+                height,
+            )
+        if (
+            extension is None
+            or not png_dimensions_match
+            or not isinstance(width, int)
+            or isinstance(width, bool)
+            or not isinstance(height, int)
+            or isinstance(height, bool)
+            or width < 1
+            or height < 1
+            or width * height > 50_000_000
+        ):
+            candidate["fetch_status"] = "invalid_image_payload"
+            candidates.append(candidate)
+            continue
+        digest = hashlib.sha256(payload).hexdigest()
+        relative_path = (
+            Path(".automation/work")
+            / run_id
+            / "research-media"
+            / f"{digest}{extension}"
+        )
+        destination = root / relative_path
+        parent = root
+        for part in relative_path.parts[:-1]:
+            parent = parent / part
+            if parent.is_symlink():
+                raise ContractError("research media cache path cannot contain symlinks")
+        _ = destination.parent.mkdir(parents=True, exist_ok=True)
+        resolved_root = root.resolve()
+        if not destination.resolve().is_relative_to(resolved_root):
+            raise ContractError("research media output escaped the project root")
+        if destination.exists():
+            if (
+                destination.is_symlink()
+                or hashlib.sha256(destination.read_bytes()).hexdigest() != digest
+            ):
+                raise ContractError(
+                    "existing research media cache does not match its digest"
+                )
+        else:
+            temporary = destination.with_name(
+                f".{destination.name}.{uuid.uuid4().hex}.tmp"
+            )
+            _ = temporary.write_bytes(payload)
+            _ = temporary.replace(destination)
+        candidate["local_path"] = relative_path.as_posix()
+        candidate["sha256"] = f"sha256:{digest}"
+        candidate["fetch_status"] = "cached_verified"
+        candidates.append(candidate)
+    return candidates
 
 
 def capture_research_browser(keyword: str) -> JSONMap:
@@ -33,7 +208,12 @@ def capture_research_browser(keyword: str) -> JSONMap:
         if profile.kind in {"official", "supporting"}
     )
     profile_payload = [
-        {"host": profile.host, "kind": profile.kind, "source_id": profile.source_id}
+        {
+            "host": profile.host,
+            "kind": profile.kind,
+            "media_hosts": list(profile.media_hosts),
+            "source_id": profile.source_id,
+        }
         for profile in profiles
     ]
     selection = Path("research") / f"topic-selection-{keyword}.md"
@@ -82,6 +262,71 @@ const readOriginal = async (requested, profile) => {{
     let finalHost = '';
     try {{ finalHost = new URL(finalUrl).host; }} catch {{ finalHost = ''; }}
     const finalProfile = profiles.find(value => value.host === finalHost && value.kind === profile.kind);
+    const allowedMediaHosts = [finalHost, ...(finalProfile?.media_hosts ?? [])];
+    const mediaCandidates = await document.locator('img').evaluateAll(async (nodes, trustedHosts) => {{
+      const isDecorativePath = /(?:^|[/_-])(?:icon|logo|qr|tile|map)(?:[/_.-]|$)/i;
+      const candidates = nodes.map(image => {{
+        const rawUrl = image.currentSrc || image.getAttribute('src') || image.getAttribute('data-src') || image.getAttribute('data-original');
+        if (!rawUrl) return null;
+        let parsed;
+        try {{ parsed = new URL(rawUrl, location.href); }} catch {{ return null; }}
+        const width = image.naturalWidth || image.width || 0;
+        const height = image.naturalHeight || image.height || 0;
+        const contentRegion = image.closest('main, article, [role=main], #contents, .contents, .view_cont, .view-content');
+        const context = [image.closest('figure')?.innerText, image.parentElement?.innerText, contentRegion?.innerText].find(value => value?.trim()) || '';
+        const isRelevantSize = Math.max(width, height) >= 320 && Math.min(width, height) >= 120;
+        const dimensionsUnknown = width === 0 || height === 0;
+        const isSafeUrl = parsed.protocol === 'https:';
+        const isTrustedHost = trustedHosts.includes(parsed.host);
+        const isDecorative = isDecorativePath.test(parsed.pathname);
+        return {{
+          image_url: parsed.href,
+          host: parsed.host,
+          alt: image.alt || '',
+          title: image.title || '',
+          width,
+          height,
+          nearby_text: context.trim().slice(0, 300),
+          page_title: window.document.title,
+          candidate_status: isSafeUrl && (isRelevantSize || dimensionsUnknown) && !isDecorative ? (isTrustedHost ? 'eligible' : 'unverified_media_host') : 'not_eligible',
+        }};
+      }}).filter(candidate => candidate && candidate.candidate_status !== 'not_eligible')
+        .sort((left, right) => Number(right.candidate_status === 'eligible') - Number(left.candidate_status === 'eligible'))
+        .slice(0, 12);
+      for (const candidate of candidates.filter(value => value.candidate_status === 'eligible').slice(0, 2)) {{
+        try {{
+          const response = await fetch(candidate.image_url);
+          if (!response.ok) {{ candidate.fetch_status = `http_${{response.status}}`; continue; }}
+          const finalImageUrl = new URL(response.url);
+          candidate.final_image_url = finalImageUrl.href;
+          if (finalImageUrl.protocol !== 'https:' || !trustedHosts.includes(finalImageUrl.host)) {{ candidate.fetch_status = 'redirected_to_unverified_host'; continue; }}
+          const contentType = (response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+          if (!['image/png', 'image/jpeg', 'image/webp'].includes(contentType)) {{ candidate.fetch_status = 'unsupported_content_type'; continue; }}
+          const declaredLength = Number(response.headers.get('content-length') || 0);
+          if (declaredLength > 4194304) {{ candidate.fetch_status = 'over_size_limit'; continue; }}
+          const bytes = new Uint8Array(await response.arrayBuffer());
+          if (bytes.byteLength === 0 || bytes.byteLength > 4194304) {{ candidate.fetch_status = 'over_size_limit'; continue; }}
+          const bitmap = await createImageBitmap(new Blob([bytes], {{ type: contentType }}));
+          candidate.width = bitmap.width;
+          candidate.height = bitmap.height;
+          bitmap.close();
+          if (Math.max(candidate.width, candidate.height) < 320 || Math.min(candidate.width, candidate.height) < 120) {{ candidate.fetch_status = 'image_too_small'; continue; }}
+          let binary = '';
+          for (let offset = 0; offset < bytes.length; offset += 0x8000) {{
+            binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+          }}
+          candidate.content_type = contentType;
+          candidate.content_base64 = btoa(binary);
+          candidate.fetch_status = 'downloaded';
+        }} catch (error) {{
+          candidate.fetch_status = 'fetch_failed';
+        }}
+      }}
+      for (const candidate of candidates) {{
+        if (candidate.candidate_status === 'unverified_media_host') candidate.fetch_status = 'not_downloaded_unverified_host';
+      }}
+      return candidates;
+    }}, allowedMediaHosts);
     return {{
       requested_keyword: {json.dumps(keyword, ensure_ascii=True)},
       requested_url: requested.href,
@@ -89,6 +334,7 @@ const readOriginal = async (requested, profile) => {{
       source_kind: profile.kind === 'official' ? 'official_document' : 'supporting_document',
       source_profile_id: finalProfile?.source_id ?? profile.source_id,
       tree: documentSnap.tree,
+      media_candidates: mediaCandidates,
       result: finalProfile ? 'observed' : 'redirect_blocked'
     }};
   }} finally {{
@@ -199,7 +445,9 @@ def capture_research_sources(
         completed = completed_capture(prior, binding)
         if completed is not None:
             return completed
-        reservation = reserve_capture_attempt(root, run_id, binding, policy.max_searches)
+        reservation = reserve_capture_attempt(
+            root, run_id, binding, policy.max_searches
+        )
         capture_id = reservation.get("capture_id")
         if not isinstance(capture_id, str):
             raise ContractError("research capture reservation is malformed")
@@ -230,7 +478,11 @@ def capture_research_sources(
             "자료조사 브라우저가 요청한 정확한 검색어를 표시하지 않습니다. 모델은 호출하지 않았습니다."
         )
     search_observation: JSONMap = {
-        **observation,
+        **{
+            key: value
+            for key, value in observation.items()
+            if key not in {"document_observations"}
+        },
         "source_kind": "search_results",
         "evidence_status": "observed",
     }
@@ -267,6 +519,13 @@ def capture_research_sources(
             raise ContractError(
                 "research document redirect is outside its configured source profile"
             )
+        media_candidates = _capture_media_candidates(
+            raw_document,
+            final_profile.kind,
+            profiles,
+            root,
+            run_id,
+        )
         documents.append(
             {
                 **raw_document,
@@ -274,6 +533,7 @@ def capture_research_sources(
                 "requested_url": requested_document_url,
                 "source_profile_id": requested_profile.source_id,
                 "evidence_status": "observed",
+                "media_candidates": media_candidates,
             }
         )
     observations: list[JSONValue] = [search_observation, *documents]
