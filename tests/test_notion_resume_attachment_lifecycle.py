@@ -28,6 +28,21 @@ def test_uncertain_attachment_initialize_requires_manual_recovery(
     assert transport.create_page_calls == 0
 
 
+def test_upload_names_are_isolated_between_runs_with_same_asset_names(
+    tmp_path: Path,
+) -> None:
+    first_request, _ = _request(tmp_path / "first", run_id="RUN-first")
+    second_request, _ = _request(tmp_path / "second", run_id="RUN-second")
+
+    first_specs = _adapter(MemoryTransport()).attachment_specs(first_request)
+    second_specs = _adapter(MemoryTransport()).attachment_specs(second_request)
+
+    assert [spec.path.name for spec in first_specs] == [spec.path.name for spec in second_specs]
+    assert {spec.name for spec in first_specs}.isdisjoint(
+        {spec.name for spec in second_specs}
+    )
+
+
 def test_attachment_id_and_hash_are_checkpointed_before_send(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:

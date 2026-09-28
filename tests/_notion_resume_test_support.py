@@ -13,9 +13,10 @@ from tools.notion_resume import ResumableNotionAdapter
 __all__ = ("_adapter", "_request")
 
 
-def _request(tmp_path: Path) -> tuple[ExternalWriteRequest, JSONMap]:
+def _request(
+    tmp_path: Path, *, run_id: str = "RUN-notion-resume"
+) -> tuple[ExternalWriteRequest, JSONMap]:
     keyword = "topic"
-    run_id = "RUN-notion-resume"
     asset_dir = tmp_path / "assets" / keyword
     final_dir = tmp_path / "final"
     asset_dir.mkdir(parents=True)
