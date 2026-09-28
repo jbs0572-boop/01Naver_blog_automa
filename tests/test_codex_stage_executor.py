@@ -419,6 +419,56 @@ def test_stage_executor_reuses_existing_writer_draft_without_model_call(
     assert not (work_dir / "artifact-ownership.json").exists()
 
 
+def test_writer_regenerates_existing_draft_when_run_has_fresh_research_revision(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _writer_stage_files(tmp_path)
+    draft = tmp_path / "drafts" / "test.md"
+    draft.parent.mkdir()
+    _ = draft.write_text("stale draft", encoding="utf-8")
+    revision = tmp_path / "research" / "revisions" / "RUN-test" / "test.md"
+    revision.parent.mkdir(parents=True)
+    _ = revision.write_text("fresh research", encoding="utf-8")
+    prompts: list[str] = []
+    monkeypatch.setattr(
+        "tools.codex_stage_executor.require_research_readiness", lambda _path: None
+    )
+
+    def produce_fresh_draft(
+        args: list[str], **_kwargs: SubprocessValue
+    ) -> subprocess.CompletedProcess[str]:
+        prompts.append(" ".join(str(arg) for arg in args))
+        workspace_root = Path(args[args.index("--cd") + 1])
+        artifact = workspace_root / "artifacts" / "drafts" / "test.md"
+        artifact.parent.mkdir(parents=True)
+        _ = artifact.write_text("fresh draft", encoding="utf-8")
+        output_path = Path(args[args.index("--output-last-message") + 1])
+        _ = output_path.write_text(
+            json.dumps(
+                {
+                    "stage": "writer",
+                    "status": "passed",
+                    "execution": "produced",
+                    "artifacts": ["drafts/test.md"],
+                }
+            ),
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr("tools.codex_process.subprocess.run", produce_fresh_draft)
+
+    result = CodexStageExecutor().execute(_stage_context(tmp_path))
+
+    assert result.execution is StageExecution.PRODUCED
+    assert draft.read_text(encoding="utf-8") == "fresh draft"
+    assert (
+        tmp_path / "drafts" / "revisions" / "RUN-test" / "test.previous.md"
+    ).read_text(encoding="utf-8") == "stale draft"
+    assert len(prompts) == 1
+    assert str(revision) in prompts[0]
+
+
 def test_stage_executor_exposes_user_local_bin_to_isolated_stage(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

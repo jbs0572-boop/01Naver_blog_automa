@@ -25,6 +25,7 @@ class PromotionRequest:
     project_root: Path
     declared: tuple[str, ...]
     ledger_path: Path
+    replace_existing: bool = False
 
 
 def _allowed(stage: str, path: str, keyword: str | None, run_id: str) -> bool:
@@ -192,7 +193,11 @@ def _validate(
                 and _sha256(destination)
                 == _sha256(archive / relative.relative_to(Path("assets") / str(request.keyword)))
             )
-            if not current_run_owned and not archived_previous:
+            if (
+                not current_run_owned
+                and not archived_previous
+                and not (request.stage == "writer" and request.replace_existing)
+            ):
                 raise ContractError(f"existing artifact is not owned or archived: {value}")
         validated.append((source, destination, value))
     return tuple(validated)
@@ -405,9 +410,17 @@ def promote_stage_artifacts(
     project_root: Path,
     declared: tuple[str, ...],
     ledger_path: Path,
+    replace_existing: bool = False,
 ) -> tuple[str, ...]:
     request = PromotionRequest(
-        stage, keyword, run_id, staging_root, project_root, declared, ledger_path
+        stage,
+        keyword,
+        run_id,
+        staging_root,
+        project_root,
+        declared,
+        ledger_path,
+        replace_existing,
     )
     if stage == "image-maker":
         if keyword is None:
@@ -416,6 +429,22 @@ def promote_stage_artifacts(
             staging_root / "assets" / keyword,
             project_root / "drafts" / f"{keyword}.md",
         )
+    if stage == "writer" and replace_existing and keyword is not None:
+        for value in (keyword, run_id):
+            if not value or Path(value).name != value or value in {".", ".."}:
+                raise ContractError("writer refresh archive path is unsafe")
+        existing = project_root / "drafts" / f"{keyword}.md"
+        if existing.is_file():
+            archive = (
+                project_root
+                / "drafts"
+                / "revisions"
+                / run_id
+                / f"{keyword}.previous.md"
+            )
+            if archive.exists():
+                raise ContractError("writer refresh archive already exists")
+            _atomic_copy(existing, archive)
     archive = _archive_existing_image_assets(request)
     validated = _validate(request, archive)
     if stage == "image-maker":
