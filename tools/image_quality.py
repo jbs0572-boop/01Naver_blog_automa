@@ -327,10 +327,13 @@ def validate_image_map(
         if len(values) >= 4 and (
             values[2] == "[IMAGE]" or values[2].startswith("[IMAGE:")
         ):
-            if len(values) != 14:
+            if (
+                len(values) != 14
+                or not cells[12].strip().startswith("`")
+                or not cells[12].strip().endswith("`")
+                or cells[13].strip() != "통과"
+            ):
                 raise ContractError("image map row must have exactly 14 columns")
-            if values[13] != "통과":
-                raise ContractError("image map row has not passed image review")
             if len(body_entries) >= len(body_paths):
                 raise ContractError("image map has an invalid body image row")
             if values[0] != str(len(body_entries) + 1):
