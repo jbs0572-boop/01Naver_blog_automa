@@ -112,7 +112,7 @@ class ImageQualityTests(unittest.TestCase):
     def test_generated_route_diagram_cannot_claim_official_map_slot(self) -> None:
         image_map = self.root / "image-map.md"
         _ = image_map.write_text(
-            "| 1 | VIS-01 | `[IMAGE: asset_type=map; source_policy=official_or_licensed]` | `image-01.png` | x | x | x | x | x | x | x | x | `origin=generated; Pillow local_render` | x |\n"
+            "| 1 | VIS-01 | `[IMAGE: asset_type=map; source_policy=official_or_licensed]` | `image-01.png` | identify | map | title_promise | official_or_licensed | scope | section | fallback | info | `origin=generated; Pillow local_render` | pending |\n"
             + "| [THUMBNAIL] | `[THUMBNAIL]` | `thumbnail.png` |\n",
             encoding="utf-8",
         )
@@ -130,7 +130,7 @@ class ImageQualityTests(unittest.TestCase):
             "`origin=generated; source_url=https://example.com/source`",
         ):
             _ = image_map.write_text(
-                f"| 1 | VIS-01 | {marker} | `image-01.png` | x | x | x | x | x | x | x | x | {provenance} | x |\n"
+                f"| 1 | VIS-01 | {marker} | `image-01.png` | identify | map | title_promise | official_or_licensed | scope | section | fallback | info | {provenance} | pending |\n"
                 + tail,
                 encoding="utf-8",
             )
@@ -138,7 +138,7 @@ class ImageQualityTests(unittest.TestCase):
                 _ = validate_image_map(image_map, ["image-01.png"], "thumbnail.png")
 
         _ = image_map.write_text(
-            f"| 1 | VIS-01 | {marker} | `image-01.png` | x | x | x | x | x | x | x | x | `origin=official; source_url=https://example.com/official-map.png` | x |\n"
+            f"| 1 | VIS-01 | {marker} | `image-01.png` | identify | map | title_promise | official_or_licensed | scope | section | fallback | info | `origin=official; source_url=https://example.com/official-map.png` | pending |\n"
             + tail,
             encoding="utf-8",
         )
@@ -149,7 +149,7 @@ class ImageQualityTests(unittest.TestCase):
         image_map = self.root / "image-map.md"
         marker = "`[IMAGE: asset_type=original_photo; source_policy=official_or_licensed]`"
         _ = image_map.write_text(
-            f"| 1 | VIS-01 | {marker} | `image-01.png` | x | x | x | x | x | x | x | x | `origin=generated; Pillow local_render` | x |\n"
+            f"| 1 | VIS-01 | {marker} | `image-01.png` | identify | original_photo | title_promise | official_or_licensed | scope | section | fallback | info | `origin=generated; Pillow local_render` | pending |\n"
             + "| [THUMBNAIL] | `[THUMBNAIL]` | `thumbnail.png` |\n",
             encoding="utf-8",
         )
@@ -201,6 +201,7 @@ class ImageQualityTests(unittest.TestCase):
             ("MAP", "official_or_licensed"),
             ("map", "OFFICIAL_OR_LICENSED"),
             ("map", "official-or-licensed"),
+            ("x", "x"),
         ):
             _ = image_map.write_text(
                 f"| 1 | VIS-01 | `[IMAGE: asset_type={asset_type}; source_policy={source_policy}]` | `image-01.png` | identify | {asset_type} | title_promise | {source_policy} | scope | section | fallback | info | `origin=generated; Pillow local_render` | pending |\n"
@@ -217,6 +218,11 @@ class ImageQualityTests(unittest.TestCase):
             "https://example.com/%ZZ",
             "https://example.com/%",
             "https://example.com/image<1>.png",
+            "https://example.com/image[1].png",
+            "https://example.com/#a#b",
+            "https://example.com/image.png\x7f",
+            "https://[2001:db8::1]/image[1].png",
+            "https://example.com/image.png\x85",
         ):
             _ = image_map.write_text(
                 f"| 1 | VIS-01 | `[IMAGE: slot 1]` | `image-01.png` | identify | photograph | title_promise | official_or_licensed | scope | section | fallback | info | `origin=official; source_url={source_url}` | pending |\n"

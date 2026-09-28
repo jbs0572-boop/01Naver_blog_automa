@@ -5,6 +5,7 @@ import hashlib
 import ipaddress
 import json
 import re
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 from typing import Final
@@ -342,10 +343,7 @@ def validate_image_map(
             marker_metadata = _parse_image_marker_metadata(marker)
             asset_type = values[5].strip("`").strip() if len(values) > 5 else ""
             source_policy = values[7].strip("`").strip() if len(values) > 7 else ""
-            if asset_type.lower() in {"", "x"}:
-                asset_type = ""
-            if source_policy.lower() in {"", "x"}:
-                source_policy = ""
+            canonical_row = len(values) >= 14
             for field, column_value in (
                 ("asset_type", asset_type),
                 ("source_policy", source_policy),
@@ -359,6 +357,12 @@ def validate_image_map(
             effective_source_policy = source_policy or marker_metadata.get(
                 "source_policy", ""
             )
+            if canonical_row and (
+                asset_type not in ASSET_TYPES or source_policy not in SOURCE_POLICIES
+            ):
+                raise ContractError(
+                    "image map canonical row requires supported asset_type and source_policy values"
+                )
             if effective_asset_type and effective_asset_type not in ASSET_TYPES:
                 raise ContractError("image map has an unsupported asset_type")
             if effective_source_policy and effective_source_policy not in SOURCE_POLICIES:
@@ -412,9 +416,8 @@ def _is_https_source(value: str | None) -> bool:
     if (
         value is None
         or not value
-        or any(char.isspace() or ord(char) < 32 for char in value)
+        or any(char.isspace() or ord(char) < 32 or ord(char) == 127 for char in value)
         or re.search(r"%(?![A-Fa-f0-9]{2})", value)
-        or re.search(r'[<>"{}|\\^`]', value)
     ):
         return False
     try:
@@ -432,22 +435,38 @@ def _is_https_source(value: str | None) -> bool:
         return False
     try:
         _ = ipaddress.ip_address(hostname)
-        return True
+        host_is_valid = True
     except ValueError:
-        pass
-    try:
-        ascii_host = hostname.encode("idna").decode("ascii")
-    except UnicodeError:
-        return False
-    if len(ascii_host) > 253 or "." not in ascii_host:
-        return False
-    labels = ascii_host.rstrip(".").split(".")
-    return all(
-        label
-        and len(label) <= 63
-        and re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?", label)
-        for label in labels
+        try:
+            ascii_host = hostname.encode("idna").decode("ascii")
+        except UnicodeError:
+            return False
+        if len(ascii_host) > 253 or "." not in ascii_host:
+            return False
+        labels = ascii_host.rstrip(".").split(".")
+        host_is_valid = all(
+            label
+            and len(label) <= 63
+            and re.fullmatch(
+                r"[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?", label
+            )
+            for label in labels
+        )
+    pchar = "A-Za-z0-9._~!$&'()*+,;=:@%/-"
+    query_fragment = pchar + "?"
+    components_are_valid = all(
+        all(
+            (ord(char) >= 128 and unicodedata.category(char) not in {"Cc", "Cs"})
+            or re.fullmatch(f"[{allowed}]", char) is not None
+            for char in component
+        )
+        for component, allowed in (
+            (parsed.path, pchar),
+            (parsed.query, query_fragment),
+            (parsed.fragment, query_fragment),
+        )
     )
+    return host_is_valid and components_are_valid
 
 
 def validate_image_stage_assets(asset_dir: Path, draft_path: Path) -> JSONMap:
