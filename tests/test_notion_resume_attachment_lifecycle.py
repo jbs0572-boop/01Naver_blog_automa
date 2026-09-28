@@ -37,7 +37,10 @@ def test_upload_names_are_isolated_between_runs_with_same_asset_names(
     first_specs = _adapter(MemoryTransport()).attachment_specs(first_request)
     second_specs = _adapter(MemoryTransport()).attachment_specs(second_request)
 
-    assert [spec.path.name for spec in first_specs] == [spec.path.name for spec in second_specs]
+    assert [spec.path.relative_to(first_request.root) for spec in first_specs] == [
+        spec.path.relative_to(second_request.root) for spec in second_specs
+    ]
+    assert all(spec.path.is_file() for spec in (*first_specs, *second_specs))
     assert {spec.name for spec in first_specs}.isdisjoint(
         {spec.name for spec in second_specs}
     )

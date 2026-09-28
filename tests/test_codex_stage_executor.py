@@ -740,6 +740,20 @@ def test_naver_copy_normalizer_rejects_unknown_or_mixed_list_attributes(
         _ = normalize_naver_copy_text(source, tmp_path)
 
 
+def test_naver_copy_normalizer_preserves_key_value_table_without_title(
+    tmp_path: Path,
+) -> None:
+    source = """[TABLE]
+[ROW]기간=2026년 10월 16일~18일[/ROW]
+[ROW]장소=변산해수욕장[/ROW]
+[/TABLE]
+"""
+
+    normalized = normalize_naver_copy_text(source, tmp_path)
+
+    assert normalized == source
+
+
 def _writer_stage_files(root: Path) -> None:
     _ = (root / "writer.md").write_text("instruction", encoding="utf-8")
     schema_dir = root / "schemas"

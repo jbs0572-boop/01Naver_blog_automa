@@ -99,7 +99,7 @@ def _normalize_table(
         title = only_required(attributes(attrs), {"title"})["title"]
     else:
         title = ""
-    if title and all(_is_canonical_row(row) for row in rows):
+    if all(_is_canonical_row(row) for row in rows):
         return ([lines[start], *lines[start + 1 : index + 1]], index + 1)
     headers = _pipe_cells(rows[0])
     if not title:
