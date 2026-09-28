@@ -21,6 +21,26 @@ from tools.schema_validation import validate_instance
 
 HASH_RE: Final = re.compile(r"^sha256:[0-9a-f]{64}$")
 SIZE_RE: Final = re.compile(r"^[1-9][0-9]*x[1-9][0-9]*$")
+ASSET_TYPES: Final = frozenset(
+    {
+        "official_asset",
+        "portrait_grid",
+        "character_cards",
+        "side_by_side",
+        "timeline",
+        "process_flow",
+        "relationship_map",
+        "official_screenshot",
+        "map",
+        "chart",
+        "original_photo",
+        "generated_illustration",
+        "text_only",
+    }
+)
+SOURCE_POLICIES: Final = frozenset(
+    {"official_or_licensed", "verified_source", "generated_allowed", "no_image"}
+)
 SNAPSHOT: Final = "gpt-image-2.5-flare-2026-09-08"
 SCHEMA_PATH: Final = (
     Path(__file__).resolve().parents[1] / "schemas" / "workflow-contract.schema.json"
@@ -339,6 +359,10 @@ def validate_image_map(
             effective_source_policy = source_policy or marker_metadata.get(
                 "source_policy", ""
             )
+            if effective_asset_type and effective_asset_type not in ASSET_TYPES:
+                raise ContractError("image map has an unsupported asset_type")
+            if effective_source_policy and effective_source_policy not in SOURCE_POLICIES:
+                raise ContractError("image map has an unsupported source_policy")
             if effective_source_policy == "official_or_licensed" and (
                 provenance.get("origin") not in {"official", "licensed"}
                 or not _is_https_source(provenance.get("source_url"))
@@ -385,7 +409,13 @@ def _parse_image_marker_metadata(marker: str) -> dict[str, str]:
 
 
 def _is_https_source(value: str | None) -> bool:
-    if value is None or not value or any(char.isspace() for char in value):
+    if (
+        value is None
+        or not value
+        or any(char.isspace() or ord(char) < 32 for char in value)
+        or re.search(r"%(?![A-Fa-f0-9]{2})", value)
+        or re.search(r'[<>"{}|\\^`]', value)
+    ):
         return False
     try:
         parsed = urlsplit(value)

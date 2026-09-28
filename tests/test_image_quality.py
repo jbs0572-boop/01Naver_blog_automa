@@ -147,7 +147,7 @@ class ImageQualityTests(unittest.TestCase):
 
     def test_official_or_licensed_asset_requires_source_metadata(self) -> None:
         image_map = self.root / "image-map.md"
-        marker = "`[IMAGE: asset_type=photograph; source_policy=official_or_licensed]`"
+        marker = "`[IMAGE: asset_type=original_photo; source_policy=official_or_licensed]`"
         _ = image_map.write_text(
             f"| 1 | VIS-01 | {marker} | `image-01.png` | x | x | x | x | x | x | x | x | `origin=generated; Pillow local_render` | x |\n"
             + "| [THUMBNAIL] | `[THUMBNAIL]` | `thumbnail.png` |\n",
@@ -188,6 +188,38 @@ class ImageQualityTests(unittest.TestCase):
         ):
             _ = image_map.write_text(
                 f"| 1 | VIS-01 | {marker} | `image-01.png` | identify | photograph | title_promise | official_or_licensed | scope | section | fallback | info | `origin=official; source_url={source_url}` | pending |\n"
+                + tail,
+                encoding="utf-8",
+            )
+            with self.subTest(source_url=source_url), self.assertRaises(ContractError):
+                _ = validate_image_map(image_map, ["image-01.png"], "thumbnail.png")
+
+    def test_image_map_rejects_unknown_provenance_enums(self) -> None:
+        image_map = self.root / "image-map.md"
+        tail = "| [THUMBNAIL] | `[THUMBNAIL]` | `thumbnail.png` |\n"
+        for asset_type, source_policy in (
+            ("MAP", "official_or_licensed"),
+            ("map", "OFFICIAL_OR_LICENSED"),
+            ("map", "official-or-licensed"),
+        ):
+            _ = image_map.write_text(
+                f"| 1 | VIS-01 | `[IMAGE: asset_type={asset_type}; source_policy={source_policy}]` | `image-01.png` | identify | {asset_type} | title_promise | {source_policy} | scope | section | fallback | info | `origin=generated; Pillow local_render` | pending |\n"
+                + tail,
+                encoding="utf-8",
+            )
+            with self.subTest(asset_type=asset_type, source_policy=source_policy), self.assertRaises(ContractError):
+                _ = validate_image_map(image_map, ["image-01.png"], "thumbnail.png")
+
+    def test_official_source_rejects_malformed_uri_path_escapes(self) -> None:
+        image_map = self.root / "image-map.md"
+        tail = "| [THUMBNAIL] | `[THUMBNAIL]` | `thumbnail.png` |\n"
+        for source_url in (
+            "https://example.com/%ZZ",
+            "https://example.com/%",
+            "https://example.com/image<1>.png",
+        ):
+            _ = image_map.write_text(
+                f"| 1 | VIS-01 | `[IMAGE: slot 1]` | `image-01.png` | identify | photograph | title_promise | official_or_licensed | scope | section | fallback | info | `origin=official; source_url={source_url}` | pending |\n"
                 + tail,
                 encoding="utf-8",
             )
