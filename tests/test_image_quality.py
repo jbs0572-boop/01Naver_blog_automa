@@ -222,15 +222,36 @@ class ImageQualityTests(unittest.TestCase):
             "https://example.com/#a#b",
             "https://example.com/image.png\x7f",
             "https://[2001:db8::1]/image[1].png",
-            "https://example.com/image.png\x85",
+            "https://example.com/image.png\x90",
         ):
             _ = image_map.write_text(
-                f"| 1 | VIS-01 | `[IMAGE: slot 1]` | `image-01.png` | identify | photograph | title_promise | official_or_licensed | scope | section | fallback | info | `origin=official; source_url={source_url}` | pending |\n"
+                f"| 1 | VIS-01 | `[IMAGE: slot 1]` | `image-01.png` | identify | original_photo | title_promise | official_or_licensed | scope | section | fallback | info | `origin=official; source_url={source_url}` | pending |\n"
                 + tail,
                 encoding="utf-8",
             )
             with self.subTest(source_url=source_url), self.assertRaises(ContractError):
                 _ = validate_image_map(image_map, ["image-01.png"], "thumbnail.png")
+        for source_url in (
+            "https://example.com/image.png",
+            "https://[2001:db8::1]/image.png",
+        ):
+            _ = image_map.write_text(
+                f"| 1 | VIS-01 | `[IMAGE: slot 1]` | `image-01.png` | identify | original_photo | title_promise | official_or_licensed | scope | section | fallback | info | `origin=official; source_url={source_url}` | pending |\n"
+                + tail,
+                encoding="utf-8",
+            )
+            with self.subTest(valid_source_url=source_url):
+                _ = validate_image_map(image_map, ["image-01.png"], "thumbnail.png")
+
+    def test_image_map_rejects_raw_pipe_in_official_source_url(self) -> None:
+        image_map = self.root / "image-map.md"
+        _ = image_map.write_text(
+            "| 1 | VIS-01 | `[IMAGE: slot 1]` | `image-01.png` | identify | original_photo | title_promise | official_or_licensed | scope | section | fallback | info | `origin=official; source_url=https://example.com/image|bad.png` | pending |\n"
+            + "| [THUMBNAIL] | `[THUMBNAIL]` | `thumbnail.png` |\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(ContractError, "unexpected extra columns"):
+            _ = validate_image_map(image_map, ["image-01.png"], "thumbnail.png")
 
     def _image_bytes(self) -> bytes:
         return base64.b64decode(

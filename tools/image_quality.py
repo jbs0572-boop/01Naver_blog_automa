@@ -327,6 +327,8 @@ def validate_image_map(
         if len(values) >= 4 and (
             values[2] == "[IMAGE]" or values[2].startswith("[IMAGE:")
         ):
+            if len(values) > 14:
+                raise ContractError("image map row has unexpected extra columns")
             if len(body_entries) >= len(body_paths):
                 raise ContractError("image map has an invalid body image row")
             if values[0] != str(len(body_entries) + 1):
