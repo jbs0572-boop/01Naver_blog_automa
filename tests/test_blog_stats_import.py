@@ -27,7 +27,11 @@ def _owner(path: Path, *blog_ids: str) -> Path:
     return path
 
 
-def _link(root: Path, post_id: str = "POST-001") -> None:
+def _link(
+    root: Path,
+    post_id: str = "POST-001",
+    target_blog_id: str | None = "owner",
+) -> None:
     _ = link_publication(
         PublicationAttributionRequest(
             root=root,
@@ -41,6 +45,7 @@ def _link(root: Path, post_id: str = "POST-001") -> None:
             artifact_digest="sha256:" + "a" * 64,
             score_version="topic-baseline-v1",
             legacy_identity="fixture-approved",
+            target_blog_id=target_blog_id,
         )
     )
 
@@ -118,6 +123,35 @@ def test_import_csv_preserves_zero_null_coverage_and_link_digest(
     ]
     assert hashlib.sha256(source.read_bytes()).hexdigest() == before
     assert Path(result.paths[0]).read_bytes()
+
+
+
+def test_import_rejects_another_allowed_blog_for_the_publication(
+    tmp_path: Path,
+) -> None:
+    # Given: a publication bound to one blog and an owner export for another.
+    _link(tmp_path)
+    source = _csv(tmp_path / "other-blog.csv", blog_id="other-blog")
+    owner = _owner(tmp_path / "owner.json", "owner", "other-blog")
+
+    # When/Then: membership in the owner allowlist is not sufficient identity.
+    with pytest.raises(ContractError, match="publication blog mismatch"):
+        _ = import_blog_stats(BlogStatsImportRequest(source, owner, tmp_path))
+    assert not (tmp_path / "metadata/blog-stats").exists()
+
+
+def test_import_rejects_a_legacy_publication_without_blog_identity(
+    tmp_path: Path,
+) -> None:
+    # Given: an older publication link without a frozen target blog.
+    _link(tmp_path, target_blog_id=None)
+    source = _csv(tmp_path / "stats.csv")
+    owner = _owner(tmp_path / "owner.json", "owner")
+
+    # When/Then: legacy links cannot authorize attribution without a blog identity.
+    with pytest.raises(ContractError, match="unknown publication"):
+        _ = import_blog_stats(BlogStatsImportRequest(source, owner, tmp_path))
+    assert not (tmp_path / "metadata/blog-stats").exists()
 
 
 def test_import_json_supports_delayed_status_and_explicit_zero(tmp_path: Path) -> None:

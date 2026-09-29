@@ -43,6 +43,7 @@ class PublicationAttributionRequest:
     naver_post_url: str | None = None
     url_rule_approval: Path | None = None
     url_rule_approval_sha256: str | None = None
+    target_blog_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,6 +153,8 @@ def _current_identity(request: PublicationAttributionRequest) -> _Identity:
         if target_blog_id_value is not None
         else None
     )
+    if request.target_blog_id is not None and request.target_blog_id != target_blog_id:
+        raise ContractError("caller target_blog_id does not match the frozen run")
     url, published_at = _historical_link(request.root, request.run_id)
     return _Identity(
         request.run_id,
@@ -177,7 +180,11 @@ def _legacy_identity(request: PublicationAttributionRequest) -> _Identity:
         _required_text(request.legacy_identity, "legacy_identity"),
         None,
         None,
-        None,
+        (
+            _required_text(request.target_blog_id, "target_blog_id")
+            if request.target_blog_id is not None
+            else None
+        ),
     )
 
 
@@ -214,9 +221,7 @@ def _approved_url_post_id(
     if parsed.scheme != "https" or parsed.hostname != "blog.naver.com" or parsed.query or parsed.fragment or len(parts) != 2:
         raise ContractError("Naver URL does not exactly match the approved rule")
     blog_id = _required_text(parts[0], "approved blog_id")
-    if request.source_identity == "current-run" and (
-        expected_blog_id is None or blog_id != expected_blog_id
-    ):
+    if expected_blog_id is None or blog_id != expected_blog_id:
         raise ContractError("Naver URL blog_id does not match frozen target_blog_id")
     return _required_text(parts[1], "approved blog_post_id")
 
@@ -244,6 +249,8 @@ def link_publication(request: PublicationAttributionRequest) -> JSONMap:
     )
     if post_id is None:
         missing.insert(0, "blog_post_id")
+    if identity.target_blog_id is None:
+        missing.append("target_blog_id")
     payload: JSONMap = {
         "schema_version": "publication-link-v1",
         "captured_at": _kst_timestamp(request.captured_at, "captured_at"),
@@ -252,11 +259,16 @@ def link_publication(request: PublicationAttributionRequest) -> JSONMap:
         "limitations": ([] if post_id is not None else ["blog_post_id remains unlinked without an approved explicit identity"]),
         "input_digests": [identity.artifact_digest],
         "missing_fields": missing,
-        "status": "mature" if post_id is not None else "pending",
+        "status": (
+            "mature"
+            if post_id is not None and identity.target_blog_id is not None
+            else "pending"
+        ),
         "run_id": identity.run_id,
         "topic_id": identity.topic_id,
         "keyword": identity.keyword,
         "blog_post_id": post_id,
+        "target_blog_id": identity.target_blog_id,
         "published_at": published_at,
         "artifact_digest": identity.artifact_digest,
         "score_version": identity.score_version,

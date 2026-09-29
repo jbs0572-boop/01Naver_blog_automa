@@ -69,7 +69,6 @@ def test_dashboard_factory_requests_only_naver_draft_capability(
     monkeypatch.setattr(
         "tools.dashboard_adapters.NotionApiAdapter", FixtureNotionAdapter
     )
-    monkeypatch.setenv("NAVER_E2E_DISCARD_RECOVERY", "1")
 
     # When
     adapters = load_dashboard_external_adapters(tmp_path)
@@ -78,7 +77,7 @@ def test_dashboard_factory_requests_only_naver_draft_capability(
     # Then
     assert requested == [frozenset({BrowserCapability.NAVER_DRAFT_WRITE})]
     assert adapters.naver is gateway.naver
-    assert gateway.discard_recovery is True
+    assert gateway.discard_recovery is False
     assert gateway.close_count == 1
 
 

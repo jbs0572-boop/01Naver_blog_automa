@@ -211,7 +211,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         self.send_error(HTTPStatus.NOT_FOUND, "not found")
 
-    def _validate_post_request(self) -> bool:
+    def _validate_loopback_host(self) -> bool:
         server = self._dashboard_server()
         host_headers = self.headers.get_all("Host", [])
         try:
@@ -238,9 +238,15 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 raise ValueError("dashboard Host must be loopback")
         except ValueError:
             self._error(
-                ContractError("dashboard mutations require a loopback Host"),
+                ContractError("dashboard requests require a loopback Host"),
                 HTTPStatus.FORBIDDEN,
             )
+            return False
+        return True
+
+    def _validate_post_request(self) -> bool:
+        server = self._dashboard_server()
+        if not self._validate_loopback_host():
             return False
 
         origin_headers = self.headers.get_all("Origin", [])

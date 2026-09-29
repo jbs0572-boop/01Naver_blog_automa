@@ -152,6 +152,11 @@ def _payload(
     link = links.get(post_id)
     if link is None:
         raise ContractError("blog stats unknown publication")
+    target_blog_id = link.get("target_blog_id")
+    if not isinstance(target_blog_id, str) or not target_blog_id:
+        raise ContractError("blog stats publication blog identity is unavailable")
+    if blog_id != target_blog_id:
+        raise ContractError("blog stats publication blog mismatch")
     start, end = _day(row, "coverage_start"), _day(row, "coverage_end")
     if start > end:
         raise ContractError("blog stats coverage interval is invalid")

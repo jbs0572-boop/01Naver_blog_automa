@@ -288,6 +288,20 @@ def test_http_rejects_cross_origin_or_non_json_mutations(
         _stop_server(server, thread)
 
 
+
+def test_http_rejects_non_loopback_host_on_get(tmp_path: Path) -> None:
+    server, thread, base_url = _start_server(tmp_path)
+    try:
+        reply = _json_request(
+            base_url,
+            "/api/manual-runs",
+            headers={"Host": "attacker.invalid"},
+        )
+        assert reply.status is HTTPStatus.FORBIDDEN
+    finally:
+        _stop_server(server, thread)
+
+
 def test_http_accepts_same_origin_json_mutation(tmp_path: Path) -> None:
     server, thread, base_url = _start_server(tmp_path)
     try:

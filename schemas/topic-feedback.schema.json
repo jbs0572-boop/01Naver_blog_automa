@@ -124,6 +124,7 @@
         "topic_id": { "type": "string", "minLength": 1 },
         "keyword": { "type": "string", "minLength": 1 },
         "blog_post_id": { "type": ["string", "null"], "minLength": 1 },
+        "target_blog_id": { "type": ["string", "null"], "minLength": 1 },
         "published_at": { "anyOf": [{ "$ref": "#/$defs/kstTimestamp" }, { "type": "null" }] },
         "artifact_digest": { "$ref": "#/$defs/digest" },
         "score_version": { "type": "string", "minLength": 1 },

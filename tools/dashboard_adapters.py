@@ -31,7 +31,7 @@ def load_dashboard_external_adapters(root: Path) -> DashboardExternalAdapters:
     return DashboardExternalAdapters(
         notion=NotionApiAdapter(),
         naver=gateway.create_naver_adapter(
-            discard_recovery=True,
+            discard_recovery=False,
         ),
         browser_gateway=gateway,
     )

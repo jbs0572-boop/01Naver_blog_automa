@@ -50,6 +50,7 @@ def _parser() -> argparse.ArgumentParser:
     _ = publication.add_argument("--artifact-digest")
     _ = publication.add_argument("--score-version", default=CURRENT_SCORE_VERSION)
     _ = publication.add_argument("--legacy-identity")
+    _ = publication.add_argument("--target-blog-id")
     _ = publication.add_argument("--naver-post-url")
     _ = publication.add_argument("--url-rule-approval", type=Path)
     _ = publication.add_argument("--url-rule-approval-sha256")
@@ -125,6 +126,7 @@ def _run(arguments: Sequence[str]) -> int:
                     artifact_digest=parsed.artifact_digest,
                     score_version=parsed.score_version,
                     legacy_identity=parsed.legacy_identity,
+                    target_blog_id=parsed.target_blog_id,
                     naver_post_url=parsed.naver_post_url,
                     url_rule_approval=parsed.url_rule_approval,
                     url_rule_approval_sha256=parsed.url_rule_approval_sha256,

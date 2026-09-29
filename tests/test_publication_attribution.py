@@ -96,6 +96,7 @@ def test_current_run_link_is_append_only_and_idempotent(tmp_path: Path) -> None:
     assert payload["blog_post_id"] == "POST-001"
     assert payload["artifact_digest"] == state["artifact_digest"]
     assert payload["score_version"] == "topic-baseline-v1"
+    assert payload["target_blog_id"] == "owner"
 
 
 def test_current_run_rejects_stale_caller_artifact_digest(tmp_path: Path) -> None:
@@ -227,6 +228,8 @@ def test_legacy_import_requires_explicit_identity_and_published_at(tmp_path: Pat
     assert isinstance(payload, dict)
     assert payload["source_identity"] == "legacy-import"
     assert payload["legacy_identity"] == "legacy-export-row-1"
+    assert payload["target_blog_id"] is None
+    assert payload["status"] == "pending"
 
     with pytest.raises(ContractError, match="published_at is required"):
         _ = link_publication(replace(request, published_at=None))
