@@ -37,6 +37,41 @@ def test_snapshot_aggregates_logs_without_exposing_raw_events(tmp_path: Path) ->
     assert first["topic_source"] is None
 
 
+def test_dashboard_derives_gates_from_production_stage_evidence(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "runs" / "RUN-production-gates.jsonl"
+    path.parent.mkdir(parents=True)
+    events = [
+        {
+            "event_type": "stage",
+            "run_id": "RUN-production-gates",
+            "topic_id": "TOPIC-production-gates",
+            "stage": "content-assembler",
+            "status": "passed",
+            "attempt": 1,
+            "quality": {"artifact_digest": "sha256:artifact"},
+        },
+        {
+            "event_type": "stage",
+            "run_id": "RUN-production-gates",
+            "topic_id": "TOPIC-production-gates",
+            "stage": "notion-rider",
+            "status": "passed",
+            "attempt": 1,
+            "quality": {"storage_integrity": "passed"},
+        },
+    ]
+    _ = path.write_text(
+        "".join(json.dumps(event) + "\n" for event in events), encoding="utf-8"
+    )
+
+    run = load_runs(tmp_path)[0]
+
+    assert run.q1 == "passed"
+    assert run.q2 == "passed"
+
+
 def test_snapshot_exposes_topic_source_without_legacy_mode(tmp_path: Path) -> None:
     _write_log(tmp_path, "RUN-auto")
     state_path = tmp_path / ".automation" / "state" / "RUN-auto.json"

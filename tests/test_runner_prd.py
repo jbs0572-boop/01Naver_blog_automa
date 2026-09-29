@@ -17,7 +17,7 @@ from tools.image_quality import post_q2_image_review_path
 from tools.manifest import verify_manifest
 from tools.model_presets import default_stage_settings, model_config_snapshot
 from tools.notion_resume import NotionQ2Failure
-from tools.runner_cli import main as runner_main
+from tools.runner_cli import _live_naver_adapter, main as runner_main
 from tools.runner_execution import (
     confirm_job,
     invalidate_naver_preparation,
@@ -662,6 +662,7 @@ def test_cli_forwards_naver_confirmation_nonce_and_adapter(
 ) -> None:
     captured: list[ConfirmationInput] = []
     adapter = FixtureNaver()
+    notion = FixtureNotion()
 
     def confirm(confirmation: ConfirmationInput) -> RunnerResult:
         captured.append(confirmation)
@@ -689,11 +690,42 @@ def test_cli_forwards_naver_confirmation_nonce_and_adapter(
             "nonce-from-current-preview",
         ],
         naver_adapter_factory=lambda _root: adapter,
+        notion_adapter_factory=lambda _root: notion,
     )
 
     assert result == 0
     assert captured[0].confirmation_nonce == "nonce-from-current-preview"
     assert captured[0].naver_adapter is adapter
+    assert captured[0].notion_adapter is notion
+
+
+def test_cli_naver_adapter_preserves_recoverable_drafts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    adapter = FixtureNaver()
+    recovery_options: list[bool] = []
+    closed: list[bool] = []
+
+    class Gateway:
+        def create_naver_adapter(self, *, discard_recovery: bool) -> FixtureNaver:
+            recovery_options.append(discard_recovery)
+            return adapter
+
+        def close(self) -> None:
+            closed.append(True)
+
+    gateway = Gateway()
+    monkeypatch.setattr(
+        "tools.runner_cli.load_aside_browser_gateway",
+        lambda *_args, **_kwargs: gateway,
+    )
+
+    actual, cleanup = _live_naver_adapter(tmp_path, None)
+    cleanup()
+
+    assert actual is adapter
+    assert recovery_options == [False]
+    assert closed == [True]
 
 
 def test_cli_resume_reinjects_naver_adapter_after_q3(

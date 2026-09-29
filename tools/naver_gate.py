@@ -10,6 +10,7 @@ from tools.gate_models import GateRequest, parse_aware_datetime
 from tools.manifest import Manifest
 from tools.manifest_parsing import as_map
 from tools.naver_adapter import NaverConfig
+from tools.notion_copy_grammar import closed_tag
 
 
 @dataclass(frozen=True, slots=True)
@@ -206,7 +207,12 @@ def canonical_naver_input(manifest: Manifest, root: Path) -> NaverCanonicalInput
     lines = iter(body.splitlines())
     title: str | None = None
     for line in lines:
-        if line.strip() != "[TITLE]":
+        normalized = line.strip()
+        inline_title = closed_tag(normalized, "TITLE")
+        if inline_title is not None and inline_title[1].strip():
+            title = inline_title[1].strip()
+            break
+        if normalized != "[TITLE]":
             continue
         for candidate in lines:
             value = candidate.strip()

@@ -60,7 +60,7 @@ def _live_naver_adapter(
         root,
         required_capabilities=frozenset({BrowserCapability.NAVER_DRAFT_WRITE}),
     )
-    return gateway.create_naver_adapter(discard_recovery=True), gateway.close
+    return gateway.create_naver_adapter(discard_recovery=False), gateway.close
 
 
 def _options(
@@ -250,8 +250,12 @@ def _cli(
             raise ContractError("invalid option: --actor")
         action = _required(values, "action")
         naver_adapter: NaverBrowserAdapter | None = None
+        notion_adapter: NotionAdapter | None = None
         cleanup_naver = lambda: None
         if action == "naver-draft-save":
+            notion_adapter = _live_notion_adapter(
+                root, False, notion_adapter_factory
+            )
             naver_adapter, cleanup_naver = _live_naver_adapter(
                 root, naver_adapter_factory
             )
@@ -262,6 +266,7 @@ def _cli(
                 action=action,
                 state_dir=_state_option(values, root),
                 actor=actor,
+                notion_adapter=notion_adapter,
                 naver_adapter=naver_adapter,
                 confirmation_nonce=_required(values, "confirmation-nonce"),
             ))

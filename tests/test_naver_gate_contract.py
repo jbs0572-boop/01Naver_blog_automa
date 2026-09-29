@@ -16,6 +16,7 @@ from tools.article_quality import (
 )
 from tools.image_quality import post_q2_image_review_path
 from tools.manifest import ManifestBuildInput
+from tools.naver_gate import canonical_naver_input
 from tools.workflow_contract import (
     PIPELINE_VERSION,
     ContractError,
@@ -135,6 +136,17 @@ class NaverGateContractTests(unittest.TestCase):
             "".join(json.dumps(record) + "\n" for record in image_records),
             encoding="utf-8",
         )
+
+    def test_canonical_naver_input_accepts_inline_title_block(self) -> None:
+        input_path = self.root / "final" / f"{self.keyword}-naver-input.md"
+        _ = input_path.write_text(
+            "[TITLE]Inline fixture title[/TITLE]\n[TEXT]Fixture body[/TEXT]\n",
+            encoding="utf-8",
+        )
+
+        canonical = canonical_naver_input(self.manifest, self.root)
+
+        self.assertEqual(canonical.title, "Inline fixture title")
 
     def test_naver_preflight_does_not_require_approval(self) -> None:
         self.manifest = build_manifest(self._manifest_input())

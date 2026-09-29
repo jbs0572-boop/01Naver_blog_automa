@@ -196,12 +196,24 @@ def _stage_views(
 
 
 def _gate(events: list[JSONMap], key: str) -> str:
+    production_stage = {"q1": "content-assembler", "q2": "notion-rider"}.get(key)
     for item in reversed(events):
         quality = _map(item.get("quality"))
         value = quality.get(key)
         if isinstance(value, str):
             return value
-        if item.get("stage") == key and item.get("status") == "passed":
+        status = _text(item.get("status"))
+        if item.get("stage") == key and status == "passed":
+            return "passed"
+        if item.get("stage") != production_stage:
+            continue
+        if status in {"failed", "blocked", "skipped"}:
+            return status
+        if status not in {"passed", "success", "completed"}:
+            continue
+        if key == "q1" and isinstance(quality.get("artifact_digest"), str):
+            return "passed"
+        if key == "q2" and quality.get("storage_integrity") == "passed":
             return "passed"
     return "not_recorded"
 
