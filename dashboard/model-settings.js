@@ -16,7 +16,7 @@
   async function save(event) {
     event.preventDefault(); const name = document.querySelector('#model-preset-name').value.trim(); if (!name || !settings) return;
     const source = settings.presets.find(item => item.id === selected()); const id = `preset-${Date.now()}`;
-    const response = await fetch('/api/model-settings', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({revision:settings.revision, active_preset_id:id, presets:[...settings.presets, {id, name, stages:source.stages}]})});
+    const response = await fetch('/api/model-settings', {method:'POST', headers: window.dashboardMutationHeaders(), body:JSON.stringify({revision:settings.revision, active_preset_id:id, presets:[...settings.presets, {id, name, stages:source.stages}]})});
     const data = await response.json(); if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`); document.querySelector('#model-preset-name').value = ''; render(data);
   }
   window.ModelSettings = {selected, load};

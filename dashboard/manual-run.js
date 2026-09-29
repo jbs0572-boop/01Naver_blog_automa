@@ -192,7 +192,7 @@
     status(`${actionLabel(action.kind, child)} 처리 중입니다.`, "warning");
     try {
       const response = await fetch(`/api/manual-run/${encodeURIComponent(batch.batch_id)}/children/${encodeURIComponent(child.child_id)}/${action.kind}`, {
-        method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({nonce: action.nonce}),
+        method: "POST", headers: window.dashboardMutationHeaders(), body: JSON.stringify({nonce: action.nonce}),
       });
       if (response.status === 409) {
         state.activeChildId = null;
@@ -243,7 +243,7 @@
       }
       const payload = {...basePayload, request_nonce: pending.request_nonce};
       window.sessionStorage.setItem(pendingKey, JSON.stringify(pending));
-      const response = await fetch("/api/manual-run", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(payload)});
+      const response = await fetch("/api/manual-run", {method: "POST", headers: window.dashboardMutationHeaders(), body: JSON.stringify(payload)});
       const batch = await readJson(response);
       window.sessionStorage.removeItem(pendingKey);
       render(batch);

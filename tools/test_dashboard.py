@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import hmac
 import ipaddress
 import json
+import secrets
 import uuid
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -199,7 +201,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             filename = "showcase.html" if route == "/showcase.html" else "index.html"
             self._file(filename, "text/html; charset=utf-8")
             return
-        if route in {"/styles.css", "/app.js", "/manual-run.js", "/progress.js", "/schedule.js", "/model-settings.js", "/preview.js", "/health.js", "/notifications.js", "/navigation.js", "/tasks.js"}:
+        if route in {"/styles.css", "/app.js", "/manual-run.js", "/progress.js", "/schedule.js", "/model-settings.js", "/preview.js", "/security.js", "/health.js", "/notifications.js", "/navigation.js", "/tasks.js"}:
             content_type = (
                 "text/css; charset=utf-8"
                 if route.endswith("css")
@@ -274,6 +276,17 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._error(
                 ContractError("dashboard mutations require application/json"),
                 HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
+            )
+            return False
+        csrf_headers = self.headers.get_all("X-Dashboard-CSRF", [])
+        if (
+            len(csrf_headers) != 1
+            or not csrf_headers[0].isascii()
+            or not hmac.compare_digest(csrf_headers[0], server.csrf_token)
+        ):
+            self._error(
+                ContractError("dashboard mutation CSRF token is invalid"),
+                HTTPStatus.FORBIDDEN,
             )
             return False
         return True
@@ -540,8 +553,16 @@ class DashboardHandler(BaseHTTPRequestHandler):
         except OSError:
             self.send_error(HTTPStatus.NOT_FOUND, "asset not found")
             return
+        is_html = content_type.startswith("text/html")
+        if is_html:
+            csrf_meta = (
+                f'<meta name="dashboard-csrf-token" content="{server.csrf_token}">\n'
+            ).encode("ascii")
+            body = body.replace(b"</head>", csrf_meta + b"  </head>", 1)
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", content_type)
+        if is_html:
+            self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         _ = self.wfile.write(body)
@@ -579,6 +600,7 @@ class DashboardServer(ThreadingHTTPServer):
     project_root: Path
     dashboard_root: Path
     live_writes_enabled: bool
+    csrf_token: str
     manual_runs: ManualRunManager
     model_settings: ModelSettingsStore
     tasks: DashboardTasks
@@ -590,6 +612,7 @@ class DashboardServer(ThreadingHTTPServer):
     ) -> None:
         resolved_dependencies = dependencies or DashboardServerDependencies()
         self.operation_lock: RLock = RLock()
+        self.csrf_token = secrets.token_urlsafe(32)
         self.dependencies: DashboardServerDependencies = resolved_dependencies
         self.loaded_adapters: DashboardExternalAdapters | None = None
         self.project_root = config.root

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from dataclasses import dataclass
 from http import HTTPStatus
@@ -125,6 +126,19 @@ def _stop_server(server: DashboardServer, thread: Thread) -> None:
     server.server_close()
 
 
+def _dashboard_csrf_token(base_url: str) -> str:
+    request = Request(base_url)
+    with urlopen(request) as response:
+        html = response.read().decode("utf-8")
+    match = re.search(
+        r'<meta name="dashboard-csrf-token" content="([A-Za-z0-9_-]+)">',
+        html,
+    )
+    if match is None:
+        raise AssertionError("dashboard HTML did not expose its CSRF token")
+    return match.group(1)
+
+
 def _json_request(
     base_url: str,
     path: str,
@@ -132,12 +146,15 @@ def _json_request(
     method: str = "GET",
     body: JSONMap | None = None,
     headers: dict[str, str] | None = None,
+    with_csrf: bool = True,
 ) -> JsonReply:
     encoded = json.dumps(body).encode("utf-8") if body is not None else None
     request_headers = (
         {"Content-Type": "application/json"} if encoded is not None else {}
     )
     request_headers.update(headers or {})
+    if method.upper() == "POST" and with_csrf:
+        request_headers.setdefault("X-Dashboard-CSRF", _dashboard_csrf_token(base_url))
     request = Request(
         f"{base_url}{path}",
         data=encoded,
@@ -237,6 +254,10 @@ def _poll_child_with_action(base_url: str, batch_id: str, child_id: str) -> JSON
             {"Host": "attacker.invalid", "Content-Type": "application/json"},
             HTTPStatus.FORBIDDEN,
         ),
+        (
+            {"Content-Type": "application/json", "X-Dashboard-CSRF": "invalid"},
+            HTTPStatus.FORBIDDEN,
+        ),
         ({"Content-Type": "text/plain"}, HTTPStatus.UNSUPPORTED_MEDIA_TYPE),
     ],
 )
@@ -257,6 +278,7 @@ def test_http_rejects_cross_origin_or_non_json_mutations(
                 "request_nonce": str(uuid.uuid4()),
             },
             headers=headers,
+            with_csrf=False,
         )
         assert reply.status is expected_status
         listed = _json_request(base_url, "/api/manual-runs")

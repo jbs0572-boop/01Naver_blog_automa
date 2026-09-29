@@ -66,7 +66,7 @@
   async function cancel(data) {
     const button = [...document.querySelectorAll(".task-cancel")].find(node => node.dataset.taskId === data.taskId);
     if (!button || button.disabled) return; button.disabled = true;
-    try { const response = await fetch(`/api/manual-run/${encodeURIComponent(data.batchId)}/children/${encodeURIComponent(data.childId)}/cancel`, {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nonce:data.nonce,scope:data.scope})}); if (!response.ok) throw new Error(`HTTP ${response.status}`); await load(); }
+    try { const response = await fetch(`/api/manual-run/${encodeURIComponent(data.batchId)}/children/${encodeURIComponent(data.childId)}/cancel`, {method:"POST",headers: window.dashboardMutationHeaders(),body:JSON.stringify({nonce:data.nonce,scope:data.scope})}); if (!response.ok) throw new Error(`HTTP ${response.status}`); await load(); }
     catch (error) { button.disabled=false; message(`취소 결과를 확인하지 못했습니다. ${error.message}`,"error"); }
   }
   async function cancelSelected() { const targets=state.items.filter(item => state.selectedIds.has(item.task_id) && item.cancel_action?.scope === "queued_only"); state.selectedIds.clear(); updateSelection(); for (const item of targets.slice(0,3)) await cancel({taskId:item.task_id,batchId:item.batch_id,childId:item.child_id,nonce:item.cancel_action.nonce,scope:item.cancel_action.scope}); }

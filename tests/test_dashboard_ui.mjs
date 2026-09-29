@@ -3,9 +3,28 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
 
+const dashboardMutationHeaders = () => ({
+  "Content-Type": "application/json",
+  "X-Dashboard-CSRF": "test-token",
+});
+
+test("security adds the page token to mutation headers", async () => {
+  const source = await readFile(new URL("../dashboard/security.js", import.meta.url), "utf8");
+  const document = {
+    querySelector: (selector) => selector === 'meta[name="dashboard-csrf-token"]'
+      ? {getAttribute: () => "page-token"}
+      : null,
+  };
+  const context = vm.createContext({document, window: {}});
+  vm.runInContext(source, context);
+  const headers = context.window.dashboardMutationHeaders();
+  assert.equal(headers["Content-Type"], "application/json");
+  assert.equal(headers["X-Dashboard-CSRF"], "page-token");
+});
+
 test("progress waits for saved draft and retains unknown usage", async () => {
   const source = await readFile(new URL("../dashboard/progress.js", import.meta.url), "utf8");
-  const context = vm.createContext({window: {}});
+  const context = vm.createContext({window: {dashboardMutationHeaders, }});
   vm.runInContext(source, context);
   const stages = ["topic-selector", "researcher", "writer", "image-maker", "content-assembler", "notion-rider", "naver-rider"].map(name => ({name, status: "passed"}));
   const metrics = context.window.RunMetrics;
@@ -21,7 +40,7 @@ test("progress waits for saved draft and retains unknown usage", async () => {
 
 test("progress counts validated stages and ignores skipped stages", async () => {
   const source = await readFile(new URL("../dashboard/progress.js", import.meta.url), "utf8");
-  const context = vm.createContext({window: {}});
+  const context = vm.createContext({window: {dashboardMutationHeaders, }});
   vm.runInContext(source, context);
   const metrics = context.window.RunMetrics;
   const stages = [
@@ -42,7 +61,7 @@ test("progress counts validated stages and ignores skipped stages", async () => 
 
 test("progress does not report full completion before draft_saved", async () => {
   const source = await readFile(new URL("../dashboard/progress.js", import.meta.url), "utf8");
-  const context = vm.createContext({window: {}});
+  const context = vm.createContext({window: {dashboardMutationHeaders, }});
   vm.runInContext(source, context);
   const stages = ["topic-selector", "researcher", "writer", "image-maker", "content-assembler", "notion-rider", "naver-rider"]
     .map(name => ({name, status: "passed"}));
@@ -124,7 +143,7 @@ async function manualHarness(respond) {
   const context = vm.createContext({
     document,
     fetch: async (url, options = {}) => { requests.push([url, options]); return respond(url, options, requests); },
-    window: {confirm: () => true, crypto: {randomUUID: () => `11111111-1111-4111-8111-${String(++uuidSequence).padStart(12, "0")}`}, sessionStorage, setTimeout: (handler, delay) => { timers.push({handler, delay}); return timers.length; }, clearTimeout() {}},
+    window: {dashboardMutationHeaders, confirm: () => true, crypto: {randomUUID: () => `11111111-1111-4111-8111-${String(++uuidSequence).padStart(12, "0")}`}, sessionStorage, setTimeout: (handler, delay) => { timers.push({handler, delay}); return timers.length; }, clearTimeout() {}},
   });
   vm.runInContext(source, context);
   return {context, document, documentListeners, elements, requests, timers, stored};
@@ -187,7 +206,7 @@ test("late model settings populate schedule rows without losing pinned presets",
   const stages = {"topic-selector": {model: "gpt-5.6-luna", reasoning_effort: "low"}, researcher: {model: "gpt-5.6-terra", reasoning_effort: "medium"}, writer: {model: "gpt-5.6-terra", reasoning_effort: "medium"}, "image-maker": {model: "gpt-5.6-terra", reasoning_effort: "medium"}, "content-assembler": {model: "gpt-5.6-luna", reasoning_effort: "low"}};
   const data = {revision: 1, active_preset_id: "default", presets: [{id: "default", name: "기본", stages}, {id: "alternate", name: "대체", stages}]};
   const document = {createElement: (tag) => new FakeElement(tag), querySelector: (selector) => elements.get(selector) ?? null, querySelectorAll: (selector) => selector === ".schedule-entry-preset" ? [entryPreset] : []};
-  const context = vm.createContext({document, fetch: async () => ({ok: true, json: async () => data}), window: {}});
+  const context = vm.createContext({document, fetch: async () => ({ok: true, json: async () => data}), window: {dashboardMutationHeaders, }});
 
   vm.runInContext(source, context);
   await new Promise((resolve) => setImmediate(resolve));
@@ -244,7 +263,7 @@ test("schedule rows keep each pinned preset when schedule data resolves before m
   const scheduleData = {enabled: true, times: ["08:00", "12:00"], entries: [{entry_id: "ENTRY-08", time: "08:00", enabled: true, preset_id: "alternate"}, {entry_id: "ENTRY-12", time: "12:00", enabled: true, preset_id: "default"}], history: []};
   const scheduleStatus = {executions: [], history: []};
   const fetch = url => { requests.push(url); if (url === "/api/model-settings" || url === "/api/schedule") return new Promise(resolve => resolvers.set(url, resolve)); return Promise.resolve({ok: true, json: async () => scheduleStatus}); };
-  const context = vm.createContext({document, fetch, window: {crypto: {randomUUID: () => "ENTRY-NEW"}, setInterval() {}}, Intl});
+  const context = vm.createContext({document, fetch, window: {dashboardMutationHeaders, crypto: {randomUUID: () => "ENTRY-NEW"}, setInterval() {}}, Intl});
   vm.runInContext(modelSource, context);
   vm.runInContext(scheduleSource, context);
   assert.deepEqual(requests.slice(0, 2), ["/api/model-settings", "/api/schedule"]);

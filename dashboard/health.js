@@ -13,7 +13,7 @@
     if (response.ok) render(await response.json());
   }
   button.addEventListener("click", async () => {
-    const response = await fetch("/api/health/check", {method: "POST", headers: {"Content-Type": "application/json"}, body: "{}"});
+    const response = await fetch("/api/health/check", {method: "POST", headers: window.dashboardMutationHeaders(), body: "{}"});
     render(await response.json());
     window.setTimeout(load, 500);
   });

@@ -13,7 +13,7 @@
     const nonce = button.dataset.nonce || `${item.occurrence_id}-${Date.now()}`;
     button.dataset.nonce = nonce;
     try {
-      const response = await fetch('/api/schedule/retry', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({occurrence_id:item.occurrence_id, nonce})});
+      const response = await fetch('/api/schedule/retry', {method:'POST', headers: window.dashboardMutationHeaders(), body:JSON.stringify({occurrence_id:item.occurrence_id, nonce})});
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
       if (result.status === 'failed') delete button.dataset.nonce;
@@ -144,7 +144,7 @@
     try {
       const entries = [...times.children].map(row => ({entry_id: row.dataset.entryId, time: row.querySelector('input[type="time"]').value, enabled: row.querySelector('input[type="checkbox"]').checked, preset_id: row.querySelector('.schedule-entry-preset').value}));
       const payload = {enabled, entries};
-      const response = await fetch('/api/schedule', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+      const response = await fetch('/api/schedule', {method:'POST', headers: window.dashboardMutationHeaders(), body:JSON.stringify(payload)});
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
       render(data);

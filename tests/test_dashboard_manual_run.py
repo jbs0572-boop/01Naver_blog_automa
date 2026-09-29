@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import json
 import shutil
-from threading import Event
-from time import monotonic, sleep
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
+from threading import Event
+from time import monotonic, sleep
 
 import pytest
 

@@ -2,7 +2,7 @@
   const count = document.querySelector("#notification-count");
   const list = document.querySelector("#notification-list");
   async function markRead(id) {
-    await fetch(`/api/notifications/${encodeURIComponent(id)}/read`, {method: "POST", headers: {"Content-Type": "application/json"}, body: "{}"});
+    await fetch(`/api/notifications/${encodeURIComponent(id)}/read`, {method: "POST", headers: window.dashboardMutationHeaders(), body: "{}"});
     await load();
   }
   async function load() {
