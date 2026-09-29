@@ -63,22 +63,23 @@
     catch (error) { if (request === state.detailRequest) $("#detail").innerHTML = `<div class="panel-error"><h2>상세 조회 실패</h2><p>${esc(error.message)}</p></div>`; }
   }
   function updateSelection() { $("#task-cancel-selected").disabled = !state.selectedIds.size; }
+  function clearSelection() { state.selectedIds.clear(); state.listSignature = ""; updateSelection(); }
   async function cancel(data, refresh=true) {
     const button = [...document.querySelectorAll(".task-cancel")].find(node => node.dataset.taskId === data.taskId);
-    if (!button || button.disabled) return; button.disabled = true;
-    try { const response = await fetch(`/api/manual-run/${encodeURIComponent(data.batchId)}/children/${encodeURIComponent(data.childId)}/cancel`, {method:"POST",headers: window.dashboardMutationHeaders(),body:JSON.stringify({nonce:data.nonce,scope:data.scope})}); if (!response.ok) throw new Error(`HTTP ${response.status}`); if (refresh) await load(); }
-    catch (error) { button.disabled=false; message(`취소 결과를 확인하지 못했습니다. ${error.message}`,"error"); }
+    if (!button || button.disabled) return false; button.disabled = true;
+    try { const response = await fetch(`/api/manual-run/${encodeURIComponent(data.batchId)}/children/${encodeURIComponent(data.childId)}/cancel`, {method:"POST",headers: window.dashboardMutationHeaders(),body:JSON.stringify({nonce:data.nonce,scope:data.scope})}); if (!response.ok) throw new Error(`HTTP ${response.status}`); if (refresh) await load(); return true; }
+    catch (error) { button.disabled=false; message(`취소 결과를 확인하지 못했습니다. ${error.message}`,"error"); return false; }
   }
-  async function cancelSelected() { const targets=state.items.filter(item => state.selectedIds.has(item.task_id) && item.cancel_action?.scope === "queued_only"); state.selectedIds.clear(); updateSelection(); for (const item of targets) await cancel({taskId:item.task_id,batchId:item.batch_id,childId:item.child_id,nonce:item.cancel_action.nonce,scope:item.cancel_action.scope},false); await load(); }
+  async function cancelSelected() { const targets=state.items.filter(item => state.selectedIds.has(item.task_id) && item.cancel_action?.scope === "queued_only"); const failed=[]; for (const item of targets) { const success=await cancel({taskId:item.task_id,batchId:item.batch_id,childId:item.child_id,nonce:item.cancel_action.nonce,scope:item.cancel_action.scope},false); if(!success) failed.push(item); } state.selectedIds.clear(); updateSelection(); await load(); if(failed.length) message(`취소 실패 ${failed.length}건: ${failed.map(item=>item.display_id||item.task_id).join(", ")}. 다시 확인하세요.`,"error"); }
   function message(text, kind="info") { const node=$("#task-status-message"); node.textContent=text; node.className=`manual-status ${kind}`; }
   async function nextSchedule() { try { const response=await fetch("/api/schedule",{cache:"no-store"}); return response.ok ? (await response.json()).next_run : null; } catch { return null; } }
   async function load(append=false) {
-    if (state.loading || document.hidden || (window.DashboardNavigation?.route?.() || "tasks") !== "tasks") return;
+    if (state.loading || (!append && state.selectedIds.size) || document.hidden || (window.DashboardNavigation?.route?.() || "tasks") !== "tasks") return;
     state.loading=true;
     try { const params=new URLSearchParams({limit:"20"}); const query=$("#task-search").value.trim(); const filter=$("#task-status-filter").value; if(query) params.set("q",query); if(filter!=="all") params.set("status",filter); if(append&&state.cursor) params.set("cursor",state.cursor); const response=await fetch(`/api/tasks?${params}`,{cache:"no-store"}); if(!response.ok) throw new Error(`HTTP ${response.status}`); const data=await response.json(); state.items=append?[...state.items,...(data.items||[])]:data.items||[]; state.cursor=data.next_cursor||null; state.error=false; state.lastObservedAt=data.server_now||new Date().toISOString(); $("#task-more").hidden=!state.cursor; renderSummary(data.global_summary,await nextSchedule()); message(`마지막 조회 ${time(state.lastObservedAt)} · 목록 연결됨`,"success"); state.selectedIds=new Set([...state.selectedIds].filter(id=>state.items.some(item=>item.task_id===id))); renderList(); }
     catch(error){state.error=true;message(`연결 끊김 · 마지막 조회 ${time(state.lastObservedAt)} · ${error.message}`,"error");renderList();} finally{state.loading=false;renderList();}
   }
   window.DashboardTasks={load,select,state,status:message};
-  document.addEventListener("DOMContentLoaded",()=>{$("#task-search")?.addEventListener("input",()=>{clearTimeout(state.searchTimer);state.searchTimer=setTimeout(()=>load(),300);});$("#task-status-filter")?.addEventListener("change",()=>load());$("#task-cancel-selected")?.addEventListener("click",cancelSelected);$("#task-more")?.addEventListener("click",()=>load(true));load();});
+  document.addEventListener("DOMContentLoaded",()=>{$("#task-search")?.addEventListener("input",()=>{clearSelection();clearTimeout(state.searchTimer);state.searchTimer=setTimeout(()=>load(),300);});$("#task-status-filter")?.addEventListener("change",()=>{clearSelection();load();});$("#task-cancel-selected")?.addEventListener("click",cancelSelected);$("#task-more")?.addEventListener("click",()=>load(true));load();});
   window.addEventListener("hashchange",()=>load()); window.setInterval(()=>load(),10_000); document.addEventListener("visibilitychange",()=>{if(!document.hidden)load();});
 })();

@@ -466,7 +466,7 @@ test("job table owns list polling and fetches detail only for the selected run",
 
 test("bulk cancellation sends every selected task across pages before reloading", async () => {
   const source = await readFile(new URL("../dashboard/tasks.js", import.meta.url), "utf8");
-  const elements = new Map(); const documentListeners = {}; const requests = [];
+  const elements = new Map(); const documentListeners = {}; const requests = []; let taskListRequests = 0;
   class TaskElement extends FakeElement {
     querySelectorAll() { return []; }
   }
@@ -479,7 +479,7 @@ test("bulk cancellation sends every selected task across pages before reloading"
     return button;
   });
   const items = taskIds.map((taskId, index) => ({
-    task_id: taskId, batch_id: "BATCH-1", child_id: `CHILD-${index + 1}`,
+    task_id: taskId, display_id: taskId, batch_id: "BATCH-1", child_id: `CHILD-${index + 1}`,
     keyword: `주제 ${index + 1}`, effective_status: "queued",
     cancel_action: {scope: "queued_only", nonce: `nonce-${index + 1}`},
   }));
@@ -492,6 +492,7 @@ test("bulk cancellation sends every selected task across pages before reloading"
   };
   const fetch = async (url, options = {}) => {
     if (options.method === "POST") requests.push([url, JSON.parse(options.body)]);
+    else if (url.startsWith("/api/tasks")) taskListRequests += 1;
     const paginatedItems = url.includes("cursor=next")
       ? items.slice(20)
       : items.slice(0, 20);
@@ -501,7 +502,7 @@ test("bulk cancellation sends every selected task across pages before reloading"
         : cancelButtons.slice(0, 20);
     }
     return {
-      ok: true,
+      ok: !(options.method === "POST" && url.includes("CHILD-3")),
       json: async () => url === "/api/schedule"
         ? {next_run: null}
         : {items: paginatedItems, next_cursor: url.startsWith("/api/tasks") && !url.includes("cursor=next") ? "next" : null, global_summary: {by_status: {queued: items.length}}, server_now: "2026-09-29T12:00:00+09:00"},
@@ -517,10 +518,16 @@ test("bulk cancellation sends every selected task across pages before reloading"
   await elements.get("#task-more").click();
   await new Promise(resolve => setImmediate(resolve));
   context.window.DashboardTasks.state.selectedIds = new Set(taskIds);
+  const requestsBeforePolling = taskListRequests;
+  await context.window.DashboardTasks.load();
+  assert.equal(taskListRequests, requestsBeforePolling);
+  assert.equal(context.window.DashboardTasks.state.items.length, 25);
+  assert.equal(context.window.DashboardTasks.state.selectedIds.size, 25);
   await elements.get("#task-cancel-selected").click();
 
   assert.equal(requests.length, 25);
   assert.deepEqual(requests.map(([, body]) => body.nonce), taskIds.map((_, index) => `nonce-${index + 1}`));
+  assert.match(elements.get("#task-status-message").textContent, /취소 실패 1건: JOB-3/);
 });
 
 test("job polling skips identical list DOM and redraws when observed tokens change", async () => {
