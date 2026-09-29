@@ -65,7 +65,7 @@ def test_dashboard_remains_readable_when_external_adapters_are_unavailable(
     )
     try:
         health = _json_request(base_url, "/api/health")
-        check = _json_request(base_url, "/api/health/check", method="POST")
+        check = _json_request(base_url, "/api/health/check", method="POST", body={})
         history = _json_request(base_url, "/api/manual-runs")
     finally:
         _stop_server(server, thread)
@@ -131,12 +131,17 @@ def _json_request(
     *,
     method: str = "GET",
     body: JSONMap | None = None,
+    headers: dict[str, str] | None = None,
 ) -> JsonReply:
     encoded = json.dumps(body).encode("utf-8") if body is not None else None
+    request_headers = (
+        {"Content-Type": "application/json"} if encoded is not None else {}
+    )
+    request_headers.update(headers or {})
     request = Request(
         f"{base_url}{path}",
         data=encoded,
-        headers={"Content-Type": "application/json"} if encoded is not None else {},
+        headers=request_headers,
         method=method,
     )
     try:
@@ -215,6 +220,70 @@ def _poll_child_with_action(base_url: str, batch_id: str, child_id: str) -> JSON
             if _child_id(child) == child_id and child["next_action"] is not None:
                 return child
     raise AssertionError("manual child action did not become available")
+
+
+@pytest.mark.parametrize(
+    ("headers", "expected_status"),
+    [
+        (
+            {"Origin": "http://attacker.invalid", "Content-Type": "text/plain"},
+            HTTPStatus.FORBIDDEN,
+        ),
+        (
+            {"Origin": "http://attacker.invalid", "Content-Type": "application/json"},
+            HTTPStatus.FORBIDDEN,
+        ),
+        (
+            {"Host": "attacker.invalid", "Content-Type": "application/json"},
+            HTTPStatus.FORBIDDEN,
+        ),
+        ({"Content-Type": "text/plain"}, HTTPStatus.UNSUPPORTED_MEDIA_TYPE),
+    ],
+)
+def test_http_rejects_cross_origin_or_non_json_mutations(
+    tmp_path: Path,
+    headers: dict[str, str],
+    expected_status: HTTPStatus,
+) -> None:
+    server, thread, base_url = _start_server(tmp_path)
+    try:
+        reply = _json_request(
+            base_url,
+            "/api/manual-run",
+            method="POST",
+            body={
+                "auto_topic": True,
+                "as_of_date": "2026-09-07",
+                "request_nonce": str(uuid.uuid4()),
+            },
+            headers=headers,
+        )
+        assert reply.status is expected_status
+        listed = _json_request(base_url, "/api/manual-runs")
+        assert listed.status is HTTPStatus.OK
+        assert listed.body["batches"] == []
+    finally:
+        _stop_server(server, thread)
+
+
+def test_http_accepts_same_origin_json_mutation(tmp_path: Path) -> None:
+    server, thread, base_url = _start_server(tmp_path)
+    try:
+        reply = _json_request(
+            base_url,
+            "/api/manual-run",
+            method="POST",
+            body={
+                "auto_topic": True,
+                "as_of_date": "2026-09-07",
+                "request_nonce": str(uuid.uuid4()),
+            },
+            headers={"Origin": base_url},
+        )
+        assert reply.status is HTTPStatus.ACCEPTED
+        assert len(_children(reply.body)) == 1
+    finally:
+        _stop_server(server, thread)
 
 
 def test_http_auto_post_returns_one_child_batch(tmp_path: Path) -> None:

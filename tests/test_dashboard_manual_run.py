@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import shutil
+from threading import Event
+from time import monotonic, sleep
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, datetime
@@ -1148,3 +1150,109 @@ def test_injected_local_runner_completes_one_child_without_adapters(
     assert settled is not None
     assert settled.status == "completed"
     assert settled.children[0].result_status == "local-only"
+
+def test_queued_child_action_does_not_run_after_queued_only_cancel(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    entered = Event()
+    release = Event()
+    executed_task_ids: list[str] = []
+    first_task_id: str | None = None
+
+    def runner(request: RunnerRequest) -> RunnerResult:
+        return RunnerResult(
+            str(request.run_id),
+            RunStatus.LOCAL_ONLY,
+            tmp_path / "state.json",
+            tmp_path / "run.jsonl",
+            (),
+            "fixture completed",
+        )
+
+    manager = ManualRunManager(
+        ManualRunContext(tmp_path, False), ManualRunDependencies(runner)
+    )
+
+    def wait_for_external_action(batch_id: str) -> ManualRunView:
+        deadline = monotonic() + 2
+        while monotonic() < deadline:
+            batch = manager.get(batch_id)
+            if batch is not None:
+                child = batch.children[0]
+                if child.next_action is not None:
+                    return child
+            sleep(0.01)
+        raise AssertionError("manual child did not reach its external action")
+
+    def fake_execute_child_action(
+        _context: ManualRunContext,
+        _dependencies: ManualRunDependencies,
+        child: ManualRunView,
+        _kind: str,
+    ) -> ManualRunView:
+        executed_task_ids.append(child.task_id)
+        if child.task_id == first_task_id:
+            entered.set()
+            assert release.wait(timeout=2)
+        return replace(
+            child,
+            status="completed",
+            result_status=RunStatus.LOCAL_ONLY.value,
+            next_action=None,
+            active_action=None,
+        )
+
+    try:
+        first_batch = manager.start(
+            parse_manual_run_payload(
+                {"keyword": "first queued action", "as_of_date": "2026-09-01"}
+            )
+        )
+        second_batch = manager.start(
+            parse_manual_run_payload(
+                {"keyword": "second queued action", "as_of_date": "2026-09-01"}
+            )
+        )
+        first_child = wait_for_external_action(first_batch.batch_id)
+        second_child = wait_for_external_action(second_batch.batch_id)
+        first_task_id = first_child.task_id
+        assert first_child.child_id is not None
+        assert second_child.child_id is not None
+        assert first_child.next_action is not None
+        assert second_child.next_action is not None
+        assert second_child.cancel_action is not None
+
+        monkeypatch.setattr(
+            "tools.dashboard_manual_run.execute_child_action",
+            fake_execute_child_action,
+        )
+        _ = manager.submit_action(
+            first_batch.batch_id,
+            first_child.child_id,
+            "external",
+            first_child.next_action.nonce,
+        )
+        assert entered.wait(timeout=1)
+        _ = manager.submit_action(
+            second_batch.batch_id,
+            second_child.child_id,
+            "external",
+            second_child.next_action.nonce,
+        )
+        _, accepted = manager.cancel(
+            second_batch.batch_id,
+            second_child.child_id,
+            second_child.cancel_action.nonce,
+            second_child.cancel_action.scope,
+        )
+        assert not accepted
+    finally:
+        release.set()
+        manager.close()
+
+    final_batch = manager.get(second_batch.batch_id)
+    assert final_batch is not None
+    assert final_batch.children[0].status == "cancelled"
+    assert final_batch.children[0].result_status == "cancelled"
+    assert executed_task_ids == [first_child.task_id]
+

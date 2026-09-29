@@ -208,7 +208,7 @@ class ManualRunManager:
             batch = replace(batch, status=aggregate_status(batch), updated_at=accepted_at)
             self._store.save(batch)
         self._futures.append(
-            self._pool.submit(self._execute_action, batch_id, child_id, kind, child)
+            self._pool.submit(self._execute_action, batch_id, child_id, kind)
         )
         return batch
 
@@ -423,10 +423,33 @@ class ManualRunManager:
         batch_id: str,
         child_id: str,
         kind: ActionKind,
-        accepted_child: ManualRunView,
     ) -> None:
-        batch = self._required_batch(batch_id)
-        child = self._required_child(batch, child_id)
+        with self._lock:
+            batch = self._required_batch(batch_id)
+            child = self._required_child(batch, child_id)
+            active_action = child.active_action
+            if child.status == "cancelled":
+                return
+            if (
+                child.status != "queued"
+                or active_action is None
+                or active_action.kind != kind
+            ):
+                return
+            started_at = _now()
+            child = replace(
+                child,
+                status="running",
+                active_action=replace(active_action, state="running"),
+                updated_at=started_at,
+            )
+            batch = _replace_child(batch, child)
+            batch = replace(
+                batch,
+                status=aggregate_status(batch),
+                updated_at=started_at,
+            )
+            self._store.save(batch)
         if kind == "retry":
             if child.slot is None:
                 self._settle_error(batch_id, 1, "ContractError")
@@ -435,11 +458,11 @@ class ManualRunManager:
             return
         try:
             updated = execute_child_action(
-                self._context, self._dependencies, accepted_child, kind
+                self._context, self._dependencies, child, kind
             )
         except (ContractError, OSError, TimeoutError, ValueError) as error:
             uncertain_save = kind == "confirm" and _naver_save_outcome_uncertain(
-                self._context.root, accepted_child.run_id
+                self._context.root, child.run_id
             )
             updated = replace(
                 child,
@@ -470,6 +493,11 @@ class ManualRunManager:
     def _save_child(self, batch: ManualBatchView, child: ManualRunView) -> None:
         with self._lock:
             current = self._required_batch(batch.batch_id)
+            if child.child_id is None:
+                return
+            persisted = self._required_child(current, child.child_id)
+            if persisted.status == "cancelled":
+                return
             updated = _replace_child(current, child)
             self._store.save(
                 replace(updated, status=aggregate_status(updated), updated_at=_now())

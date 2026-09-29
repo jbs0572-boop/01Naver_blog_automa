@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import ipaddress
 import json
 import uuid
 from collections.abc import Generator
@@ -208,7 +209,78 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         self.send_error(HTTPStatus.NOT_FOUND, "not found")
 
+    def _validate_post_request(self) -> bool:
+        server = self._dashboard_server()
+        host_headers = self.headers.get_all("Host", [])
+        try:
+            if len(host_headers) != 1:
+                raise ValueError("invalid Host header")
+            parsed_host = urlparse(f"//{host_headers[0]}")
+            hostname = parsed_host.hostname
+            port = parsed_host.port
+            if (
+                hostname is None
+                or parsed_host.username is not None
+                or parsed_host.password is not None
+                or parsed_host.path
+                or parsed_host.params
+                or parsed_host.query
+                or parsed_host.fragment
+                or port != server.server_address[1]
+            ):
+                raise ValueError("invalid Host header")
+            is_loopback = hostname == "localhost"
+            if not is_loopback:
+                is_loopback = ipaddress.ip_address(hostname).is_loopback
+            if not is_loopback:
+                raise ValueError("dashboard Host must be loopback")
+        except ValueError:
+            self._error(
+                ContractError("dashboard mutations require a loopback Host"),
+                HTTPStatus.FORBIDDEN,
+            )
+            return False
+
+        origin_headers = self.headers.get_all("Origin", [])
+        if len(origin_headers) > 1:
+            self._error(
+                ContractError("dashboard mutations reject multiple Origin headers"),
+                HTTPStatus.FORBIDDEN,
+            )
+            return False
+        if origin_headers:
+            try:
+                origin = urlparse(origin_headers[0])
+                if (
+                    origin.scheme != "http"
+                    or origin.hostname != hostname
+                    or origin.port != server.server_address[1]
+                    or origin.username is not None
+                    or origin.password is not None
+                    or origin.path
+                    or origin.params
+                    or origin.query
+                    or origin.fragment
+                ):
+                    raise ValueError("cross-origin dashboard mutation")
+            except ValueError:
+                self._error(
+                    ContractError("dashboard mutations require a same-origin request"),
+                    HTTPStatus.FORBIDDEN,
+                )
+                return False
+
+        if self.headers.get_content_type().lower() != "application/json":
+            self._error(
+                ContractError("dashboard mutations require application/json"),
+                HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
+            )
+            return False
+        return True
+
     def do_POST(self) -> None:
+        if not self._validate_post_request():
+            return
         with self._dashboard_server().operation_lock:
             self._post()
 
