@@ -42,7 +42,7 @@ def _create_legacy_publication(root: Path) -> subprocess.CompletedProcess[str]:
             "--source",
             "legacy-import",
             "--target-blog-id",
-            "owner",
+            "owner-blog",
             "--topic-id",
             "TOPIC-001",
             "--keyword",
