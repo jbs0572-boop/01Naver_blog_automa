@@ -839,6 +839,35 @@ def test_startup_recovery_clears_confirm_and_preserves_uncertain_save(
     assert recovered_actions == []
 
 
+def test_external_action_without_adapter_settles_child_and_refreshes_end_time(
+    tmp_path: Path,
+) -> None:
+    request = parse_manual_run_payload(
+        {"keyword": "외부 저장 대기", "as_of_date": "2026-09-29"}
+    )
+    child = replace(
+        new_batch(request, tmp_path).children[0],
+        status="completed",
+        result_status=RunStatus.AWAITING_USER_CONFIRMATION.value,
+        ended_at="2026-09-01T00:00:00+00:00",
+    )
+
+    def unused_runner(_request: RunnerRequest) -> RunnerResult:
+        raise AssertionError("external continuation does not run without an adapter")
+
+    updated = execute_child_action(
+        ManualRunContext(tmp_path, False),
+        ManualRunDependencies(unused_runner),
+        child,
+        "external",
+    )
+
+    assert updated.status == "completed"
+    assert updated.result_status == RunStatus.LOCAL_ONLY.value
+    assert updated.ended_at != "2026-09-01T00:00:00+00:00"
+    assert updated.ended_at == updated.updated_at
+
+
 def test_confirm_failure_with_uncertain_save_does_not_offer_retry(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -870,6 +899,7 @@ def test_confirm_failure_with_uncertain_save_does_not_offer_retry(
         result_status=RunStatus.AWAITING_USER_CONFIRMATION.value,
         confirmation_preview=preview,
         next_action=ManualActionView("confirm", "nonce"),
+        ended_at="2026-09-01T00:00:00+00:00",
     )
     failed = RunnerResult(
         run_id,
@@ -898,6 +928,8 @@ def test_confirm_failure_with_uncertain_save_does_not_offer_retry(
     assert updated.result_status == RunStatus.FAILED.value
     assert updated.retryable is False
     assert updated.next_action is None
+    assert updated.ended_at != "2026-09-01T00:00:00+00:00"
+    assert updated.ended_at == updated.updated_at
     assert updated.message is not None
     assert "수동 대조" in updated.message
 
@@ -934,6 +966,7 @@ def test_confirm_exception_after_uncertain_save_does_not_offer_retry(
         result_status=RunStatus.AWAITING_USER_CONFIRMATION.value,
         confirmation_preview=preview,
         next_action=ManualActionView("confirm", "nonce"),
+        ended_at="2026-09-01T00:00:00+00:00",
     )
 
     def runner(_request: RunnerRequest) -> RunnerResult:
@@ -964,6 +997,8 @@ def test_confirm_exception_after_uncertain_save_does_not_offer_retry(
     assert settled is not None
     recovered = settled.children[0]
     assert recovered.status == "failed"
+    assert recovered.result_status == RunStatus.FAILED.value
+    assert recovered.ended_at != "2026-09-01T00:00:00+00:00"
     assert recovered.retryable is False
     assert recovered.next_action is None
     assert recovered.message is not None

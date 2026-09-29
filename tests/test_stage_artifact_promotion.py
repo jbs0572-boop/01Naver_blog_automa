@@ -143,6 +143,41 @@ def test_rejects_unsafe_staging_content(tmp_path: Path, unsafe: str) -> None:
         )
 
 
+def test_rejects_symlinked_project_destination_parent_without_external_writes(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    staging = tmp_path / "staging"
+    external = tmp_path / "external"
+    ledger = project / ".automation" / "work" / "RUN-1" / "artifact-ownership.json"
+    source = staging / "drafts" / "topic.md"
+    external.mkdir()
+    project.mkdir()
+    source.parent.mkdir(parents=True)
+    _ = source.write_text("staged draft", encoding="utf-8")
+    (project / "drafts").symlink_to(external, target_is_directory=True)
+    ledger.parent.mkdir(parents=True)
+    original_ledger = json.dumps(
+        {"run_id": "RUN-1", "artifacts": {}}, sort_keys=True
+    )
+    _ = ledger.write_text(original_ledger, encoding="utf-8")
+
+    with pytest.raises(ContractError, match="destination contains a symlink"):
+        _ = promote_stage_artifacts(
+            stage="writer",
+            keyword="topic",
+            run_id="RUN-1",
+            staging_root=staging,
+            project_root=project,
+            declared=("drafts/topic.md",),
+            ledger_path=ledger,
+        )
+
+    assert not (external / "topic.md").exists()
+    assert ledger.read_text(encoding="utf-8") == original_ledger
+    assert source.read_text(encoding="utf-8") == "staged draft"
+
+
 def test_rejects_existing_historical_destination(tmp_path: Path) -> None:
     # Given: a canonical file exists without this run's ownership record.
     project = tmp_path / "project"

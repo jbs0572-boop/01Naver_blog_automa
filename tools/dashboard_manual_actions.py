@@ -33,12 +33,15 @@ def execute_child_action(
                 dependencies.notion_adapter is None
                 and dependencies.naver_adapter is None
             ):
+                settled_at = _now()
                 return replace(
                     child,
                     status="completed",
+                    result_status=RunStatus.LOCAL_ONLY.value,
                     message="외부 저장 대기 · Notion/Naver 연결이 필요합니다",
                     next_action=ManualActionView("external", uuid.uuid4().hex),
-                    updated_at=_now(),
+                    updated_at=settled_at,
+                    ended_at=settled_at,
                 )
             result = resume_job(
                 RunnerRequest(
@@ -100,6 +103,7 @@ def execute_child_action(
         and not _q1_exhausted(context, child)
     ):
         next_action = ManualActionView("retry", uuid.uuid4().hex)
+    settled_at = _now()
     return replace(
         child,
         status="failed" if result.status is RunStatus.FAILED else "completed",
@@ -114,7 +118,8 @@ def execute_child_action(
         retryable=result.status is RunStatus.FAILED and next_action is not None,
         confirmation_preview=preview,
         next_action=next_action,
-        updated_at=_now(),
+        updated_at=settled_at,
+        ended_at=settled_at,
     )
 
 
@@ -142,13 +147,15 @@ def recover_child_action(
     )
     if result.run_id != child.run_id:
         raise ContractError("confirmation recovery changed child run_id")
+    settled_at = _now()
     return replace(
         child,
         status="failed" if result.status is RunStatus.FAILED else "completed",
         result_status=result.status.value,
         message=result.message,
         active_action=None,
-        updated_at=_now(),
+        updated_at=settled_at,
+        ended_at=settled_at,
     )
 
 

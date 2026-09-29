@@ -465,9 +465,11 @@ class ManualRunManager:
             uncertain_save = kind == "confirm" and _naver_save_outcome_uncertain(
                 self._context.root, accepted_child.run_id
             )
+            settled_at = _now()
             updated = replace(
                 child,
                 status="failed",
+                result_status=RunStatus.FAILED.value,
                 error=type(error).__name__,
                 message=(
                     "네이버 임시저장 결과가 불확실합니다. "
@@ -481,7 +483,8 @@ class ManualRunManager:
                     if uncertain_save
                     else ManualActionView("retry", uuid.uuid4().hex)
                 ),
-                updated_at=_now(),
+                updated_at=settled_at,
+                ended_at=settled_at,
             )
         self._save_child(batch, replace(updated, active_action=None))
 

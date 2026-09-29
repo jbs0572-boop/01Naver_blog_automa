@@ -106,6 +106,8 @@ class RunListQuery:
 
 class DashboardHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
+        if not self._validate_loopback_host():
+            return
         with self._dashboard_server().operation_lock:
             self._get()
 
@@ -248,6 +250,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
         server = self._dashboard_server()
         if not self._validate_loopback_host():
             return False
+        host_headers = self.headers.get_all("Host", [])
+        hostname = (
+            urlparse(f"//{host_headers[0]}").hostname
+            if len(host_headers) == 1
+            else None
+        )
 
         origin_headers = self.headers.get_all("Origin", [])
         if len(origin_headers) > 1:

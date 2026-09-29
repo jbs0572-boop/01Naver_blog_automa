@@ -179,6 +179,13 @@ def _validate(
         if not source.is_file() or source.stat().st_size == 0:
             raise ContractError(f"artifact is missing or empty: {value}")
         destination = request.project_root / relative
+        destination_component = request.project_root
+        for part in relative.parts:
+            destination_component = destination_component / part
+            if destination_component.is_symlink():
+                raise ContractError(
+                    f"artifact destination contains a symlink: {value}"
+                )
         if destination.exists():
             expected = owned.get(value)
             current_run_owned = (
