@@ -952,9 +952,10 @@ def test_confirm_exception_after_uncertain_save_does_not_offer_retry(
         raise OSError("event log write failed after the save call")
 
     monkeypatch.setattr("tools.dashboard_manual_run.execute_child_action", fail_after_save)
-    _ = manager.submit_action(
+    accepted = manager.submit_action(
         batch.batch_id, str(child.child_id), "confirm", "nonce"
     )
+    assert accepted.children[0].result_status is None
     manager.close()
     settled = manager.get(batch.batch_id)
 
