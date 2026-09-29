@@ -120,9 +120,14 @@ def test_assessment_rejects_missing_evidence_invalid_digest_and_pre_q2_review() 
     pre_q2 = _report()
     pre_q2["reviewed_at"] = "2026-09-01T00:02:59+09:00"
     pre_q2["report_digest"] = assessment_digest(pre_q2)
-    with pytest.raises(ContractError, match="predates"):
+    with pytest.raises(ContractError, match="after"):
         _ = _parse(pre_q2)
 
+    same_as_q2 = _report()
+    same_as_q2["reviewed_at"] = "2026-09-01T00:03:00+09:00"
+    same_as_q2["report_digest"] = assessment_digest(same_as_q2)
+    with pytest.raises(ContractError, match="after"):
+        _ = _parse(same_as_q2)
 
 def test_assessment_timestamp_is_aware() -> None:
     report = _report()

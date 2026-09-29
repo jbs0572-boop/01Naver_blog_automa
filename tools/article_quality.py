@@ -122,8 +122,8 @@ def parse_assessment(
         raise ContractError("quality report does not match the current run artifacts")
     reviewer = _required_string(payload, "reviewer")
     reviewed_at = parse_aware_datetime(payload.get("reviewed_at"), "reviewed_at")
-    if reviewed_at < parse_aware_datetime(q2_verified_at, "notion_last_verified_at"):
-        raise ContractError("quality report predates the successful Notion Q2 review")
+    if reviewed_at <= parse_aware_datetime(q2_verified_at, "notion_last_verified_at"):
+        raise ContractError("quality report must be reviewed after the successful Notion Q2 review")
 
     raw_scores = payload.get("scores")
     raw_evidence = payload.get("evidence")
