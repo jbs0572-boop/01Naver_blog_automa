@@ -941,7 +941,7 @@ def test_confirm_exception_after_uncertain_save_does_not_offer_retry(
         ManualRunContext(tmp_path, True),
         ManualRunDependencies(runner),
     )
-    manager._store.save(replace(batch, children=(child,)))
+    ManualBatchStore(tmp_path).save(replace(batch, children=(child,)))
 
     def fail_after_save(
         _context: ManualRunContext,
@@ -952,9 +952,11 @@ def test_confirm_exception_after_uncertain_save_does_not_offer_retry(
         raise OSError("event log write failed after the save call")
 
     monkeypatch.setattr("tools.dashboard_manual_run.execute_child_action", fail_after_save)
-    manager._execute_action(batch.batch_id, str(child.child_id), "confirm", child)
-    settled = manager.get(batch.batch_id)
+    _ = manager.submit_action(
+        batch.batch_id, str(child.child_id), "confirm", "nonce"
+    )
     manager.close()
+    settled = manager.get(batch.batch_id)
 
     assert settled is not None
     recovered = settled.children[0]
