@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+from dataclasses import replace
+from datetime import UTC, datetime
 from pathlib import Path
 
 from tools.contract_types import JSONMap, JSONValue
 from tools.dashboard_manual_batch import new_batch
-from tools.dashboard_manual_models import ManualRunContext, ManualRunDependencies
+from tools.dashboard_manual_models import (
+    ManualActiveActionView,
+    ManualRunContext,
+    ManualRunDependencies,
+)
 from tools.dashboard_manual_request import parse_manual_run_payload
 from tools.dashboard_manual_run import ManualRunManager
 from tools.dashboard_manual_store import ManualBatchStore
@@ -63,6 +69,28 @@ def test_terminal_run_state_overrides_stale_running_child() -> None:
     child = batch.children[0]
     assert child.status == "queued"
     assert effective_status(child, {"status": "failed"}) == "failed"
+
+
+def test_active_action_status_overrides_preserved_terminal_result() -> None:
+    batch = new_batch(parse_manual_run_payload({"keyword": "확인 재개", "as_of_date": "2026-09-10"}))
+    child = batch.children[0]
+    active = ManualActiveActionView(
+        "confirm",
+        "OPERATION-confirm",
+        "sha256:" + "a" * 64,
+        datetime.now(UTC).isoformat(),
+        "queued",
+    )
+    queued = replace(
+        child,
+        status="queued",
+        result_status=RunStatus.AWAITING_USER_CONFIRMATION.value,
+        active_action=active,
+    )
+
+    assert effective_status(
+        queued, {"status": RunStatus.AWAITING_USER_CONFIRMATION.value}
+    ) == "queued"
 
 
 def test_snapshot_revision_ignores_elapsed_duration(tmp_path: Path) -> None:

@@ -162,6 +162,24 @@ def test_accepted_retry_recovery_relaunches_idempotently_after_restart(
     )
     assert repeated == recovery
 
+    # Schedule status and visible history must follow the successful retry while
+    # the persisted source history remains immutable.
+    progress = DailySchedule(tmp_path).progress(
+        tmp_path, datetime.fromisoformat("2026-09-10T09:05:00+09:00")
+    )
+    progress_history = progress["history"]
+    assert isinstance(progress_history, list)
+    visible_occurrence = next(
+        item
+        for item in progress_history
+        if isinstance(item, dict) and item.get("occurrence_id") == occurrence_id
+    )
+    assert visible_occurrence["status"] == "submitted"
+    assert visible_occurrence["batch_id"] == "BATCH-stable"
+    stored_history = DailySchedule(tmp_path).data["history"]
+    assert isinstance(stored_history, list) and isinstance(stored_history[0], dict)
+    assert stored_history[0]["status"] == "missed"
+
 def test_pause_invalid_time_and_missed_occurrences(tmp_path: Path) -> None:
     scheduler = DailySchedule(tmp_path)
     now = datetime.fromisoformat("2026-09-10T07:00:00+09:00")

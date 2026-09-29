@@ -470,3 +470,86 @@ test("job polling skips identical list DOM and redraws when observed tokens chan
   assert.equal(writes, initialWrites + 1);
   assert.equal(intervals[0].delay, 10_000);
 });
+
+
+test("schedule retry rotates nonce after terminal failure and retains it after transport uncertainty", async () => {
+  const scheduleSource = await readFile(new URL("../dashboard/schedule.js", import.meta.url), "utf8");
+  class ScheduleElement {
+    constructor(tagName = "div") { this.tagName = tagName.toUpperCase(); this.children = []; this.listeners = {}; this.attributes = {}; this.dataset = {}; this.value = ""; this.checked = true; this.disabled = false; this.hidden = false; this.className = ""; this.textContent = ""; }
+    addEventListener(type, handler) { this.listeners[type] = handler; }
+    append(...children) { this.children.push(...children); }
+    replaceChildren(...children) { this.children = [...children]; }
+    setAttribute(name, value) { this.attributes[name] = String(value); }
+    removeAttribute(name) { delete this.attributes[name]; }
+    cloneNode() { const clone = new ScheduleElement(this.tagName); clone.value = this.value; clone.className = this.className; clone.children = this.children.map(child => child.cloneNode?.() ?? child); return clone; }
+    remove() { this.removed = true; }
+    set innerHTML(value) {
+      this._innerHTML = value;
+      if (value.includes("schedule-progress")) {
+        const strong = new ScheduleElement("strong");
+        const step = new ScheduleElement("span"); step.className = "schedule-step";
+        const bar = new ScheduleElement("progress");
+        const small = new ScheduleElement("small");
+        this.children = [strong, step, bar, small];
+      }
+    }
+    get innerHTML() { return this._innerHTML || ""; }
+    querySelector(selector) {
+      const matches = node => selector.startsWith(".")
+        ? node.className.split(" ").includes(selector.slice(1))
+        : selector === 'input[type="time"]' ? node.tagName === "INPUT" && node.type === "time"
+        : selector === 'input[type="checkbox"]' ? node.tagName === "INPUT" && node.type === "checkbox"
+        : node.tagName.toLowerCase() === selector;
+      for (const child of this.children) {
+        if (matches(child)) return child;
+        const found = child.querySelector?.(selector);
+        if (found) return found;
+      }
+      return null;
+    }
+    querySelectorAll(selector) { const found = this.querySelector(selector); return found ? [found] : []; }
+  }
+  const selectors = ["#model-preset", "#manual-preset", "#schedule-preset", "#model-stage-settings", "#model-settings-status", "#model-preset-form", "#schedule-form", "#schedule-times", "#schedule-status", "#schedule-history", "#schedule-add", "#schedule-start", "#schedule-stop"];
+  const elements = new Map(selectors.map(selector => [selector, new ScheduleElement(selector.includes("preset") ? "select" : "div")]));
+  elements.get("#schedule-preset").hidden = true;
+  const occurrence = {at:"2026-09-28T08:00:00+09:00", entry_id:"ENTRY-08", status:"missed", occurrence_id:"OCC-08"};
+  const schedule = {enabled:true, times:["08:00"], entries:[{entry_id:"ENTRY-08",time:"08:00",enabled:true}], history:[occurrence]};
+  const progress = {history:[occurrence], executions:[]};
+  const requests = [];
+  let retries = 0;
+  const fetch = async (url, options = {}) => {
+    if (url === "/api/schedule") return {ok:true, json:async () => schedule};
+    if (url === "/api/schedule-status") return {ok:true, json:async () => progress};
+    if (url === "/api/schedule/retry") {
+      const payload = JSON.parse(options.body);
+      requests.push(payload);
+      retries += 1;
+      if (retries === 1) throw new Error("connection lost");
+      return {ok:true, json:async () => ({status:"failed", as_of_date:"2026-09-28", error:"launch failed"})};
+    }
+    throw new Error(`unexpected request: ${url}`);
+  };
+  const document = {
+    createElement: tag => new ScheduleElement(tag),
+    createTextNode: text => ({textContent:text}),
+    querySelector: selector => elements.get(selector) ?? null,
+    addEventListener() {},
+    hidden: false,
+  };
+  let now = 0;
+  class TestDate extends Date { static now() { now += 1; return 1_800_000_000_000 + now; } }
+  const context = vm.createContext({document, fetch, Date:TestDate, Intl, window:{crypto:{randomUUID:()=>"ENTRY-NEW"}, setInterval() {}}});
+  vm.runInContext(scheduleSource, context);
+  await new Promise(resolve => setImmediate(resolve));
+  const history = elements.get("#schedule-history");
+  const retry = history.children[0].children.find(child => child.tagName === "BUTTON");
+  assert.ok(retry);
+  await retry.listeners.click();
+  assert.equal(requests.length, 1);
+  await retry.listeners.click();
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0].nonce, requests[1].nonce);
+  await retry.listeners.click();
+  assert.equal(requests.length, 3);
+  assert.notEqual(requests[1].nonce, requests[2].nonce);
+});

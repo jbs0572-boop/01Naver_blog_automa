@@ -333,7 +333,35 @@ class DailySchedule:
         runs: JSONValue = None
         if not isinstance(history, list):
             return {**self.view(now), "executions": executions}
-        for item in reversed(history):
+        latest_recoveries: dict[str, JSONMap] = {}
+        recoveries = self.data.get("recoveries")
+        if isinstance(recoveries, list):
+            for recovery in recoveries:
+                if isinstance(recovery, dict):
+                    occurrence_id = recovery.get("occurrence_id")
+                    if isinstance(occurrence_id, str):
+                        latest_recoveries[occurrence_id] = recovery
+        displayed_history: list[JSONValue] = []
+        for item in history:
+            if not isinstance(item, dict):
+                displayed_history.append(item)
+                continue
+            displayed: JSONMap = dict(item)
+            occurrence_id = displayed.get("occurrence_id")
+            recovery = (
+                latest_recoveries.get(occurrence_id)
+                if isinstance(occurrence_id, str)
+                else None
+            )
+            if recovery is not None:
+                status = recovery.get("status")
+                batch_id = recovery.get("batch_id")
+                if isinstance(status, str):
+                    displayed["status"] = status
+                if isinstance(batch_id, str):
+                    displayed["batch_id"] = batch_id
+            displayed_history.append(displayed)
+        for item in reversed(displayed_history):
             if not isinstance(item, dict) or not isinstance(item.get("at"), str):
                 continue
             at = item["at"]
@@ -364,7 +392,11 @@ class DailySchedule:
                             None,
                         )
             executions.append(execution)
-        return {**self.view(now), "executions": executions}
+        return {
+            **self.view(now),
+            "history": displayed_history,
+            "executions": executions,
+        }
 
     def _entries(self) -> list[JSONMap]:
         entries = self.data.get("entries")

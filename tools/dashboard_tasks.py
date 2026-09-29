@@ -21,6 +21,8 @@ def effective_status(child: ManualRunView | None, run: JSONMap | None = None) ->
     if child is not None:
         if child.status in {"cancelling", "cancelled"}:
             return child.status
+        if child.active_action is not None and child.status in {"queued", "running"}:
+            return child.status
         if child.result_status:
             return child.result_status
         if run_status in RUN_TERMINAL_STATUSES:

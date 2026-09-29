@@ -955,7 +955,7 @@ def test_confirm_exception_after_uncertain_save_does_not_offer_retry(
     accepted = manager.submit_action(
         batch.batch_id, str(child.child_id), "confirm", "nonce"
     )
-    assert accepted.children[0].result_status is None
+    assert accepted.children[0].result_status == RunStatus.AWAITING_USER_CONFIRMATION.value
     manager.close()
     settled = manager.get(batch.batch_id)
 

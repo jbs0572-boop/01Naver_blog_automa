@@ -16,6 +16,7 @@
       const response = await fetch('/api/schedule/retry', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({occurrence_id:item.occurrence_id, nonce})});
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+      if (result.status === 'failed') delete button.dataset.nonce;
       status.textContent = `예약일 ${result.as_of_date} 재실행 접수 · ${result.batch_id || result.status}`;
       await refreshProgress();
       window.DashboardNotifications?.load?.();

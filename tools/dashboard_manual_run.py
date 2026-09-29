@@ -195,7 +195,6 @@ class ManualRunManager:
                 child,
                 next_action=None,
                 status="queued",
-                result_status=None,
                 active_action=ManualActiveActionView(
                     kind,
                     "OP-" + uuid.uuid4().hex[:12],
