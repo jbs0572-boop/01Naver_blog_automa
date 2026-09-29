@@ -22,6 +22,44 @@ test("security adds the page token to mutation headers", async () => {
   assert.equal(headers["X-Dashboard-CSRF"], "page-token");
 });
 
+test("health keeps polling while the probe is checking", async () => {
+  const source = await readFile(new URL("../dashboard/health.js", import.meta.url), "utf8");
+  const elements = new Map([
+    ["#health-status", {textContent: ""}],
+    ["#health-detail", {textContent: ""}],
+    ["#health-check", {disabled: false, addEventListener() {}}],
+  ]);
+  const states = ["checking", "checking", "ready"];
+  const timers = [];
+  let reads = 0;
+  const context = vm.createContext({
+    document: {querySelector: (selector) => elements.get(selector)},
+    window: {setTimeout: (handler, delay) => timers.push({handler, delay})},
+    fetch: async () => ({
+      ok: true,
+      json: async () => ({status: states[reads++], next_action: "probe status"}),
+    }),
+  });
+
+  vm.runInContext(source, context);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(reads, 1);
+  assert.equal(timers.length, 1);
+  assert.equal(timers[0].delay, 500);
+
+  await timers.shift().handler();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(reads, 2);
+  assert.equal(timers.length, 1);
+
+  await timers.shift().handler();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(reads, 3);
+  assert.equal(timers.length, 0);
+  assert.equal(elements.get("#health-status").textContent, "연결 준비됨");
+  assert.equal(elements.get("#health-check").disabled, false);
+});
+
 test("progress waits for saved draft and retains unknown usage", async () => {
   const source = await readFile(new URL("../dashboard/progress.js", import.meta.url), "utf8");
   const context = vm.createContext({window: {dashboardMutationHeaders, }});

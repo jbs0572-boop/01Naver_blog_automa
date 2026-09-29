@@ -10,7 +10,10 @@
   }
   async function load() {
     const response = await fetch("/api/health", {cache: "no-store"});
-    if (response.ok) render(await response.json());
+    if (!response.ok) return;
+    const data = await response.json();
+    render(data);
+    if (data.status === "checking") window.setTimeout(load, 500);
   }
   button.addEventListener("click", async () => {
     const response = await fetch("/api/health/check", {method: "POST", headers: window.dashboardMutationHeaders(), body: "{}"});
