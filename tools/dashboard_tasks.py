@@ -57,6 +57,12 @@ def _string_or_none(value: JSONValue) -> str | None:
     return value if isinstance(value, str) else None
 
 
+def _item_date(item: JSONMap) -> str | None:
+    submitted = _string_or_none(item.get("submitted_at"))
+    ended = _string_or_none(item.get("ended_at"))
+    return _date(submitted or ended)
+
+
 def _stage_maps(value: JSONValue) -> list[JSONMap]:
     return [item for item in value if isinstance(item, dict)] if isinstance(value, (list, tuple)) else []
 
@@ -147,7 +153,7 @@ class DashboardTasks:
             items.append(item)
         items.extend(_run_item(run) for run_id, run in run_values.items() if run_id not in known)
         needle = q.casefold().strip()
-        filtered = [item for item in items if (not needle or needle in f"{item.get('run_id')} {item.get('task_id')} {item.get('keyword')}".casefold()) and _status_matches(item.get("effective_status"), status) and (topic_source is None or item.get("topic_source") == topic_source) and (date_from is None or (_date(_string_or_none(item.get("submitted_at"))) or "") >= date_from) and (date_to is None or (_date(_string_or_none(item.get("submitted_at"))) or "") <= date_to)]
+        filtered = [item for item in items if (not needle or needle in f"{item.get('run_id')} {item.get('task_id')} {item.get('keyword')}".casefold()) and _status_matches(item.get("effective_status"), status) and (topic_source is None or item.get("topic_source") == topic_source) and (date_from is None or (_item_date(item) or "") >= date_from) and (date_to is None or (_item_date(item) or "") <= date_to)]
         priority = {"cancelling": 0, "running": 1, "queued": 2, "awaiting_user_confirmation": 3, "ready_for_naver": 3, "local-only": 3, "blocked": 4, "failed": 4, "cancelled": 5, "draft_saved": 6}
         filtered.sort(key=lambda item: (priority.get(str(item.get("effective_status")), 7), item.get("queue_position") or 999999, str(item.get("ended_at") or item.get("submitted_at") or "")), reverse=False)
         offset = _cursor_offset(cursor, self.revision_for(items))

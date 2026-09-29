@@ -4,7 +4,10 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+
 from tools.contract_types import JSONMap, JSONValue
+from tools.dashboard_data import RunView
 from tools.dashboard_manual_batch import new_batch
 from tools.dashboard_manual_models import (
     ManualActiveActionView,
@@ -96,6 +99,42 @@ def test_active_action_status_overrides_preserved_terminal_result() -> None:
     assert effective_status(
         running, {"status": RunStatus.AWAITING_USER_CONFIRMATION.value}
     ) == "running"
+
+
+def test_date_filters_use_standalone_run_end_time(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manager = ManualRunManager(
+        ManualRunContext(tmp_path, False),
+        ManualRunDependencies(lambda _request: _runner(tmp_path)),
+    )
+    cache = RunSnapshotCache(tmp_path)
+    standalone = RunView(
+        "RUN-standalone",
+        "TOPIC-standalone",
+        "standalone run",
+        None,
+        False,
+        "failed",
+        "2026-09-05T01:00:00+00:00",
+        "2026-09-05T01:10:00+00:00",
+        "2026-09-05T01:10:00+00:00",
+        "runs/RUN-standalone.jsonl",
+        "failed",
+        "pending",
+        None,
+        (),
+    )
+    monkeypatch.setattr(cache, "runs", lambda: (standalone,))
+    tasks = DashboardTasks(manager, cache)
+
+    try:
+        included = tasks.query(date_to="2026-09-05")
+        excluded = tasks.query(date_to="2026-09-04")
+        assert included["filtered_total"] == 1
+        assert excluded["filtered_total"] == 0
+    finally:
+        manager.close()
 
 
 def test_snapshot_revision_ignores_elapsed_duration(tmp_path: Path) -> None:

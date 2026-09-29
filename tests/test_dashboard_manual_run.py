@@ -1086,6 +1086,49 @@ def test_startup_recovery_clears_discarded_confirmation_action(
     assert recovered_actions == []
 
 
+def test_startup_exposes_explicit_retry_for_stale_single_child_run(
+    tmp_path: Path,
+) -> None:
+    request = parse_manual_run_payload(
+        {"keyword": "재개할 작업", "as_of_date": "2026-09-01"}
+    )
+    batch = new_batch(request, tmp_path)
+    child = replace(
+        batch.children[0],
+        status="running",
+        result_status=RunStatus.RUNNING.value,
+        run_id="RUN-stale-recovery",
+        started_at="2026-09-01T00:00:00+00:00",
+        updated_at="2026-09-01T00:00:00+00:00",
+    )
+    stale = replace(
+        batch,
+        status="running",
+        updated_at="2026-09-01T00:00:00+00:00",
+        children=(child,),
+    )
+    store = ManualBatchStore(tmp_path)
+    store.save(stale)
+    calls: list[RunnerRequest] = []
+
+    manager = ManualRunManager(
+        ManualRunContext(tmp_path, False),
+        ManualRunDependencies(_selection_runner(tmp_path, calls)),
+    )
+    manager.close()
+    recovered = manager.get(batch.batch_id)
+
+    assert calls == []
+    assert recovered is not None
+    recovered_child = recovered.children[0]
+    assert recovered_child.status == "failed"
+    assert recovered_child.result_status == RunStatus.FAILED.value
+    assert recovered_child.retryable is True
+    assert recovered_child.next_action is not None
+    assert recovered_child.next_action.kind == "retry"
+    assert recovered_child.ended_at is not None
+
+
 def test_startup_resumes_fresh_one_child_batch_exactly_once(
     tmp_path: Path,
 ) -> None:

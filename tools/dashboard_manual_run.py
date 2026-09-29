@@ -556,11 +556,17 @@ class ManualRunManager:
                 replace(
                     child,
                     status="failed",
-                    message="stale recovery expired",
-                    retryable=False,
-                    next_action=None,
+                    result_status=RunStatus.FAILED.value,
+                    message=(
+                        "The workflow was interrupted and needs an explicit retry "
+                        "to resume from its saved runner state."
+                    ),
+                    error="StaleRunRecovery",
+                    retryable=True,
+                    next_action=ManualActionView("retry", uuid.uuid4().hex),
                     active_action=None,
                     updated_at=now,
+                    ended_at=now,
                 )
                 if child.status in {"queued", "running"}
                 and is_stale_recovery(child.updated_at, now=now_dt)

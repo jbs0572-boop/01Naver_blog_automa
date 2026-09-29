@@ -3,6 +3,7 @@ name: Quality
 on:
   pull_request:
     paths:
+      - "**/*.md"
       - ".github/pull_request_template.md"
       - ".github/workflows/quality.yml"
       - "AGENTS.md"
