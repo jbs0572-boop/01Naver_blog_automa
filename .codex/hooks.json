@@ -1,5 +1,5 @@
 {
-  "description": "Allow only target-bound Notion creation after Q1 and manifest checks; require Q1/Q2, identity, artifact verification, and user confirmation for Naver draft saves.",
+  "description": "Allow only target-bound Notion creation after Q1 and manifest checks; require Q1/Q2/Q3, identity, artifact verification, and Gate-bound workflow authorization for Naver draft saves.",
   "hooks": {
     "PreToolUse": [
       {

@@ -167,6 +167,14 @@ def read_events(path: Path) -> list[JSONMap]:
                     raise ContractError(
                         f"invalid confirmation event schema at {path}:{line_no}: {error}"
                     ) from error
+        elif event_type == "workflow_authorization":
+            if optimized_event:
+                try:
+                    validate_instance(event, SCHEMA_PATH)
+                except SchemaError as error:
+                    raise ContractError(
+                        f"invalid workflow authorization event schema at {path}:{line_no}: {error}"
+                    ) from error
         elif event_type not in {
             "batch_preparation",
             "baseline",

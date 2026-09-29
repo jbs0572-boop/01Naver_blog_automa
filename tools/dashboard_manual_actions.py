@@ -73,6 +73,7 @@ def execute_child_action(
                     root=context.root,
                     run_id=child.run_id,
                     action=child.confirmation_preview.action,
+                    actor="dashboard-auto-save",
                     executor=dependencies.executor,
                     notion_adapter=dependencies.notion_adapter,
                     naver_adapter=dependencies.naver_adapter,

@@ -292,7 +292,7 @@ def test_naver_prepare_allows_only_exact_configured_targets(
         ("browser.text", {"selector": "#draft-list"}),
     ],
 )
-def test_naver_save_allows_exact_targets_after_confirmation(
+def test_naver_save_allows_exact_targets_after_authorization(
     tmp_path: Path, tool_name: str, tool_input: JSONMap
 ) -> None:
     root, manifest_path, run_log, run_id = _fixture(tmp_path)
@@ -302,6 +302,112 @@ def test_naver_save_allows_exact_targets_after_confirmation(
     )
 
     assert decision == "allow"
+
+
+def test_naver_save_allows_gate_bound_dashboard_authorization(
+    tmp_path: Path,
+) -> None:
+    root, manifest_path, run_log, run_id = _fixture(tmp_path)
+    events: list[JSONValue] = [
+        json.loads(line) for line in run_log.read_text(encoding="utf-8").splitlines()
+    ]
+    preparation = events[-2]
+    confirmation = events[-1]
+    assert isinstance(preparation, dict)
+    assert isinstance(confirmation, dict)
+    raw_preparation_quality = preparation.get("quality")
+    assert isinstance(raw_preparation_quality, dict)
+    preparation_quality: JSONMap = raw_preparation_quality
+    confirmation_request_digest = preparation_quality.get(
+        "confirmation_request_digest"
+    )
+    assert isinstance(confirmation_request_digest, str)
+    events[-1] = {
+        "event_type": "workflow_authorization",
+        "pipeline_version": PIPELINE_VERSION,
+        "run_id": run_id,
+        "action": "naver-draft-save",
+        "policy": "all_quality_gates_passed",
+        "target_blog_id": BLOG_ID,
+        "title": "Hook title",
+        "artifact_digest": _manifest_digest(manifest_path),
+        "authorization_digest": confirmation_request_digest,
+        "requested_at": "2026-08-31T00:04:00+00:00",
+        "authorized_at": "2026-08-31T00:06:00+00:00",
+        "actor": "dashboard-auto-save",
+    }
+    _ = run_log.write_text(
+        "".join(json.dumps(event) + "\n" for event in events), encoding="utf-8"
+    )
+
+    decision = _hook(
+        root,
+        manifest_path,
+        run_log,
+        run_id,
+        "browser.click",
+        {"selector": "#save-draft"},
+        "save",
+    )
+
+    assert decision == "allow"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("actor", "operator"),
+        ("authorization_digest", "a" * 64),
+        ("authorized_at", "2026-08-31T00:02:00+00:00"),
+    ],
+)
+def test_naver_save_denies_invalid_dashboard_authorization(
+    tmp_path: Path, field: str, value: str
+) -> None:
+    root, manifest_path, run_log, run_id = _fixture(tmp_path)
+    events: list[JSONValue] = [
+        json.loads(line) for line in run_log.read_text(encoding="utf-8").splitlines()
+    ]
+    preparation = events[-2]
+    assert isinstance(preparation, dict)
+    raw_preparation_quality = preparation.get("quality")
+    assert isinstance(raw_preparation_quality, dict)
+    preparation_quality: JSONMap = raw_preparation_quality
+    confirmation_request_digest = preparation_quality.get(
+        "confirmation_request_digest"
+    )
+    assert isinstance(confirmation_request_digest, str)
+    authorization: JSONMap = {
+        "event_type": "workflow_authorization",
+        "pipeline_version": PIPELINE_VERSION,
+        "run_id": run_id,
+        "action": "naver-draft-save",
+        "policy": "all_quality_gates_passed",
+        "target_blog_id": BLOG_ID,
+        "title": "Hook title",
+        "artifact_digest": _manifest_digest(manifest_path),
+        "authorization_digest": confirmation_request_digest,
+        "requested_at": "2026-08-31T00:04:00+00:00",
+        "authorized_at": "2026-08-31T00:06:00+00:00",
+        "actor": "dashboard-auto-save",
+    }
+    authorization[field] = value
+    events[-1] = authorization
+    _ = run_log.write_text(
+        "".join(json.dumps(event) + "\n" for event in events), encoding="utf-8"
+    )
+
+    decision = _hook(
+        root,
+        manifest_path,
+        run_log,
+        run_id,
+        "browser.click",
+        {"selector": "#save-draft"},
+        "save",
+    )
+
+    assert decision.startswith("deny:")
 
 
 @pytest.mark.parametrize(
@@ -340,7 +446,7 @@ def test_naver_gate_denies_adversarial_browser_operations(
     assert decision.startswith("deny:")
 
 
-def test_naver_save_denies_exact_locator_without_confirmation(tmp_path: Path) -> None:
+def test_naver_save_denies_exact_locator_without_authorization(tmp_path: Path) -> None:
     root, manifest_path, run_log, run_id = _fixture(tmp_path)
 
     decision = _hook(

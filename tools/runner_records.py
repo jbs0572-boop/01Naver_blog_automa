@@ -152,6 +152,7 @@ def initial_state(
         "notion_target_id": request.notion_target_id,
         "job_key": None,
         "confirmation": None,
+        "naver_save_authorization": None,
         "topic_id": topic_id,
         "manifest_path": None,
         "artifact_digest": None,

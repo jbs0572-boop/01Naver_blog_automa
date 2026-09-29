@@ -263,12 +263,13 @@ def verify_naver_confirmation(
     for event in reversed(events):
         if (
             event.get("run_id") == manifest.run_id
-            and event.get("event_type") == "confirmation"
+            and event.get("event_type")
+            in {"confirmation", "workflow_authorization"}
         ):
             latest = event
             break
     if latest is None:
-        raise ContractError("Naver draft save requires explicit user confirmation")
+        raise ContractError("Naver draft save requires Gate-bound authorization")
     latest_preparation: JSONMap | None = None
     for event in reversed(events):
         if (
@@ -280,6 +281,9 @@ def verify_naver_confirmation(
             break
     if latest_preparation is None:
         raise ContractError("latest Naver preparation identity is missing")
+    prepared_at = latest_preparation.get("ended_at")
+    if not isinstance(prepared_at, str):
+        raise ContractError("latest Naver preparation timestamp is missing")
     preparation_quality = latest_preparation.get("quality")
     if (
         latest_preparation.get("status")
@@ -294,24 +298,38 @@ def verify_naver_confirmation(
     verified_at = quality.get("notion_last_verified_at")
     if not isinstance(verified_at, str):
         raise ContractError("Notion Q2 verification time is missing")
-    confirmed_at = parse_aware_datetime(latest.get("confirmed_at"), "confirmed_at")
-    if (
-        latest.get("confirmation_request_digest")
-        != preparation_quality.get("confirmation_request_digest")
-    ):
-        raise ContractError(
-            "Naver confirmation does not match latest Naver preparation"
-        )
+    event_type = latest.get("event_type")
+    if event_type == "workflow_authorization":
+        if (
+            latest.get("actor") != "dashboard-auto-save"
+            or latest.get("policy") != "all_quality_gates_passed"
+            or latest.get("authorization_digest")
+            != preparation_quality.get("confirmation_request_digest")
+        ):
+            raise ContractError("automatic Naver authorization is not Gate-bound")
+        authorized_at = parse_aware_datetime(latest.get("authorized_at"), "authorized_at")
+    else:
+        if (
+            latest.get("confirmation_request_digest")
+            != preparation_quality.get("confirmation_request_digest")
+        ):
+            raise ContractError(
+                "Naver confirmation does not match latest Naver preparation"
+            )
+        authorized_at = parse_aware_datetime(latest.get("confirmed_at"), "confirmed_at")
+    if authorized_at < parse_aware_datetime(prepared_at, "naver_preparation_ended_at"):
+        raise ContractError("Naver authorization predates the latest preparation")
+    if authorized_at < parse_aware_datetime(verified_at, "notion_last_verified_at"):
+        raise ContractError("Naver authorization predates Notion Q2 verification")
     if (
         latest.get("action") != "naver-draft-save"
         or latest.get("target_blog_id") != blog_id
         or latest.get("title") != title
         or latest.get("artifact_digest") != manifest.artifact_digest
-        or confirmed_at < parse_aware_datetime(verified_at, "notion_last_verified_at")
+        or latest.get("confirmation_request_digest", latest.get("authorization_digest"))
+        != preparation_quality.get("confirmation_request_digest")
     ):
-        raise ContractError("Naver confirmation does not match run, target, or artifact")
-
-
+        raise ContractError("Naver authorization does not match run, target, or artifact")
 __all__ = [
     "NaverCanonicalInput",
     "NaverToolRequest",

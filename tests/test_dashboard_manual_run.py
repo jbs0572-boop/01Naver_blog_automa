@@ -1333,7 +1333,7 @@ def test_confirm_exception_after_uncertain_save_does_not_offer_retry(
     assert "수동 대조" in recovered.message
 
 
-def test_startup_recovery_resumes_recent_live_naver_save(
+def test_startup_recovery_resumes_stale_live_naver_save(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1361,7 +1361,7 @@ def test_startup_recovery_resumes_recent_live_naver_save(
         run_id=run_id,
         confirmation_preview=preview,
         next_action=ManualActionView("confirm", "stale-confirmation-nonce"),
-        updated_at=datetime.now(UTC).isoformat(),
+        updated_at="2026-09-01T00:00:00+00:00",
     )
     ManualBatchStore(tmp_path).save(replace(batch, children=(child,)))
 

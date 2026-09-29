@@ -133,6 +133,7 @@ def test_confirm_action_forwards_active_dashboard_nonce_to_runner(
 
     # Then: the runner receives the exact nonce that the dashboard validated.
     assert captured[0].confirmation_nonce == nonce
+    assert captured[0].actor == "dashboard-auto-save"
 
 
 def test_two_threads_submit_same_nonce_exactly_once(tmp_path: Path) -> None:

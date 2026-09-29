@@ -191,7 +191,8 @@ def stage_action(context: StageRunContext) -> StageResult:
             "naver-publish requires --dry-run; external writes are disabled"
         )
     raise RunnerBlocked(
-        "Naver write requires Q1/Q2 verification and final user confirmation; dry-run made no external call"
+        "Naver draft save is dashboard-only after Q1/Q2/Q3 Gate verification; "
+        + "naver-publish dry-run made no external call"
     )
 
 

@@ -199,6 +199,7 @@ def invalidate_naver_preparation(root: Path, run_id: str) -> None:
     state["message"] = "content workflow completed; external storage is pending"
     for key in (
         "confirmation",
+        "naver_save_authorization",
         "confirmation_requested_at",
         "confirmation_request_digest",
         "confirmation_nonce",

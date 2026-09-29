@@ -61,6 +61,8 @@ def _record_confirmation(confirmation_input: ConfirmationInput) -> RunnerRequest
         or confirmation_input.confirmation_nonce != active_nonce
     ):
         raise ContractError("confirmation nonce is stale or invalid")
+    automatic = confirmation_input.actor == "dashboard-auto-save"
+    recorded_at = datetime.now().astimezone().isoformat()
     confirmation: JSONMap = {
         "run_id": run_id,
         "action": action,
@@ -69,7 +71,7 @@ def _record_confirmation(confirmation_input: ConfirmationInput) -> RunnerRequest
         "artifact_digest": state.get("artifact_digest"),
         "confirmation_request_digest": state.get("confirmation_request_digest"),
         "requested_at": state.get("confirmation_requested_at"),
-        "confirmed_at": datetime.now().astimezone().isoformat(),
+        "confirmed_at": recorded_at,
         "actor": confirmation_input.actor,
     }
     required = (
@@ -81,29 +83,47 @@ def _record_confirmation(confirmation_input: ConfirmationInput) -> RunnerRequest
     )
     if not all(isinstance(confirmation.get(key), str) for key in required):
         raise ContractError("confirmation preview is incomplete")
-    append_event(
-        log_path,
-        {
-            "event_type": "confirmation",
-            "pipeline_version": "workflow-optimized-v1",
+    if automatic:
+        authorization = {
             "run_id": run_id,
             "action": action,
+            "policy": "all_quality_gates_passed",
             "target_blog_id": confirmation["target_blog_id"],
             "title": confirmation["title"],
             "artifact_digest": confirmation["artifact_digest"],
-            "confirmation_request_digest": confirmation[
-                "confirmation_request_digest"
-            ],
+            "authorization_digest": confirmation["confirmation_request_digest"],
             "requested_at": confirmation["requested_at"],
-            "confirmed_at": confirmation["confirmed_at"],
-            "actor": confirmation_input.actor,
-        },
-    )
-    state["confirmation"] = confirmation
+            "authorized_at": recorded_at,
+            "actor": "dashboard-auto-save",
+        }
+        append_event(
+            log_path,
+            {
+                "event_type": "workflow_authorization",
+                "pipeline_version": "workflow-optimized-v1",
+                **authorization,
+            },
+        )
+        state["naver_save_authorization"] = authorization
+        state["confirmation"] = None
+    else:
+        append_event(
+            log_path,
+            {
+                "event_type": "confirmation",
+                "pipeline_version": "workflow-optimized-v1",
+                **confirmation,
+            },
+        )
+        state["confirmation"] = confirmation
     if "confirmation_nonce" in state:
         del state["confirmation_nonce"]
     state["status"] = RunStatus.RUNNING.value
-    state["message"] = "operator confirmation received; resuming Naver draft save"
+    state["message"] = (
+        "quality gates passed; dashboard policy authorized Naver draft save"
+        if automatic
+        else "operator confirmation received; resuming Naver draft save"
+    )
     stages = state.get("stages")
     executions = state.get("stage_execution")
     if isinstance(stages, dict):

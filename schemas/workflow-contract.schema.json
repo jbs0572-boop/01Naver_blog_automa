@@ -6,6 +6,7 @@
   "oneOf": [
     { "$ref": "#/$defs/stageEvent" },
     { "$ref": "#/$defs/confirmationEvent" },
+    { "$ref": "#/$defs/workflowAuthorizationEvent" },
     { "$ref": "#/$defs/manifest" },
     { "$ref": "#/$defs/visualSlot" },
     { "$ref": "#/$defs/imageGeneration" },
@@ -128,6 +129,25 @@
         "requested_at": { "$ref": "#/$defs/isoDateTime" },
         "confirmed_at": { "$ref": "#/$defs/isoDateTime" },
         "actor": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "workflowAuthorizationEvent": {
+      "type": "object",
+      "required": ["event_type", "pipeline_version", "run_id", "action", "policy", "target_blog_id", "title", "artifact_digest", "authorization_digest", "requested_at", "authorized_at", "actor"],
+      "properties": {
+        "event_type": { "const": "workflow_authorization" },
+        "pipeline_version": { "const": "workflow-optimized-v1" },
+        "run_id": { "type": "string", "minLength": 1 },
+        "action": { "const": "naver-draft-save" },
+        "policy": { "const": "all_quality_gates_passed" },
+        "target_blog_id": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "artifact_digest": { "$ref": "#/$defs/artifactDigest" },
+        "authorization_digest": { "$ref": "#/$defs/sha256" },
+        "requested_at": { "$ref": "#/$defs/isoDateTime" },
+        "authorized_at": { "$ref": "#/$defs/isoDateTime" },
+        "actor": { "const": "dashboard-auto-save" }
       },
       "additionalProperties": false
     },

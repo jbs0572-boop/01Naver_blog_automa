@@ -298,7 +298,10 @@ def request_from_state(
         state_dir=state_dir,
         auto_topic=state.get("auto_topic") is True,
         selection_context=_selection_context(state.get("selection_context")),
-        confirmed=state.get("confirmation") is not None,
+        confirmed=(
+            state.get("confirmation") is not None
+            or state.get("naver_save_authorization") is not None
+        ),
         resume=True,
         notion_target_id=notion_target_id,
         model_config=_model_config(state.get("model_config")),

@@ -739,7 +739,6 @@ class ManualRunManager:
                     RunStatus.READY_FOR_NAVER.value,
                     RunStatus.AWAITING_USER_CONFIRMATION.value,
                 }
-                and not is_stale_recovery(child.updated_at, now=now_dt)
             )
             confirmed_results: dict[str, tuple[str, str]] = {}
             for child in batch.children:
