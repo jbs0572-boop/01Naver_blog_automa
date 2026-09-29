@@ -417,6 +417,182 @@ def test_dashboard_external_resume_injects_adapters_after_initial_run(
     assert resumed[0].naver_adapter is not None
 
 
+def test_live_run_advances_through_quality_gate_to_naver_draft_save(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+    run_ids: list[str] = []
+
+    class Naver:
+        @property
+        def target_blog_id(self) -> str:
+            return "blog-live"
+
+        def prepare(self, title: str, body: str, artifact_digest: str) -> JSONMap:
+            _ = (title, body, artifact_digest)
+            return {}
+
+        def save(self, title: str, artifact_digest: str) -> JSONMap:
+            _ = (title, artifact_digest)
+            return {}
+
+    def runner(request: RunnerRequest) -> RunnerResult:
+        assert request.run_id is not None
+        run_id = str(request.run_id)
+        run_ids.append(run_id)
+        state_path, log_path, _ = state_paths(tmp_path, run_id)
+        atomic_write_json(
+            state_path,
+            {"run_id": run_id, "status": RunStatus.LOCAL_ONLY.value},
+        )
+        return RunnerResult(
+            run_id, RunStatus.LOCAL_ONLY, state_path, log_path, (), "quality gates passed"
+        )
+
+    def resume(request: RunnerRequest) -> RunnerResult:
+        assert request.run_id == run_ids[0]
+        state_path, log_path, _ = state_paths(tmp_path, run_ids[0])
+        run_id = run_ids[0]
+        assert request.run_id == run_id
+        events.append("external")
+        if len(events) == 1:
+            atomic_write_json(
+                state_path,
+                {"run_id": run_id, "status": RunStatus.READY_FOR_NAVER.value},
+            )
+            return RunnerResult(
+                run_id,
+                RunStatus.READY_FOR_NAVER,
+                state_path,
+                log_path,
+                (),
+                "Q2 passed",
+            )
+        atomic_write_json(
+            state_path,
+            {
+                "run_id": run_id,
+                "status": RunStatus.AWAITING_USER_CONFIRMATION.value,
+                "confirmation_nonce": "runner-confirmation-nonce",
+                "target_blog_id": "blog-live",
+                "naver_title": "테스트 글",
+                "artifact_digest": "sha256:" + "a" * 64,
+                "artifact_paths": ["assets/topic/image.png"],
+            },
+        )
+        return RunnerResult(
+            run_id,
+            RunStatus.AWAITING_USER_CONFIRMATION,
+            state_path,
+            log_path,
+            (),
+            "Naver preparation passed",
+        )
+
+    def confirm(request: ConfirmationInput) -> RunnerResult:
+        run_id = run_ids[0]
+        state_path, log_path, _ = state_paths(tmp_path, run_id)
+        assert request.run_id == run_id
+        assert request.confirmation_nonce == "runner-confirmation-nonce"
+        assert request.action == "naver-draft-save"
+        events.append("confirm")
+        atomic_write_json(
+            state_path,
+            {"run_id": run_id, "status": RunStatus.DRAFT_SAVED.value},
+        )
+        return RunnerResult(
+            run_id, RunStatus.DRAFT_SAVED, state_path, log_path, (), "draft saved"
+        )
+
+    monkeypatch.setattr("tools.dashboard_manual_actions.resume_job", resume)
+    monkeypatch.setattr("tools.dashboard_manual_actions.confirm_job", confirm)
+    manager = ManualRunManager(
+        ManualRunContext(tmp_path, True),
+        ManualRunDependencies(runner, naver_adapter=Naver()),
+    )
+
+    batch = manager.start(
+        parse_manual_run_payload({"keyword": "테스트 주제", "as_of_date": "2026-09-29"})
+    )
+    manager.close()
+    settled = manager.get(batch.batch_id)
+
+    assert settled is not None
+    result = settled.children[0]
+    assert result.result_status == RunStatus.DRAFT_SAVED.value
+    assert result.next_action is None
+    assert events == ["external", "external", "confirm"]
+
+
+def test_live_run_does_not_auto_save_when_naver_quality_gate_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    external_calls: list[str] = []
+    state_paths_by_run: dict[str, tuple[Path, Path]] = {}
+
+    class Naver:
+        @property
+        def target_blog_id(self) -> str:
+            return "blog-live"
+
+        def prepare(self, title: str, body: str, artifact_digest: str) -> JSONMap:
+            _ = (title, body, artifact_digest)
+            return {}
+
+        def save(self, title: str, artifact_digest: str) -> JSONMap:
+            _ = (title, artifact_digest)
+            return {}
+
+    def runner(request: RunnerRequest) -> RunnerResult:
+        assert request.run_id is not None
+        run_id = str(request.run_id)
+        state_path, log_path, _ = state_paths(tmp_path, run_id)
+        state_paths_by_run[run_id] = (state_path, log_path)
+        atomic_write_json(
+            state_path,
+            {"run_id": run_id, "status": RunStatus.LOCAL_ONLY.value},
+        )
+        return RunnerResult(
+            run_id, RunStatus.LOCAL_ONLY, state_path, log_path, (), "local-only"
+        )
+
+    def resume(request: RunnerRequest) -> RunnerResult:
+        assert request.run_id is not None
+        run_id = str(request.run_id)
+        state_path, log_path = state_paths_by_run[run_id]
+        external_calls.append(run_id)
+        atomic_write_json(
+            state_path,
+            {"run_id": run_id, "status": RunStatus.FAILED.value},
+        )
+        return RunnerResult(
+            run_id, RunStatus.FAILED, state_path, log_path, (), "Q3 quality gate failed"
+        )
+
+    def unexpected_confirm(_request: ConfirmationInput) -> RunnerResult:
+        pytest.fail("a failed quality gate must never reach Naver save")
+
+    monkeypatch.setattr("tools.dashboard_manual_actions.resume_job", resume)
+    monkeypatch.setattr("tools.dashboard_manual_actions.confirm_job", unexpected_confirm)
+    manager = ManualRunManager(
+        ManualRunContext(tmp_path, True),
+        ManualRunDependencies(runner, naver_adapter=Naver()),
+    )
+
+    batch = manager.start(
+        parse_manual_run_payload({"keyword": "차단할 주제", "as_of_date": "2026-09-29"})
+    )
+    manager.close()
+    settled = manager.get(batch.batch_id)
+
+    assert settled is not None
+    result = settled.children[0]
+    assert result.result_status == RunStatus.FAILED.value
+    assert external_calls == [result.run_id]
+
+
 def test_dashboard_dry_continue_external_strips_supplied_adapters(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1155,6 +1331,112 @@ def test_confirm_exception_after_uncertain_save_does_not_offer_retry(
     assert recovered.next_action is None
     assert recovered.message is not None
     assert "수동 대조" in recovered.message
+
+
+def test_startup_recovery_resumes_recent_live_naver_save(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = parse_manual_run_payload(
+        {"keyword": "재시작 저장", "as_of_date": "2026-09-29"}
+    )
+    batch = new_batch(request, tmp_path)
+    run_id = "RUN-restart-auto-save"
+    state_path, log_path, _ = state_paths(tmp_path, run_id)
+    atomic_write_json(
+        state_path,
+        {"run_id": run_id, "naver_save_outcome_uncertain": False},
+    )
+    preview = ConfirmationPreview(
+        "naver-draft-save",
+        "blog-live",
+        "재시작 글",
+        ("assets/topic/image.png",),
+        "sha256:" + "a" * 64,
+    )
+    child = replace(
+        batch.children[0],
+        status="completed",
+        result_status=RunStatus.AWAITING_USER_CONFIRMATION.value,
+        run_id=run_id,
+        confirmation_preview=preview,
+        next_action=ManualActionView("confirm", "stale-confirmation-nonce"),
+        updated_at=datetime.now(UTC).isoformat(),
+    )
+    ManualBatchStore(tmp_path).save(replace(batch, children=(child,)))
+
+    class Naver:
+        @property
+        def target_blog_id(self) -> str:
+            return "blog-live"
+
+        def prepare(self, title: str, body: str, artifact_digest: str) -> JSONMap:
+            _ = (title, body, artifact_digest)
+            return {}
+
+        def save(self, title: str, artifact_digest: str) -> JSONMap:
+            _ = (title, artifact_digest)
+            return {}
+
+    events: list[str] = []
+
+    def resume(action: RunnerRequest) -> RunnerResult:
+        assert action.run_id == run_id
+        events.append("external")
+        atomic_write_json(
+            state_path,
+            {
+                "run_id": run_id,
+                "status": RunStatus.AWAITING_USER_CONFIRMATION.value,
+                "confirmation_nonce": "fresh-confirmation-nonce",
+                "target_blog_id": "blog-live",
+                "naver_title": "재시작 글",
+                "artifact_digest": preview.artifact_digest,
+                "artifact_paths": list(preview.images),
+            },
+        )
+        return RunnerResult(
+            run_id,
+            RunStatus.AWAITING_USER_CONFIRMATION,
+            state_path,
+            log_path,
+            (),
+            "Naver preparation passed",
+        )
+
+    def confirm(action: ConfirmationInput) -> RunnerResult:
+        assert action.run_id == run_id
+        assert action.confirmation_nonce == "fresh-confirmation-nonce"
+        events.append("confirm")
+        atomic_write_json(
+            state_path,
+            {"run_id": run_id, "status": RunStatus.DRAFT_SAVED.value},
+        )
+        return RunnerResult(
+            run_id, RunStatus.DRAFT_SAVED, state_path, log_path, (), "draft saved"
+        )
+
+    def invalidate(_root: Path, _run_id: str) -> None:
+        return
+
+    monkeypatch.setattr(
+        "tools.dashboard_manual_run.invalidate_naver_preparation", invalidate
+    )
+    monkeypatch.setattr("tools.dashboard_manual_actions.resume_job", resume)
+    monkeypatch.setattr("tools.dashboard_manual_actions.confirm_job", confirm)
+    manager = ManualRunManager(
+        ManualRunContext(tmp_path, True),
+        ManualRunDependencies(lambda _request: pytest.fail("must not rerun"), naver_adapter=Naver()),
+    )
+
+    manager.close()
+    recovered = manager.get(batch.batch_id)
+
+    assert recovered is not None
+    saved = recovered.children[0]
+    assert saved.result_status == RunStatus.DRAFT_SAVED.value
+    assert saved.next_action is None
+    assert events == ["external", "confirm"]
 
 
 def test_startup_recovery_clears_discarded_confirmation_action(

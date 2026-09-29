@@ -1,5 +1,5 @@
 (() => {
-  const labels = {queued:"대기",running:"실행 중",cancelling:"중단 중",awaiting_user_confirmation:"확인 필요",ready_for_naver:"확인 필요","local-only":"확인 필요",blocked:"확인 필요",failed:"실패",cancelled:"취소",draft_saved:"임시저장 완료"};
+  const labels = {queued:"대기",running:"실행 중",cancelling:"중단 중",awaiting_user_confirmation:"임시저장 진행 중",ready_for_naver:"네이버 입력 준비 중","local-only":"외부 저장 대기",blocked:"Gate 차단",failed:"실패",cancelled:"취소",draft_saved:"임시저장 완료"};
   const stages = {"topic-selector":"주제 선정",researcher:"조사",writer:"작성","image-maker":"이미지","content-assembler":"조립","notion-rider":"Notion","naver-rider":"Naver"};
   const state = {items:[],selected:null,selectedRun:null,selectedIds:new Set(),cursor:null,loading:false,error:false,listSignature:"",detailRequest:0,lastObservedAt:null,searchTimer:null};
   const $ = selector => document.querySelector(selector);
@@ -12,7 +12,8 @@
   function reason(item) {
     if (item.effective_status === "queued") return item.queue_position ? `앞선 Job ${item.queue_position - 1}건 실행 대기` : "실행 슬롯 대기";
     if (item.effective_status === "local-only") return "외부 저장 대기";
-    if (["awaiting_user_confirmation","ready_for_naver"].includes(item.effective_status)) return "네이버 임시저장 확인 필요";
+    if (item.effective_status === "awaiting_user_confirmation") return "품질 Gate 통과 · 자동 저장 중";
+    if (item.effective_status === "ready_for_naver") return "품질 검수 후 네이버 입력";
     if (item.effective_status === "blocked") return item.run?.error || "Gate 확인 필요";
     if (item.effective_status === "failed") return item.run?.error || "기록된 실패 원인 확인";
     if (item.effective_status === "cancelling") return "현재 단계 종료 후 중단";
@@ -21,7 +22,7 @@
   }
   function renderSummary(summary = {}, nextRun = null) {
     const counts = summary.by_status || {};
-    const cards = [["실행 중",(counts.running || 0) + (counts.cancelling || 0),"현재 처리 중","attention"],["대기",counts.queued || 0,"실행 슬롯 대기",""],["확인 필요",(counts.blocked || 0) + (counts["local-only"] || 0) + (counts.awaiting_user_confirmation || 0) + (counts.ready_for_naver || 0),"외부 동작 또는 Gate","blocked"],["오늘 완료",summary.today_draft_saved || 0,"네이버 임시저장","success"],["다음 예약",nextRun ? time(nextRun) : "—","예정 시각 · 시작 보장 아님",""]];
+    const cards = [["실행 중",(counts.running || 0) + (counts.cancelling || 0) + (counts.awaiting_user_confirmation || 0),"현재 처리 또는 자동 저장 중","attention"],["대기",counts.queued || 0,"실행 슬롯 대기",""],["확인 필요",(counts.blocked || 0) + (counts["local-only"] || 0) + (counts.ready_for_naver || 0),"연결 또는 Gate 상태","blocked"],["오늘 완료",summary.today_draft_saved || 0,"네이버 임시저장","success"],["다음 예약",nextRun ? time(nextRun) : "—","예정 시각 · 시작 보장 아님",""]];
     $("#task-summary").innerHTML = cards.map(([label,total,note,klass]) => `<article class="summary-card ${klass}"><div class="label">${label}</div><div class="value">${total}</div><div class="note">${note}</div></article>`).join("");
   }
   function row(item) {

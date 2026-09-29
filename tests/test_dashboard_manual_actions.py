@@ -6,7 +6,7 @@ import threading
 from dataclasses import replace
 from pathlib import Path
 from threading import Event
-from typing import Literal, cast
+from typing import Literal
 
 import pytest
 
@@ -26,7 +26,6 @@ from tools.dashboard_manual_models import (
 from tools.dashboard_manual_request import parse_manual_run_payload
 from tools.dashboard_manual_run import ManualRunManager
 from tools.dashboard_manual_store import ManualBatchStore
-from tools.naver_adapter import NaverBrowserAdapter
 from tools.runner_state import state_paths
 from tools.runner_types import ConfirmationInput, RunnerRequest, RunnerResult, RunStatus
 
@@ -333,6 +332,7 @@ def test_restart_requeues_interrupted_initial_without_new_child_or_snapshot(
 
 def test_restart_requires_fresh_naver_preparation_before_confirmation(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     manager, batch_id, _child_id, _nonce = _settled_current_demo(tmp_path)
     before = manager.get(batch_id)
@@ -360,11 +360,73 @@ def test_restart_requires_fresh_naver_preparation_before_confirmation(
         encoding="utf-8",
     )
 
+    class Naver:
+        @property
+        def target_blog_id(self) -> str:
+            return "sola_note"
+
+        def prepare(self, title: str, body: str, artifact_digest: str) -> JSONMap:
+            _ = (title, body, artifact_digest)
+            return {}
+
+        def save(self, title: str, artifact_digest: str) -> JSONMap:
+            _ = (title, artifact_digest)
+            return {}
+
+    events: list[str] = []
+
+    def resume(request: RunnerRequest) -> RunnerResult:
+        assert request.run_id == prepared.run_id
+        assert request.naver_adapter is naver
+        events.append("external")
+        renewed_state = json.loads(state_path.read_text(encoding="utf-8"))
+        assert renewed_state["status"] == RunStatus.LOCAL_ONLY.value
+        assert renewed_state["stages"]["naver-rider"] == RunStatus.PENDING.value
+        assert "naver_tab_target_id" not in renewed_state
+        renewed_state.update(
+            {
+                "status": RunStatus.AWAITING_USER_CONFIRMATION.value,
+                "confirmation_nonce": "fresh-confirmation-nonce",
+                "target_blog_id": "sola_note",
+                "naver_title": "새 준비 제목",
+                "artifact_digest": "sha256:" + "c" * 64,
+                "artifact_paths": ["assets/retry/body.png"],
+            }
+        )
+        _ = state_path.write_text(json.dumps(renewed_state), encoding="utf-8")
+        return RunnerResult(
+            str(request.run_id),
+            RunStatus.AWAITING_USER_CONFIRMATION,
+            state_path,
+            tmp_path / ".automation" / "logs" / f"{request.run_id}.jsonl",
+            (),
+            "Naver preparation passed",
+        )
+
+    def confirm(request: ConfirmationInput) -> RunnerResult:
+        assert request.run_id == prepared.run_id
+        assert request.confirmation_nonce == "fresh-confirmation-nonce"
+        events.append("confirm")
+        _ = state_path.write_text(
+            json.dumps({"status": RunStatus.DRAFT_SAVED.value}), encoding="utf-8"
+        )
+        return RunnerResult(
+            request.run_id,
+            RunStatus.DRAFT_SAVED,
+            state_path,
+            tmp_path / ".automation" / "logs" / f"{request.run_id}.jsonl",
+            (),
+            "draft saved",
+        )
+
+    naver = Naver()
+    monkeypatch.setattr("tools.dashboard_manual_actions.resume_job", resume)
+    monkeypatch.setattr("tools.dashboard_manual_actions.confirm_job", confirm)
     restarted = ManualRunManager(
         ManualRunContext(tmp_path, True),
         ManualRunDependencies(
             _fixture_runner,
-            naver_adapter=cast("NaverBrowserAdapter", object()),
+            naver_adapter=naver,
         ),
     )
     restarted.close()
@@ -372,12 +434,11 @@ def test_restart_requires_fresh_naver_preparation_before_confirmation(
 
     assert after is not None
     recovered = after.children[0]
-    assert recovered.result_status == RunStatus.LOCAL_ONLY.value
-    assert recovered.next_action is not None
-    assert recovered.next_action.kind == "external"
+    assert recovered.result_status == RunStatus.DRAFT_SAVED.value
+    assert recovered.next_action is None
+    assert events == ["external", "confirm"]
     persisted = json.loads(state_path.read_text(encoding="utf-8"))
-    assert persisted["stages"]["naver-rider"] == RunStatus.PENDING.value
-    assert "naver_tab_target_id" not in persisted
+    assert persisted["status"] == RunStatus.DRAFT_SAVED.value
 
 
 def test_retry_after_failed_confirmed_save_requires_fresh_preparation(

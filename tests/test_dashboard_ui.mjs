@@ -29,6 +29,7 @@ test("progress waits for saved draft and retains unknown usage", async () => {
   const stages = ["topic-selector", "researcher", "writer", "image-maker", "content-assembler", "notion-rider", "naver-rider"].map(name => ({name, status: "passed"}));
   const metrics = context.window.RunMetrics;
   assert.equal(metrics.describe({stages, status: "awaiting_user_confirmation"}).percent, 86);
+  assert.equal(metrics.describe({stages, status: "awaiting_user_confirmation"}).next, "네이버 임시저장 진행 중");
   assert.equal(metrics.describe({stages, status: "draft_saved"}).percent, 100);
   assert.equal(metrics.describe({stages: [], status: "running"}).percent, 0);
   assert.equal(metrics.format(null), "집계 전");
@@ -375,18 +376,13 @@ test("transient batch polling failure retries without replaying the action", asy
   assert.deepEqual(harness.requests.map(([url]) => url), ["/api/manual-runs?limit=1", "/api/manual-run/BATCH-01", "/api/manual-run/BATCH-01"]);
 });
 
-test("child confirm dialog and request are scoped to selected child", async () => {
+test("automatic naver save does not expose a user confirmation action", async () => {
   const view = batch({childCount: 3});
   view.children[1] = {...view.children[1], result_status: "awaiting_user_confirmation", next_action: {kind: "confirm", nonce: "confirm-2"}, confirmation_preview: {action: "naver-draft-save", target_blog_id: "sola_note", title: "둘째 글", images: ["/tmp/thumbnail.png"], artifact_digest: "sha256:two"}};
   const harness = await manualHarness(async (url) => ({ok: true, status: 200, json: async () => url === "/api/manual-runs?limit=1" ? {batches: [view]} : view}));
-  let confirmation = "";
-  harness.context.window.confirm = (message) => { confirmation = message; return true; };
   await harness.context.window.ManualRunDashboard.start();
-  await findButtons(harness.elements.get("#manual-batch-list").children[1])[0].click();
-  assert.match(confirmation, /대상 블로그: sola_note/);
-  assert.match(confirmation, /임시저장.*발행하지 않음/);
-  assert.equal(harness.requests[1][0], "/api/manual-run/BATCH-01/children/CHILD-02/confirm");
-  assert.deepEqual(JSON.parse(harness.requests[1][1].body), {nonce: "confirm-2"});
+  assert.equal(findButtons(harness.elements.get("#manual-batch-list").children[1]).length, 0);
+  assert.equal(harness.requests.length, 1);
 });
 
 test("stale action 409 refreshes without replaying", async () => {
@@ -419,15 +415,14 @@ test("incomplete preview blocks confirm request", async () => {
   assert.match(harness.elements.get("#manual-status").textContent, /차단/);
 });
 
-test("untrusted child text stays text and cancelled confirmation sends no request", async () => {
+test("untrusted child text stays text and confirmation is not user-triggered", async () => {
   const view = batch();
   view.children[0] = {...view.children[0], resolved_keyword: "<img src=x onerror=alert(1)>", result_status: "awaiting_user_confirmation", next_action: {kind: "confirm", nonce: "cancelled"}, confirmation_preview: {action: "naver-draft-save", target_blog_id: "blog", title: "title", images: ["/tmp/image.png"], artifact_digest: "sha256:x"}};
   const harness = await manualHarness(async () => ({ok: true, status: 200, json: async () => ({batches: [view]})}));
-  harness.context.window.confirm = () => false;
   await harness.context.window.ManualRunDashboard.start();
   const firstCard = harness.elements.get("#manual-batch-list").children[0];
   assert.equal(firstCard.children[0].textContent, "<img src=x onerror=alert(1)>");
-  await findButtons(firstCard)[0].click();
+  assert.equal(findButtons(firstCard).length, 0);
   assert.equal(harness.requests.length, 1);
 });
 

@@ -63,8 +63,8 @@
           percent = metrics.percent; message = metrics.next;
         } else if (child) {
           message = {queued:'실행 대기',running:'작업 진행 중',failed:'실행 실패',completed:'실행 종료'}[child.status] || message;
-          if (child.result_status === 'local-only') message = '외부 저장 대기';
-          if (child.result_status === 'awaiting_user_confirmation') message = '임시저장 확인 대기';
+          if (child.result_status === 'local-only') message = '네이버 저장 준비 중';
+          if (child.result_status === 'awaiting_user_confirmation') message = '네이버 임시저장 진행 중';
           if (child.result_status === 'draft_saved') { percent = 100; message = '임시저장 완료'; }
         }
       }

@@ -18,7 +18,7 @@
     const percent = Math.round(completed / 7 * 100);
     const current = stages.find(stage => activeStatuses.includes(stage.status)) || stages.find(stage => !completedStatuses.includes(stage.status) && stage.status !== "skipped");
     const step = names[current?.name] || "결과 확인";
-    const next = run.status === "draft_saved" ? "임시저장 완료" : run.status === "awaiting_user_confirmation" ? "임시저장 확인이 필요해요" : run.status === "local-only" ? "외부 저장을 시작할 수 있어요" : ["failed","blocked"].includes(run.status) ? `${step}에서 멈췄어요` : `${step} 단계`;
+    const next = run.status === "draft_saved" ? "임시저장 완료" : run.status === "awaiting_user_confirmation" ? "네이버 임시저장 진행 중" : run.status === "local-only" ? "네이버 저장 준비 중" : ["failed","blocked"].includes(run.status) ? `${step}에서 멈췄어요` : `${step} 단계`;
     return {completed, percent, next};
   }
   function render(run) {

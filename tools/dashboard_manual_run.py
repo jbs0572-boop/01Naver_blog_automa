@@ -190,6 +190,15 @@ class ManualRunManager:
     def submit_action(
         self, batch_id: str, child_id: str, kind: ActionKind, nonce: str
     ) -> ManualBatchView:
+        batch, child = self._accept_action(batch_id, child_id, kind, nonce)
+        self._futures.append(
+            self._pool.submit(self._execute_action, batch_id, child_id, kind, child)
+        )
+        return batch
+
+    def _accept_action(
+        self, batch_id: str, child_id: str, kind: ActionKind, nonce: str
+    ) -> tuple[ManualBatchView, ManualRunView]:
         with self._lock:
             batch = self._required_batch(batch_id)
             if len(batch.children) != 1:
@@ -223,10 +232,7 @@ class ManualRunManager:
             batch = _replace_child(batch, updated)
             batch = replace(batch, status=aggregate_status(batch), updated_at=accepted_at)
             self._store.save(batch)
-        self._futures.append(
-            self._pool.submit(self._execute_action, batch_id, child_id, kind, child)
-        )
-        return batch
+        return batch, child
 
     def continue_external(self, task_id: str) -> ManualRunView:
         batch, child = self._find_task(task_id)
@@ -434,6 +440,8 @@ class ManualRunManager:
         slot = child.slot or 1
         if child.resolved_keyword is not None and slot < len(batch.children):
             self._resume_persisted_child(batch.batch_id, slot + 1)
+        if child.child_id is not None:
+            self._drive_live_naver_save(batch.batch_id, child.child_id)
 
     def _execute_action(
         self,
@@ -441,6 +449,8 @@ class ManualRunManager:
         child_id: str,
         kind: ActionKind,
         accepted_child: ManualRunView,
+        *,
+        advance_automatically: bool = True,
     ) -> None:
         with self._lock:
             batch = self._required_batch(batch_id)
@@ -504,6 +514,8 @@ class ManualRunManager:
                 ended_at=settled_at,
             )
         self._save_child(batch, replace(updated, active_action=None))
+        if advance_automatically:
+            self._drive_live_naver_save(batch_id, child_id)
 
     def _recover_action(self, batch_id: str, child_id: str, kind: ActionKind) -> None:
         batch = self._required_batch(batch_id)
@@ -538,6 +550,59 @@ class ManualRunManager:
                 ended_at=settled_at,
             )
         self._save_child(batch, replace(updated, active_action=None))
+        self._drive_live_naver_save(batch_id, child_id)
+
+    def _drive_live_naver_save(self, batch_id: str, child_id: str) -> None:
+        if not self._context.live_writes or self._dependencies.naver_adapter is None:
+            return
+        first = self._required_child(
+            self._required_batch(batch_id), child_id
+        ).result_status
+        match first:
+            case RunStatus.LOCAL_ONLY.value:
+                external_limit = 2
+            case RunStatus.READY_FOR_NAVER.value:
+                external_limit = 1
+            case _:
+                external_limit = 0
+        external_actions = 0
+        while True:
+            batch = self._required_batch(batch_id)
+            child = self._required_child(batch, child_id)
+            if (
+                child.status != "completed"
+                or child.active_action is not None
+                or child.cancellation is not None
+                or child.run_id is None
+                or child.next_action is None
+                or read_cancellation(self._context.root, child.run_id) is not None
+            ):
+                return
+            action = child.next_action
+            match (child.result_status, action.kind):
+                case (RunStatus.LOCAL_ONLY.value, "external") if external_actions == 0:
+                    kind: ActionKind = "external"
+                    external_actions += 1
+                case (RunStatus.READY_FOR_NAVER.value, "external") if external_actions < external_limit:
+                    kind = "external"
+                    external_actions += 1
+                case (RunStatus.AWAITING_USER_CONFIRMATION.value, "confirm"):
+                    preview = child.confirmation_preview
+                    if preview is None or preview.action != "naver-draft-save":
+                        return
+                    kind = "confirm"
+                case _:
+                    return
+            _, accepted_child = self._accept_action(
+                batch_id, child_id, kind, action.nonce
+            )
+            self._execute_action(
+                batch_id,
+                child_id,
+                kind,
+                accepted_child,
+                advance_automatically=False,
+            )
 
     def _save_child(self, batch: ManualBatchView, child: ManualRunView) -> None:
         cancellation_slot: int | None = None
@@ -660,6 +725,22 @@ class ManualRunManager:
                 continue
             now_dt = datetime.now(UTC)
             now = now_dt.isoformat()
+            auto_resume_ids = tuple(
+                child.child_id
+                for child in batch.children
+                if self._context.live_writes
+                and self._dependencies.naver_adapter is not None
+                and child.child_id is not None
+                and child.active_action is None
+                and child.status == "completed"
+                and child.result_status
+                in {
+                    RunStatus.LOCAL_ONLY.value,
+                    RunStatus.READY_FOR_NAVER.value,
+                    RunStatus.AWAITING_USER_CONFIRMATION.value,
+                }
+                and not is_stale_recovery(child.updated_at, now=now_dt)
+            )
             confirmed_results: dict[str, tuple[str, str]] = {}
             for child in batch.children:
                 if child.result_status != RunStatus.AWAITING_USER_CONFIRMATION.value:
@@ -867,6 +948,28 @@ class ManualRunManager:
                 self._futures.append(self._pool.submit(
                     self._resume_persisted_child, batch.batch_id, pending.slot
                 ))
+            for child_id in auto_resume_ids:
+                child = self._required_child(
+                    self._required_batch(batch.batch_id), child_id
+                )
+                if (
+                    child.status == "completed"
+                    and child.active_action is None
+                    and child.next_action is not None
+                    and child.result_status
+                    in {
+                        RunStatus.LOCAL_ONLY.value,
+                        RunStatus.READY_FOR_NAVER.value,
+                        RunStatus.AWAITING_USER_CONFIRMATION.value,
+                    }
+                ):
+                    self._futures.append(
+                        self._pool.submit(
+                            self._drive_live_naver_save,
+                            batch.batch_id,
+                            child_id,
+                        )
+                    )
 
     def _required_batch(self, batch_id: str) -> ManualBatchView:
         batch = self._store.get(batch_id)

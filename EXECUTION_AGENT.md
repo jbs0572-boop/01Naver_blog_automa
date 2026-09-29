@@ -22,7 +22,7 @@ topic-selector.md → researcher.md → writer.md → image-maker.md
 
 두 모드 모두 실행 시 KST 기준일(`as_of_date`, `YYYY-MM-DD`)을 사람에게 받는다. 새 입력에는 분야·주요 독자·발행목적을 받지 않는다. 자동 선정의 후보 원천은 네이버 Creator Advisor 화면이며 Aside Browser 읽기 전용 접근과 원시 스냅샷을 사용한다.
 
-대시보드 신규 자동 요청은 `dashboard_auto_envelope=one_daily_generate_child`로 일반 `daily-generate` 자식 1개만 실행한다. 사용자 정의 요청도 `dashboard_user_envelope=one_daily_generate_child`로 자식 1개를 실행한다. 자식은 `child_lifecycle=q1_then_q2_then_confirmation`을 통과한다. 과거 `dashboard_auto_envelope=three_sequential_daily_generate_children` 기록은 보존하고 읽을 수 있지만 신규 실행에는 사용하지 않는다. 예약은 대시보드의 '매일 자동 작성'에서 KST 시간·실행 모드를 저장하고 시작하며, 각 예약일의 KST 날짜를 기준일로 자동 주제 1건을 생성한다. 기본 시간은 08:00·12:00·18:00이며 UI에서 변경·중지할 수 있다. 대시보드 서버가 예약을 실행하고 Mac 로그인 시 launchd가 서버를 유지한다. 별도 Codex 예약이나 비활성 daily-generate launchd를 중복 활성화하지 않는다.
+대시보드 신규 자동 요청은 `dashboard_auto_envelope=one_daily_generate_child`로 일반 `daily-generate` 자식 1개만 실행한다. 사용자 정의 요청도 `dashboard_user_envelope=one_daily_generate_child`로 자식 1개를 실행한다. 자식은 `child_lifecycle=q1_then_q2_then_automatic_naver_draft_save`를 통과한다. 과거 `dashboard_auto_envelope=three_sequential_daily_generate_children` 기록은 보존하고 읽을 수 있지만 신규 실행에는 사용하지 않는다. 예약은 대시보드의 '매일 자동 작성'에서 KST 시간·실행 모드를 저장하고 시작하며, 각 예약일의 KST 날짜를 기준일로 자동 주제 1건을 생성한다. 기본 시간은 08:00·12:00·18:00이며 UI에서 변경·중지할 수 있다. 대시보드 서버가 예약을 실행하고 Mac 로그인 시 launchd가 서버를 유지한다. 별도 Codex 예약이나 비활성 daily-generate launchd를 중복 활성화하지 않는다.
 
 두 선택은 모두 같은 `research/topic-selection-[키워드].md`를 만들고, 이후 단계·품질 Gate·외부 저장 경로는 동일하다. 모드는 사용자 입력, 라우팅, 권한 판단 또는 단계 생략 조건이 아니다.
 
@@ -46,9 +46,7 @@ flowchart TD
   NR --> Q2{{Q2: Notion 재조회·digest 통과?}}
   Q2 -->|아니오| STOP
   Q2 -->|예| NAV[naver-rider.md\n모바일 에디터 입력]
-  NAV --> CONFIRM{{임시저장 직전\n명시적 사용자 확인}}
-  CONFIRM -->|아니오| HOLD[입력 유지, 임시저장 안 함]
-  CONFIRM -->|예| DRAFT[네이버 임시저장\n발행하지 않음]
+  NAV --> DRAFT[Q3·manifest 통과 후 자동 임시저장\n발행하지 않음]
 ```
 
 도식의 사각형은 담당 Markdown 지침 또는 그 산출물이며, 마름모는 다음 단계로 넘어가기 전에 반드시 통과해야 하는 Gate다.
@@ -63,7 +61,7 @@ flowchart TD
 | image-maker | `image-maker.md`, 초안, 리서치, `image-style-guide.md` | `assets/[키워드]/`, `image-map.md`, 전용 썸네일 | 슬롯·권리·파일·본문 정보 기여가 일치 |
 | content-assembler | `content-assembler.md`, 초안·자산·연결표 | 네 최종 Markdown과 manifest | Q1 통과 |
 | notion-rider | `notion-rider.md`, `notion-config.md`, Q1 산출물 | 지정 데이터 소스의 신규 Notion 페이지와 Q2 기록 | Q2 통과 |
-| naver-rider | `naver-rider.md`, Q2 확인 페이지와 네이버 입력본 | 네이버 새 임시저장 글 | 명시적 사용자 확인 후 임시저장, 발행 없음 |
+| naver-rider | `naver-rider.md`, Q2 확인 페이지와 네이버 입력본 | 네이버 새 임시저장 글 | Q3·manifest·Hook 통과 후 자동 임시저장, 발행 없음 |
 
 이전 단계의 산출물 또는 Gate 통과 기록이 없으면 다음 단계를 호출하지 않는다. 총괄 에이전트는 산출물을 직접 작성하지 않고 담당 단계의 결과와 검증만 확인한다.
 
@@ -94,7 +92,7 @@ Notion 쓰기는 Q1, 현재 manifest, 실행 로그, 설정과 실제 조회 결
 
 외부 Notion·네이버·브라우저·컴퓨터 도구의 쓰기는 `.codex/hooks.json`의 `PreToolUse` Hook이 manifest·로그·`run_id`·대상·쓰기 종류를 검증한 뒤에만 허용한다. Hook 환경에는 `WORKFLOW_GATE`, `WORKFLOW_MANIFEST`, `WORKFLOW_RUN_LOG`, `WORKFLOW_RUN_ID`, `WORKFLOW_TARGET_ID`를 이번 실행 값으로 주입한다. `notion_write`와 `naver_draft_save`는 승인 단계가 아니라 쓰기 종류 식별자다. 인증 토큰·쿠키는 환경이나 로그에 기록하지 않는다.
 
-`naver-rider`는 Q2 후 Notion 페이지 ID·검증 시각·`notion_roundtrip_digest`·대상 블로그 ID·현재 `artifact_digest`를 대조하고, 현재 산출물에 결합된 통과 Q3 보고서를 읽은 뒤 `naver-input.md`가 Notion raw 원본과 허용된 출처 메타데이터 제거 외에는 같은지 확인한다. 임시저장 버튼 바로 앞에는 대상 블로그·제목·이미지·저장 동작에 대한 명시적 사용자 확인을 다시 받는다. 확인이 없으면 임시저장하지 않으며, 발행·예약 발행·공개 설정 변경은 수행하지 않는다.
+`naver-rider`는 Q2 후 Notion 페이지 ID·검증 시각·`notion_roundtrip_digest`·대상 블로그 ID·현재 `artifact_digest`를 대조하고, 현재 산출물에 결합된 통과 Q3 보고서를 읽은 뒤 `naver-input.md`가 Notion raw 원본과 허용된 출처 메타데이터 제거 외에는 같은지 확인한다. 모든 준비 검증과 쓰기 Hook이 통과하면 사용자 추가 확인 없이 네이버 임시저장 버튼을 누르고, 임시저장 목록에서 새 글 제목과 저장 완료 상태를 확인한다. 발행·예약 발행·공개 설정 변경은 수행하지 않는다.
 
 ## 6. Notion 호환 규칙
 
@@ -118,4 +116,4 @@ researcher의 `research-official`과 `research-supporting-visual` Lane은 별도
 
 ## 8. 보고
 
-각 담당 단계의 성공 보고는 `진행 상황: <단계명> 완료`, 실패 보고는 `오류: <단계명> - <원인과 필요한 조치>` 형식을 쓴다. 최종 보고에는 주제 입력 방식, 주제, 단계별 결과, 최종 파일 경로, Notion 데이터 소스 ID와 Q2 결과, 네이버 입력·사용자 확인·임시저장 결과, 남은 오류를 포함한다.
+각 담당 단계의 성공 보고는 `진행 상황: <단계명> 완료`, 실패 보고는 `오류: <단계명> - <원인과 필요한 조치>` 형식을 쓴다. 최종 보고에는 주제 입력 방식, 주제, 단계별 결과, 최종 파일 경로, Notion 데이터 소스 ID와 Q2 결과, 네이버 입력·임시저장 결과, 남은 오류를 포함한다.
