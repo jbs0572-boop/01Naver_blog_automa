@@ -75,6 +75,7 @@ def expected_signature(document: ParsedNotionCopy) -> JSONMap:
                 entry = {
                     "kind": "image",
                     "filename": filename,
+                    "alt": block.alt,
                     "representative": representative,
                 }
                 blocks.append(entry)
@@ -142,6 +143,7 @@ def plan_payload(
                     "kind": "image",
                     "filename": filename,
                     "path": str(staged),
+                    "alt": block.alt,
                     "representative": representative,
                 }
                 blocks.append(entry)
@@ -378,6 +380,11 @@ for (const block of payload.plan.blocks) {
     const image = editor.locator('.se-component.se-image').nth(before);
     await editor.locator('.se-component.se-image img').nth(before).waitFor({ state: 'visible', timeout: 30000 });
     await image.click();
+    const description = image.locator('.se-module-text.se-caption .se-text-paragraph').first();
+    if (!block.alt) throw new Error('Naver image description is required');
+    await description.click();
+    await description.pressSequentially(block.alt);
+    await waitForNormalizedText(description, block.alt, 'Naver image description did not settle');
     continue;
   }
   if (block.kind === 'table') {
@@ -446,10 +453,12 @@ const inspectDocument = async () => {
       }
       if (element.classList.contains('se-image')) {
         const image = element.querySelector('img');
-        const source = image?.getAttribute('alt') || image?.getAttribute('src') || '';
+        const source = image?.getAttribute('src') || '';
         const filename = source.split('/').pop().split('?')[0];
+        const caption = element.querySelector('.se-module-text.se-caption .se-text-paragraph');
+        const description = caption && !caption.querySelector('.se-placeholder') ? clean(caption.textContent) : '';
         const representative = Boolean(element.querySelector('button.se-set-rep-image-button.se-is-selected'));
-        output.push({ kind: 'image', filename, representative });
+        output.push({ kind: 'image', filename, alt: description, representative });
         continue;
       }
       if (element.classList.contains('se-table')) {
@@ -512,8 +521,10 @@ const inspectDocument = async () => {
         if (text) output.push({ kind: 'heading', text });
       } else if (element.classList.contains('se-image')) {
         const image = element.querySelector('img');
-        const source = image?.getAttribute('alt') || image?.getAttribute('src') || '';
-        output.push({ kind: 'image', filename: source.split('/').pop().split('?')[0], representative: Boolean(element.querySelector('button.se-set-rep-image-button.se-is-selected')) });
+        const source = image?.getAttribute('src') || '';
+        const caption = element.querySelector('.se-module-text.se-caption .se-text-paragraph');
+        const description = caption && !caption.querySelector('.se-placeholder') ? clean(caption.textContent) : '';
+        output.push({ kind: 'image', filename: source.split('/').pop().split('?')[0], alt: description, representative: Boolean(element.querySelector('button.se-set-rep-image-button.se-is-selected')) });
       } else if (element.classList.contains('se-table')) {
         output.push({ kind: 'table', rows: Array.from(element.querySelectorAll('tr')).map(row => Array.from(row.querySelectorAll('td')).map(cell => clean(cell.querySelector('.se-text-paragraph')?.textContent))) });
       } else if (element.classList.contains('se-text')) {

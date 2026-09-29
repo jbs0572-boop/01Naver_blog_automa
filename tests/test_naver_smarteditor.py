@@ -112,11 +112,13 @@ def test_signature_preserves_smarteditor_block_order() -> None:
         "image",
         "text",
     ]
+    assert blocks[0]["alt"] == "대표"
     assert blocks[4]["rows"] == [
         ["구분", "기준", "혜택"],
         ["일반", "6000", "6%"],
         ["우대", "3600", "12%"],
     ]
+    assert blocks[5]["alt"] == "본문"
     assert layout_digest(signature).startswith("sha256:")
 
 
@@ -140,7 +142,9 @@ def test_plan_payload_uses_staged_image_paths(tmp_path: Path) -> None:
     blocks = _map_list(payload["blocks"])
     image_steps = [block for block in blocks if block["kind"] == "image"]
     assert image_steps[0]["path"] == str(tmp_path / "thumbnail.png")
+    assert image_steps[0]["alt"] == "대표"
     assert image_steps[0]["representative"] is True
+    assert image_steps[1]["alt"] == "본문"
     assert image_steps[1]["representative"] is False
 
 
@@ -194,6 +198,11 @@ def test_scripts_are_bound_to_semantic_smarteditor_actions(tmp_path: Path) -> No
     assert "await page.mouse.click(titleBox.x + 30" in prepare
     assert "await page.keyboard.insertText(payload.plan.title)" in prepare
     assert "setInputFiles" in prepare
+    assert "image.locator('.se-module-text.se-caption .se-text-paragraph')" in prepare
+    assert "Naver image description did not settle" in prepare
+    assert "alt: description" in prepare
+    assert "se-module-text.se-caption .se-text-paragraph" in save
+    assert "alt: description" in save
     assert "se-toolbar-option-text-format-sectionTitle-button" in prepare
     assert "se-toolbar-option-list-bullet-button" in prepare
     assert "const waitForNormalizedText" in prepare
