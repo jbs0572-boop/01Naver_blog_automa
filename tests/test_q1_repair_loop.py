@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import override
 
@@ -178,7 +178,7 @@ class CountingQ1Notion:
             topic_id=manifest.topic_id,
             artifact_digest=digest,
             manifest={"files": [entry.as_json() for entry in manifest.files]},
-            reviewed_at=NOW.isoformat(),
+            reviewed_at=(NOW + timedelta(seconds=1)).isoformat(),
         )
         content_digest = "sha256:" + "1" * 64
         return {

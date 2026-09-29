@@ -161,7 +161,7 @@ class NotionGateContractTests(unittest.TestCase):
             topic_id=self.topic_id,
             artifact_digest=artifact_digest,
             manifest=self.manifest,
-            reviewed_at=verified_at,
+            reviewed_at="2026-08-26T12:03:01+09:00",
         )
         events = [
             {

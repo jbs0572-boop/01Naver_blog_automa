@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta
 import tempfile
 import unittest
 from pathlib import Path
@@ -87,6 +88,9 @@ class NaverGateContractTests(unittest.TestCase):
         )
 
     def _install_quality_review(self, verified_at: str) -> None:
+        q3_reviewed_at = (
+            datetime.fromisoformat(verified_at) + timedelta(seconds=1)
+        ).isoformat()
         from tests.article_quality_fixtures import install_passing_quality_review
 
         _ = install_passing_quality_review(
@@ -95,7 +99,7 @@ class NaverGateContractTests(unittest.TestCase):
             topic_id=self.topic_id,
             artifact_digest=str(self.manifest["artifact_digest"]),
             manifest=self.manifest,
-            reviewed_at=verified_at,
+            reviewed_at=q3_reviewed_at,
         )
         scores: JSONMap = {name: value for name, value in SCORE_MAXIMA.items()}
         report: JSONMap = {
@@ -105,7 +109,7 @@ class NaverGateContractTests(unittest.TestCase):
             "topic_id": self.topic_id,
             "artifact_digest": self.manifest["artifact_digest"],
             "reviewer": "fixture-reviewer",
-            "reviewed_at": verified_at,
+            "reviewed_at": q3_reviewed_at,
             "scores": scores,
             "evidence": {name: "fixture evidence" for name in SCORE_MAXIMA},
             "immediate_failures": [],
@@ -124,7 +128,9 @@ class NaverGateContractTests(unittest.TestCase):
         ]
         for image_record in image_records:
             image_record["article_quality_report_digest"] = report["report_digest"]
-            image_record["reviewed_at"] = "2026-08-26T12:03:01+09:00"
+            image_record["reviewed_at"] = (
+                datetime.fromisoformat(q3_reviewed_at) + timedelta(seconds=1)
+            ).isoformat()
         _ = image_quality_path.write_text(
             "".join(json.dumps(record) + "\n" for record in image_records),
             encoding="utf-8",

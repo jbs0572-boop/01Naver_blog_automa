@@ -117,6 +117,7 @@ def find_duplicate_job(
         RunStatus.PASSED.value,
         RunStatus.READY_FOR_NAVER.value,
         RunStatus.AWAITING_USER_CONFIRMATION.value,
+        RunStatus.LOCAL_ONLY.value,
         RunStatus.DRAFT_SAVED.value,
     }
     directory = base / "state"

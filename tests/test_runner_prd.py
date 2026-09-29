@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import shutil
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import override
 
@@ -26,7 +26,7 @@ from tools.runner_execution import (
     resume_job,
     run_job,
 )
-from tools.runner_job import validate_job_request
+from tools.runner_job import find_duplicate_job, validate_job_request
 from tools.runner_state import atomic_write_json, state_paths
 from tools.runner_types import (
     STAGE_ORDER,
@@ -149,7 +149,7 @@ class FixtureNotion:
             topic_id=manifest.topic_id,
             artifact_digest=digest,
             manifest={"files": [entry.as_json() for entry in manifest.files]},
-            reviewed_at=NOW.isoformat(),
+            reviewed_at=(NOW + timedelta(seconds=1)).isoformat(),
         )
         content_digest = "sha256:" + "1" * 64
         return {
@@ -368,6 +368,34 @@ def test_same_date_auto_batch_slots_have_distinct_job_keys(tmp_path: Path) -> No
 
     # When / Then
     assert job_key(first) != job_key(second)
+
+
+def test_daily_generate_local_only_run_blocks_duplicate_until_external_continuation(
+    tmp_path: Path,
+) -> None:
+    request = RunnerRequest(
+        root=tmp_path,
+        job="daily-generate",
+        keyword="topic",
+        now=NOW,
+        selection_context=DATE_CONTEXT,
+    )
+    run_id = "RUN-local-only-pending"
+    state_path, _, _ = state_paths(tmp_path, run_id)
+    atomic_write_json(
+        state_path,
+        {
+            "run_id": run_id,
+            "job": "daily-generate",
+            "job_key": job_key(request),
+            "status": RunStatus.LOCAL_ONLY.value,
+        },
+    )
+
+    duplicate = find_duplicate_job(request, "daily-generate", None)
+
+    assert duplicate is not None
+    assert duplicate[0] == run_id
 
 
 def test_daily_generate_model_snapshot_changes_duplicate_identity(tmp_path: Path) -> None:

@@ -131,7 +131,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str]:
         topic_id=topic_id,
         artifact_digest=digest,
         manifest=manifest,
-        reviewed_at="2026-08-31T00:03:00+00:00",
+        reviewed_at="2026-08-31T00:03:01+00:00",
     )
     quality_report: JSONMap = {
         "report_version": QUALITY_REPORT_VERSION,
@@ -140,7 +140,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str]:
         "topic_id": topic_id,
         "artifact_digest": digest,
         "reviewer": "fixture-reviewer",
-        "reviewed_at": "2026-08-31T00:03:00+00:00",
+        "reviewed_at": "2026-08-31T00:03:01+00:00",
         "scores": dict(SCORE_MAXIMA),
         "evidence": {name: "fixture evidence" for name in SCORE_MAXIMA},
         "immediate_failures": [],
@@ -159,7 +159,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str]:
     ]
     for image_record in image_records:
         image_record["article_quality_report_digest"] = quality_report["report_digest"]
-        image_record["reviewed_at"] = "2026-08-31T00:03:01+00:00"
+        image_record["reviewed_at"] = "2026-08-31T00:03:02+00:00"
     _ = image_quality_path.write_text(
         "".join(json.dumps(record) + "\n" for record in image_records),
         encoding="utf-8",

@@ -32,7 +32,7 @@ from tools.dashboard_manual_store import ManualBatchStore
 from tools.external_adapter import ExternalWriteRequest
 from tools.log_contract import read_events
 from tools.runner_execution import run_job
-from tools.runner_state import read_state
+from tools.runner_state import atomic_write_json, read_state, state_paths
 from tools.runner_types import (
     RunnerRequest,
     RunnerResult,
@@ -747,6 +747,169 @@ def test_startup_ignores_misleading_legacy_active_action_across_restarts(
     assert calls == []
     assert path.read_bytes() == original
     assert store.get(misleading.batch_id) == misleading
+
+
+def test_startup_recovery_clears_confirm_and_preserves_uncertain_save(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = parse_manual_run_payload(
+        {"keyword": "재시작 확인", "as_of_date": "2026-09-29"}
+    )
+    batch = new_batch(request, tmp_path)
+    run_id = "RUN-confirm-recovery"
+    state_path, _, _ = state_paths(tmp_path, run_id)
+    atomic_write_json(
+        state_path,
+        {
+            "run_id": run_id,
+            "naver_save_outcome_uncertain": True,
+        },
+    )
+    active = ManualActiveActionView(
+        "confirm",
+        "OPERATION-confirm",
+        "sha256:" + "a" * 64,
+        datetime.now(UTC).isoformat(),
+        "running",
+    )
+    child = replace(
+        batch.children[0],
+        status="completed",
+        result_status=RunStatus.AWAITING_USER_CONFIRMATION.value,
+        run_id=run_id,
+        message="awaiting confirmation",
+        next_action=ManualActionView("confirm", "confirmation-nonce"),
+        active_action=active,
+        updated_at=datetime.now(UTC).isoformat(),
+    )
+    store = ManualBatchStore(tmp_path)
+    store.save(replace(batch, children=(child,)))
+    invalidated: list[str] = []
+    recovered_actions: list[str] = []
+
+    def invalidate(_root: Path, invalid_run_id: str) -> None:
+        invalidated.append(invalid_run_id)
+
+    def recover(*_args: object) -> ManualRunView:
+        recovered_actions.append("called")
+        return child
+
+    def runner(_request: RunnerRequest) -> RunnerResult:
+        raise AssertionError("startup recovery must not run a new workflow")
+
+    class ForbiddenNaver:
+        @property
+        def target_blog_id(self) -> str:
+            raise AssertionError("uncertain save must not start a new Naver action")
+
+        def prepare(self, title: str, body: str, artifact_digest: str) -> JSONMap:
+            _ = (title, body, artifact_digest)
+            raise AssertionError("uncertain save must not be prepared again")
+
+        def save(self, title: str, artifact_digest: str) -> JSONMap:
+            _ = (title, artifact_digest)
+            raise AssertionError("uncertain save must not be replayed")
+
+    monkeypatch.setattr("tools.dashboard_manual_run.invalidate_naver_preparation", invalidate)
+    monkeypatch.setattr("tools.dashboard_manual_run.recover_child_action", recover)
+    manager = ManualRunManager(
+        ManualRunContext(tmp_path, True),
+        ManualRunDependencies(runner, naver_adapter=ForbiddenNaver()),
+    )
+    manager.close()
+    settled = manager.get(batch.batch_id)
+
+    assert settled is not None
+    recovered = settled.children[0]
+    assert recovered.status == "failed"
+    assert recovered.result_status == RunStatus.FAILED.value
+    assert recovered.retryable is False
+    assert recovered.next_action is None
+    assert recovered.active_action is None
+    assert recovered.confirmation_preview is None
+    assert "수동 대조" in recovered.message
+    assert invalidated == []
+    assert recovered_actions == []
+
+
+def test_startup_recovery_clears_discarded_confirmation_action(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = parse_manual_run_payload(
+        {"keyword": "확인 갱신", "as_of_date": "2026-09-29"}
+    )
+    batch = new_batch(request, tmp_path)
+    run_id = "RUN-confirm-renewal"
+    state_path, _, _ = state_paths(tmp_path, run_id)
+    atomic_write_json(
+        state_path,
+        {
+            "run_id": run_id,
+            "naver_save_outcome_uncertain": False,
+        },
+    )
+    active = ManualActiveActionView(
+        "confirm",
+        "OPERATION-confirm",
+        "sha256:" + "b" * 64,
+        datetime.now(UTC).isoformat(),
+        "running",
+    )
+    child = replace(
+        batch.children[0],
+        status="completed",
+        result_status=RunStatus.AWAITING_USER_CONFIRMATION.value,
+        run_id=run_id,
+        message="awaiting confirmation",
+        next_action=ManualActionView("confirm", "confirmation-nonce"),
+        active_action=active,
+        updated_at=datetime.now(UTC).isoformat(),
+    )
+    store = ManualBatchStore(tmp_path)
+    store.save(replace(batch, children=(child,)))
+    monkeypatch.setattr(
+        "tools.dashboard_manual_run.invalidate_naver_preparation",
+        lambda _root, _run_id: None,
+    )
+    recovered_actions: list[str] = []
+
+    def recover(*_args: object) -> ManualRunView:
+        recovered_actions.append("called")
+        return child
+
+    def runner(_request: RunnerRequest) -> RunnerResult:
+        raise AssertionError("startup recovery must wait for external continuation")
+
+    class ForbiddenNaver:
+        @property
+        def target_blog_id(self) -> str:
+            raise AssertionError("recovery must not inspect the browser adapter")
+
+        def prepare(self, title: str, body: str, artifact_digest: str) -> JSONMap:
+            _ = (title, body, artifact_digest)
+            raise AssertionError("recovery must not prepare until requested")
+
+        def save(self, title: str, artifact_digest: str) -> JSONMap:
+            _ = (title, artifact_digest)
+            raise AssertionError("recovery must not save until confirmed")
+
+    monkeypatch.setattr("tools.dashboard_manual_run.recover_child_action", recover)
+    manager = ManualRunManager(
+        ManualRunContext(tmp_path, True),
+        ManualRunDependencies(runner, naver_adapter=ForbiddenNaver()),
+    )
+    manager.close()
+    settled = manager.get(batch.batch_id)
+
+    assert settled is not None
+    recovered = settled.children[0]
+    assert recovered.result_status == RunStatus.LOCAL_ONLY.value
+    assert recovered.next_action is not None
+    assert recovered.next_action.kind == "external"
+    assert recovered.active_action is None
+    assert recovered_actions == []
 
 
 def test_startup_resumes_fresh_one_child_batch_exactly_once(

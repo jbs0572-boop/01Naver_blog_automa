@@ -44,6 +44,17 @@ type ActionKind = Literal["retry", "external", "confirm"]
 RECOVERY_STALE_AFTER = timedelta(minutes=15)
 
 
+def _naver_save_outcome_uncertain(root: Path, run_id: str | None) -> bool:
+    if run_id is None:
+        return True
+    try:
+        state_path, _, _ = state_paths(root, run_id)
+        state = read_state(state_path)
+    except ContractError:
+        return True
+    return state.get("naver_save_outcome_uncertain") is True
+
+
 def is_stale_recovery(updated_at: str, *, now: datetime) -> bool:
     try:
         parsed = datetime.fromisoformat(updated_at)
@@ -519,13 +530,41 @@ class ManualRunManager:
                 )
                 self._store.save(batch)
             if self._context.live_writes and self._dependencies.naver_adapter is not None:
+                uncertain_runs = {
+                    child.run_id
+                    for child in batch.children
+                    if child.result_status
+                    == RunStatus.AWAITING_USER_CONFIRMATION.value
+                    and _naver_save_outcome_uncertain(
+                        self._context.root, child.run_id
+                    )
+                }
                 recovered_children = tuple(
                     replace(
+                        child,
+                        status="failed",
+                        result_status=RunStatus.FAILED.value,
+                        message=(
+                            "네이버 임시저장 결과 확인이 필요합니다. "
+                            "중복 저장 방지를 위해 수동 대조 후 재개해 주세요."
+                        ),
+                        error="NaverSaveReconciliationRequired",
+                        retryable=False,
+                        confirmation_preview=None,
+                        next_action=None,
+                        active_action=None,
+                        updated_at=_now(),
+                    )
+                    if child.result_status
+                    == RunStatus.AWAITING_USER_CONFIRMATION.value
+                    and child.run_id in uncertain_runs
+                    else replace(
                         child,
                         result_status=RunStatus.LOCAL_ONLY.value,
                         message="Naver preparation must be renewed after dashboard restart",
                         confirmation_preview=None,
                         next_action=ManualActionView("external", uuid.uuid4().hex),
+                        active_action=None,
                         updated_at=_now(),
                     )
                     if child.result_status
@@ -539,6 +578,7 @@ class ManualRunManager:
                             child.result_status
                             == RunStatus.AWAITING_USER_CONFIRMATION.value
                             and child.run_id is not None
+                            and child.run_id not in uncertain_runs
                         ):
                             invalidate_naver_preparation(
                                 self._context.root, child.run_id
