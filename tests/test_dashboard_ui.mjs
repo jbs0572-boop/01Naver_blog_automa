@@ -210,7 +210,7 @@ test("schedule rows keep each pinned preset when schedule data resolves before m
     remove() { this.removed = true; }
     set innerHTML(value) {
       this._innerHTML = value;
-      if (value.includes("schedule-progress")) {
+      if (value.includes("<strong>")) {
         const strong = new ScheduleElement("strong");
         const step = new ScheduleElement("span"); step.className = "schedule-step";
         const bar = new ScheduleElement("progress");
@@ -220,7 +220,7 @@ test("schedule rows keep each pinned preset when schedule data resolves before m
     }
     get innerHTML() { return this._innerHTML || ""; }
     querySelector(selector) {
-      const matches = (node) => selector.startsWith(".") ? node.className.split(" ").includes(selector.slice(1)) : selector === "input[type=\"time\"]" ? node.tagName === "INPUT" && node.type === "time" : selector === "input[type=\"checkbox\"]" ? node.tagName === "INPUT" && node.type === "checkbox" : node.tagName.toLowerCase() === selector;
+      const matches = (node) => selector.startsWith(".") ? String(node.className || "").split(" ").includes(selector.slice(1)) : selector === "input[type=\"time\"]" ? node.tagName === "INPUT" && node.type === "time" : selector === "input[type=\"checkbox\"]" ? node.tagName === "INPUT" && node.type === "checkbox" : node.tagName.toLowerCase() === selector;
       for (const child of this.children) { if (matches(child)) return child; const found = child.querySelector?.(selector); if (found) return found; }
       return null;
     }
@@ -485,7 +485,7 @@ test("schedule retry recovers accepted work after reload, rotates terminal failu
     remove() { this.removed = true; }
     set innerHTML(value) {
       this._innerHTML = value;
-      if (value.includes("schedule-progress")) {
+      if (value.includes("<strong>")) {
         const strong = new ScheduleElement("strong");
         const step = new ScheduleElement("span"); step.className = "schedule-step";
         const bar = new ScheduleElement("progress");
@@ -496,7 +496,7 @@ test("schedule retry recovers accepted work after reload, rotates terminal failu
     get innerHTML() { return this._innerHTML || ""; }
     querySelector(selector) {
       const matches = node => selector.startsWith(".")
-        ? node.className.split(" ").includes(selector.slice(1))
+        ? String(node.className || "").split(" ").includes(selector.slice(1))
         : selector === 'input[type="time"]' ? node.tagName === "INPUT" && node.type === "time"
         : selector === 'input[type="checkbox"]' ? node.tagName === "INPUT" && node.type === "checkbox"
         : node.tagName.toLowerCase() === selector;
