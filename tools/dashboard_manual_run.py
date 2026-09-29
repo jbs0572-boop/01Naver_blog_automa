@@ -438,12 +438,25 @@ class ManualRunManager:
                 self._context, self._dependencies, accepted_child, kind
             )
         except (ContractError, OSError, TimeoutError, ValueError) as error:
+            uncertain_save = kind == "confirm" and _naver_save_outcome_uncertain(
+                self._context.root, accepted_child.run_id
+            )
             updated = replace(
                 child,
                 status="failed",
                 error=type(error).__name__,
-                retryable=True,
-                next_action=ManualActionView("retry", uuid.uuid4().hex),
+                message=(
+                    "네이버 임시저장 결과가 불확실합니다. "
+                    + "중복 저장 방지를 위해 임시저장 목록을 수동 대조해야 합니다."
+                    if uncertain_save
+                    else child.message
+                ),
+                retryable=not uncertain_save,
+                next_action=(
+                    None
+                    if uncertain_save
+                    else ManualActionView("retry", uuid.uuid4().hex)
+                ),
                 updated_at=_now(),
             )
         self._save_child(batch, replace(updated, active_action=None))
