@@ -900,6 +900,71 @@ def test_confirm_failure_with_uncertain_save_does_not_offer_retry(
     assert "수동 대조" in updated.message
 
 
+
+def test_confirm_exception_after_uncertain_save_does_not_offer_retry(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = parse_manual_run_payload(
+        {"keyword": "저장 후 기록 오류", "as_of_date": "2026-09-29"}
+    )
+    batch = new_batch(request, tmp_path)
+    run_id = "RUN-uncertain-save-exception"
+    state_path, _, _ = state_paths(tmp_path, run_id)
+    atomic_write_json(
+        state_path,
+        {
+            "run_id": run_id,
+            "naver_save_outcome_uncertain": True,
+        },
+    )
+    preview = ConfirmationPreview(
+        action="naver-draft-save",
+        target_blog_id="blog-fixture",
+        title="확인할 제목",
+        images=("assets/topic/image-01.png",),
+        artifact_digest="sha256:" + "c" * 64,
+    )
+    child = replace(
+        batch.children[0],
+        status="completed",
+        run_id=run_id,
+        result_status=RunStatus.AWAITING_USER_CONFIRMATION.value,
+        confirmation_preview=preview,
+        next_action=ManualActionView("confirm", "nonce"),
+    )
+
+    def runner(_request: RunnerRequest) -> RunnerResult:
+        raise AssertionError("uncertain save recovery must not launch a new workflow")
+
+    manager = ManualRunManager(
+        ManualRunContext(tmp_path, True),
+        ManualRunDependencies(runner),
+    )
+    manager._store.save(replace(batch, children=(child,)))
+
+    def fail_after_save(
+        _context: ManualRunContext,
+        _dependencies: ManualRunDependencies,
+        _child: ManualRunView,
+        _kind: str,
+    ) -> ManualRunView:
+        raise OSError("event log write failed after the save call")
+
+    monkeypatch.setattr("tools.dashboard_manual_run.execute_child_action", fail_after_save)
+    manager._execute_action(batch.batch_id, str(child.child_id), "confirm", child)
+    settled = manager.get(batch.batch_id)
+    manager.close()
+
+    assert settled is not None
+    recovered = settled.children[0]
+    assert recovered.status == "failed"
+    assert recovered.retryable is False
+    assert recovered.next_action is None
+    assert recovered.message is not None
+    assert "수동 대조" in recovered.message
+
+
 def test_startup_recovery_clears_discarded_confirmation_action(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
