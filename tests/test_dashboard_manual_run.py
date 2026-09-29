@@ -12,6 +12,7 @@ import pytest
 from tests.test_dashboard_manual_store import persist_legacy_pending_batch
 from tests.test_runner_prd import FixtureExecutor
 from tools.contract_types import ContractError, JSONMap
+from tools.dashboard_manual_actions import execute_child_action
 from tools.dashboard_manual_batch import new_batch
 from tools.dashboard_manual_models import (
     AUTO_BATCH_SIZE,
@@ -22,7 +23,6 @@ from tools.dashboard_manual_models import (
     ManualRunView,
     ManualSnapshotView,
 )
-from tools.dashboard_manual_actions import execute_child_action
 from tools.dashboard_manual_run import (
     ManualRunContext,
     ManualRunDependencies,
@@ -36,6 +36,7 @@ from tools.log_contract import read_events
 from tools.runner_execution import run_job
 from tools.runner_state import atomic_write_json, read_state, state_paths
 from tools.runner_types import (
+    ConfirmationInput,
     RunnerRequest,
     RunnerResult,
     RunStatus,
@@ -876,7 +877,10 @@ def test_confirm_failure_with_uncertain_save_does_not_offer_retry(
         (),
         "save outcome is uncertain",
     )
-    monkeypatch.setattr("tools.dashboard_manual_actions.confirm_job", lambda _input: failed)
+    def fail_confirm(_input: ConfirmationInput) -> RunnerResult:
+        return failed
+
+    monkeypatch.setattr("tools.dashboard_manual_actions.confirm_job", fail_confirm)
 
     def runner(_request: RunnerRequest) -> RunnerResult:
         raise AssertionError("failed confirmation must not launch a new run")

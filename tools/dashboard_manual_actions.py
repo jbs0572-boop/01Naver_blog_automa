@@ -80,6 +80,10 @@ def execute_child_action(
         raise ContractError("child action returned a different preallocated run_id")
     preview = confirmation_preview(result)
     next_action = None
+    uncertain_save = (
+        result.status is RunStatus.FAILED
+        and _naver_save_outcome_uncertain(context, child)
+    )
     if result.status is RunStatus.LOCAL_ONLY:
         next_action = ManualActionView("external", uuid.uuid4().hex)
     elif result.status is RunStatus.AWAITING_USER_CONFIRMATION:
@@ -90,19 +94,19 @@ def execute_child_action(
         next_action = ManualActionView("confirm", confirmation_nonce)
     elif result.status is RunStatus.READY_FOR_NAVER:
         next_action = ManualActionView("external", uuid.uuid4().hex)
-    elif result.status is RunStatus.FAILED:
-        if _naver_save_outcome_uncertain(context, child):
-            message = (
-                "네이버 임시저장 결과가 불확실합니다. "
-                "중복 저장 방지를 위해 임시저장 목록을 수동 대조해야 합니다."
-            )
-        elif not _q1_exhausted(context, child):
+    elif result.status is RunStatus.FAILED and not uncertain_save:
+        if not _q1_exhausted(context, child):
             next_action = ManualActionView("retry", uuid.uuid4().hex)
     return replace(
         child,
         status="failed" if result.status is RunStatus.FAILED else "completed",
         result_status=result.status.value,
-        message=message if result.status is RunStatus.FAILED and _naver_save_outcome_uncertain(context, child) else result.message,
+        message=(
+            "네이버 임시저장 결과가 불확실합니다. "
+            "중복 저장 방지를 위해 임시저장 목록을 수동 대조해야 합니다."
+            if uncertain_save
+            else result.message
+        ),
         error=None,
         retryable=result.status is RunStatus.FAILED and next_action is not None,
         confirmation_preview=preview,
