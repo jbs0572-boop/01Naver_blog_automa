@@ -9,6 +9,7 @@ from tools.article_quality import ArticleQualityFailure
 from tools.codex_stage_error import StageExecutionError, StageFailureType
 from tools.contract_types import ContractError, JSONMap
 from tools.q1_feedback import Q1FailureCode, active_q1_codes
+from tools.run_cancellation import read_cancellation
 from tools.runner_actions import stage_action
 from tools.runner_records import (
     next_stage_attempt,
@@ -112,6 +113,18 @@ def _execute_q1_repairs(
 
     def repair(feedback: str | None) -> tuple[StageResult, int, RunnerRequest]:
         nonlocal attempt
+        if read_cancellation(
+            context.stage_context.request.root, context.stage_context.run_id
+        ) is not None:
+            return (
+                StageResult(
+                    RunStatus.CANCELLED,
+                    StageExecution.NOT_CALLED,
+                    "취소됨",
+                ),
+                attempt,
+                context.stage_context.request,
+            )
         attempt += 1
         stage_context = replace(
             context.stage_context,

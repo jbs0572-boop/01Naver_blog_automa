@@ -14,6 +14,7 @@ from tools.codex_process import CodexProcessError, run_codex
 from tools.codex_stage_error import StageExecutionError, StageFailureType
 from tools.contract_types import ContractError, JSONMap
 from tools.external_adapter import ExternalWriteRequest
+from tools.run_cancellation import create_cancellation
 from tools.runner_execution import recover_job, resume_job, run_job
 from tools.runner_types import (
     RunnerRequest,
@@ -311,6 +312,36 @@ def test_q1_failure_stops_after_three_identical_content_attempts_without_notion(
         (2, "failed"),
         (3, "failed"),
     ]
+
+
+def test_q1_repair_does_not_start_another_attempt_after_cancellation(
+    tmp_path: Path,
+) -> None:
+    class CancelDuringFirstRepair(Q1RepairExecutor):
+        @override
+        def execute(self, context: StageExecutionContext) -> StageResult:
+            if context.stage == "content-assembler" and not self.feedback:
+                self.calls.append(context.stage)
+                self.feedback.append(context.q1_feedback)
+                _ = create_cancellation(
+                    context.root,
+                    run_id=context.run_id,
+                    batch_id="BATCH-fixture",
+                    child_id="CHILD-fixture",
+                    scope="remaining",
+                    nonce="fixture-cancel-nonce",
+                )
+                raise ContractError("Q1 quality failure: missing reader answer")
+            return super().execute(context)
+
+    executor = CancelDuringFirstRepair(failures=0)
+
+    result = run_job(_request(tmp_path, executor))
+
+    assert result.status is RunStatus.CANCELLED
+    assert executor.calls.count("content-assembler") == 1, (
+        "a persisted cancellation must stop the Q1 repair loop before another paid attempt"
+    )
 
 
 def test_q1_feedback_and_log_redact_sensitive_failure_values(tmp_path: Path) -> None:

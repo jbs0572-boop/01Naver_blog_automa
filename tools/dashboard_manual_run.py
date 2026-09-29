@@ -334,7 +334,8 @@ class ManualRunManager:
         cancellation = child.cancellation
         if request is not None:
             cancellation = ManualCancellationView(request.scope, request.requested_at, request.nonce_sha256, _now())
-        self._finish_child(batch, replace(child, status="cancelled", result_status="cancelled", message=message or "취소됨", cancellation=cancellation, cancel_action=None, next_action=None, active_action=None, updated_at=_now()))
+        settled_at = _now()
+        self._finish_child(batch, replace(child, status="cancelled", result_status="cancelled", message=message or "취소됨", cancellation=cancellation, cancel_action=None, next_action=None, active_action=None, retryable=False, updated_at=settled_at, ended_at=settled_at))
 
     def _request(self, child: ManualRunView) -> RunnerRequest:
         return RunnerRequest(
@@ -523,6 +524,7 @@ class ManualRunManager:
         self._save_child(batch, replace(updated, active_action=None))
 
     def _save_child(self, batch: ManualBatchView, child: ManualRunView) -> None:
+        cancellation_slot: int | None = None
         with self._lock:
             current = self._required_batch(batch.batch_id)
             if child.child_id is None:
@@ -530,10 +532,72 @@ class ManualRunManager:
             persisted = self._required_child(current, child.child_id)
             if persisted.status == "cancelled":
                 return
-            updated = _replace_child(current, child)
-            self._store.save(
-                replace(updated, status=aggregate_status(updated), updated_at=_now())
-            )
+            cancellation_requested = persisted.status == "cancelling"
+            if not cancellation_requested and persisted.run_id is not None:
+                cancellation_requested = (
+                    read_cancellation(self._context.root, persisted.run_id) is not None
+                )
+            if cancellation_requested:
+                uncertain_save = (
+                    child.result_status == RunStatus.FAILED.value
+                    and persisted.active_action is not None
+                    and persisted.active_action.kind == "confirm"
+                    and _naver_save_outcome_uncertain(
+                        self._context.root, persisted.run_id
+                    )
+                )
+                if (
+                    child.result_status == RunStatus.DRAFT_SAVED.value
+                    or uncertain_save
+                ):
+                    settled_at = _now()
+                    request = (
+                        read_cancellation(self._context.root, persisted.run_id)
+                        if persisted.run_id is not None
+                        else None
+                    )
+                    cancellation = persisted.cancellation
+                    if request is not None:
+                        cancellation = ManualCancellationView(
+                            request.scope,
+                            request.requested_at,
+                            request.nonce_sha256,
+                            settled_at,
+                        )
+                    elif cancellation is not None:
+                        cancellation = replace(cancellation, completed_at=settled_at)
+                    settled_child = replace(
+                        child,
+                        message=(
+                            "네이버 임시저장 완료 · 취소 요청 처리 중 저장 결과를 보존했습니다."
+                            if child.result_status == RunStatus.DRAFT_SAVED.value
+                            else child.message
+                        ),
+                        cancellation=cancellation,
+                        cancel_action=None,
+                        next_action=None,
+                        active_action=None,
+                        retryable=False,
+                        updated_at=settled_at,
+                        ended_at=child.ended_at or settled_at,
+                    )
+                    updated = _replace_child(current, settled_child)
+                    self._store.save(
+                        replace(
+                            updated,
+                            status=aggregate_status(updated),
+                            updated_at=settled_at,
+                        )
+                    )
+                else:
+                    cancellation_slot = persisted.slot or 1
+            else:
+                updated = _replace_child(current, child)
+                self._store.save(
+                    replace(updated, status=aggregate_status(updated), updated_at=_now())
+                )
+        if cancellation_slot is not None:
+            self._settle_cancelled(batch.batch_id, cancellation_slot, "취소됨")
 
     def _q1_exhausted(self, child: ManualRunView) -> bool:
         if child.run_id is None:
