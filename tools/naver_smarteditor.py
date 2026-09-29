@@ -166,12 +166,27 @@ def build_prepare_script(payload: JSONMap) -> str:
     template = r"""
 const payload = __PAYLOAD__;
 const normalize = value => String(value ?? '').replace(/\u200b/g, '').replace(/\s+/g, ' ').trim();
-const waitForNormalizedText = async (locator, expected, message) => {
+const waitForNormalizedText = async (locator, expected, message, recoverFromRerender = false) => {
   const wanted = normalize(expected);
+  let activeLocator = locator;
   let previousMarkup = null;
   let stableMatches = 0;
   for (let attempt = 0; attempt < 400; attempt += 1) {
-    const state = await locator.evaluate(element => ({ text: element.textContent, markup: element.innerHTML }));
+    let state = await activeLocator.evaluate(element => ({ text: element.textContent, markup: element.innerHTML }));
+    if (recoverFromRerender && normalize(state.text) !== wanted) {
+      const paragraphs = root.locator('.se-component.se-text .se-text-paragraph');
+      let replacement = null;
+      for (let index = 0; index < await paragraphs.count(); index += 1) {
+        const candidate = paragraphs.nth(index);
+        const candidateState = await candidate.evaluate(element => ({ text: element.textContent, markup: element.innerHTML }));
+        if (normalize(candidateState.text) === wanted) {
+          replacement = candidate;
+          state = candidateState;
+          break;
+        }
+      }
+      if (replacement) activeLocator = replacement;
+    }
     if (normalize(state.text) === wanted) {
       stableMatches = state.markup === previousMarkup ? stableMatches + 1 : 0;
       previousMarkup = state.markup;
@@ -182,7 +197,7 @@ const waitForNormalizedText = async (locator, expected, message) => {
     }
     await sleep(50);
   }
-  const actual = normalize(await locator.textContent());
+  const actual = normalize(await activeLocator.textContent());
   throw new Error(`${message}: expected=${wanted} actual=${actual}`);
 };
 const focusAtEnd = async locator => {
@@ -303,7 +318,7 @@ for (const block of payload.plan.blocks) {
     const paragraph = await ensureTextTail();
     await paragraph.click();
     await paragraph.pressSequentially(block.text);
-    await waitForNormalizedText(paragraph, block.text, 'Naver text did not settle');
+    await waitForNormalizedText(paragraph, block.text, 'Naver text did not settle', true);
     await pressEnterForBodyTail(paragraph, 'Naver text tail was not created');
     continue;
   }

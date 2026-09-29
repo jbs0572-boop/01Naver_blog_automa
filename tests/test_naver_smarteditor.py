@@ -197,7 +197,10 @@ def test_scripts_are_bound_to_semantic_smarteditor_actions(tmp_path: Path) -> No
     assert "se-toolbar-option-text-format-sectionTitle-button" in prepare
     assert "se-toolbar-option-list-bullet-button" in prepare
     assert "const waitForNormalizedText" in prepare
+    assert "recoverFromRerender = false" in prepare
+    assert "root.locator('.se-component.se-text .se-text-paragraph')" in prepare
     assert "markup: element.innerHTML" in prepare
+    assert "await waitForNormalizedText(paragraph, block.text, 'Naver text did not settle', true)" in prepare
     assert "stableMatches" in prepare
     assert "const focusAtEnd" in prepare
     assert "const paragraphIsEmpty" in prepare
