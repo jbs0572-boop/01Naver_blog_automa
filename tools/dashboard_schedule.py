@@ -295,21 +295,24 @@ class DailySchedule:
             ),
             None,
         )
-        if existing is not None:
+        if existing is not None and existing.get("status") != "accepted":
             return existing
         at = occurrence.get("at")
         if not isinstance(at, str):
             raise ContractError("예약 예정 시각이 올바르지 않습니다.")
-        recovery: JSONMap = {
-            "recovery_key": recovery_key,
-            "occurrence_id": occurrence_id,
-            "as_of_date": datetime.fromisoformat(at).astimezone(KST).date().isoformat(),
-            "status": "accepted",
-            "submitted_at": None,
-            "batch_id": None,
-        }
-        recoveries.append(recovery)
-        atomic_write_json(self.path, self.data)
+        if existing is None:
+            recovery: JSONMap = {
+                "recovery_key": recovery_key,
+                "occurrence_id": occurrence_id,
+                "as_of_date": datetime.fromisoformat(at).astimezone(KST).date().isoformat(),
+                "status": "accepted",
+                "submitted_at": None,
+                "batch_id": None,
+            }
+            recoveries.append(recovery)
+            atomic_write_json(self.path, self.data)
+        else:
+            recovery = existing
         try:
             model_config = parse_model_config_snapshot(occurrence.get("model_config"))
             recovery["batch_id"] = launch(
