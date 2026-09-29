@@ -660,25 +660,36 @@ class ManualRunManager:
                 continue
             now_dt = datetime.now(UTC)
             now = now_dt.isoformat()
-            confirmed_messages: dict[str, str] = {}
+            confirmed_results: dict[str, tuple[str, str]] = {}
             for child in batch.children:
                 if child.result_status != RunStatus.AWAITING_USER_CONFIRMATION.value:
                     continue
                 state = _confirmed_naver_save_state(self._context.root, child.run_id)
                 if state is not None and child.run_id is not None:
                     message = state.get("message")
-                    confirmed_messages[child.run_id] = (
+                    updated_at = state.get("updated_at")
+                    saved_at = now
+                    if isinstance(updated_at, str):
+                        try:
+                            parsed_updated_at = datetime.fromisoformat(updated_at)
+                        except ValueError:
+                            pass
+                        else:
+                            if parsed_updated_at.tzinfo is not None:
+                                saved_at = parsed_updated_at.astimezone(UTC).isoformat()
+                    confirmed_results[child.run_id] = (
                         message
                         if isinstance(message, str)
-                        else "네이버 임시저장이 완료됐습니다."
+                        else "네이버 임시저장이 완료됐습니다.",
+                        saved_at,
                     )
-            if confirmed_messages:
+            if confirmed_results:
                 recovered_children = tuple(
                     replace(
                         child,
                         status="completed",
                         result_status=RunStatus.DRAFT_SAVED.value,
-                        message=confirmed_messages[child.run_id or ""],
+                        message=confirmed_results[child.run_id or ""][0],
                         error=None,
                         retryable=False,
                         confirmation_preview=None,
@@ -692,9 +703,9 @@ class ManualRunManager:
                             else child.cancellation
                         ),
                         updated_at=now,
-                        ended_at=child.ended_at or now,
+                        ended_at=confirmed_results[child.run_id or ""][1],
                     )
-                    if child.run_id in confirmed_messages
+                    if child.run_id in confirmed_results
                     else child
                     for child in batch.children
                 )

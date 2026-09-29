@@ -844,6 +844,7 @@ def test_startup_recovery_preserves_confirmed_naver_save_before_invalidation(
             "status": RunStatus.DRAFT_SAVED.value,
             "message": "draft saved",
             "stages": {},
+            "updated_at": "2026-09-29T01:23:45+00:00",
             "naver_save_outcome_uncertain": False,
         },
     )
@@ -862,6 +863,7 @@ def test_startup_recovery_preserves_confirmed_naver_save_before_invalidation(
             "running",
         ),
         updated_at=datetime.now(UTC).isoformat(),
+        ended_at="2026-09-29T00:15:00+00:00",
     )
     ManualBatchStore(tmp_path).save(replace(batch, children=(child,)))
 
@@ -890,6 +892,7 @@ def test_startup_recovery_preserves_confirmed_naver_save_before_invalidation(
     assert saved.status == "completed"
     assert saved.result_status == RunStatus.DRAFT_SAVED.value
     assert saved.message == "draft saved"
+    assert saved.ended_at == "2026-09-29T01:23:45+00:00"
     assert saved.retryable is False
     assert saved.next_action is None
     assert saved.active_action is None
