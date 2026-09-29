@@ -106,7 +106,7 @@ def execute_child_action(
         result_status=result.status.value,
         message=(
             "네이버 임시저장 결과가 불확실합니다. "
-            "중복 저장 방지를 위해 임시저장 목록을 수동 대조해야 합니다."
+            + "중복 저장 방지를 위해 임시저장 목록을 수동 대조해야 합니다."
             if uncertain_save
             else result.message
         ),
