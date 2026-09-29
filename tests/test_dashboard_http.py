@@ -154,7 +154,7 @@ def _json_request(
     )
     request_headers.update(headers or {})
     if method.upper() == "POST" and with_csrf:
-        request_headers.setdefault("X-Dashboard-CSRF", _dashboard_csrf_token(base_url))
+        _ = request_headers.setdefault("X-Dashboard-CSRF", _dashboard_csrf_token(base_url))
     request = Request(
         f"{base_url}{path}",
         data=encoded,
