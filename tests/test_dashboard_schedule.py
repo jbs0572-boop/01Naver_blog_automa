@@ -131,7 +131,7 @@ def test_accepted_retry_recovery_relaunches_idempotently_after_restart(
         raise SystemExit("crash after accepted retry record")
 
     with pytest.raises(SystemExit, match="accepted retry record"):
-        scheduler.retry(occurrence_id, "same-ui-nonce", interrupted_launch)
+        _ = scheduler.retry(occurrence_id, "same-ui-nonce", interrupted_launch)
 
     restarted = DailySchedule(tmp_path)
 
