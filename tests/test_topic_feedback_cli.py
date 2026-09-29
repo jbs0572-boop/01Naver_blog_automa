@@ -990,7 +990,7 @@ def test_import_blog_stats_cli_links_and_persists_canonical_snapshot(
     snapshot = snapshots[0]
     assert isinstance(snapshot, dict)
     assert snapshot["publication_run_id"] == "RUN-BLOG-STATS"
-    assert snapshot["coverage_end"] == "2026-09-07"
+    assert snapshot["coverage_end"] == "2026-09-08"
     paths = payload["paths"]
     assert isinstance(paths, list)
     assert len(paths) == 1
