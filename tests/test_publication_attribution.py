@@ -51,6 +51,7 @@ def frozen_run_fixture(root: Path, run_id: str, keyword: str, post_id: str) -> J
         "artifact_digest": manifest["artifact_digest"],
         "manifest_path": f"manifests/{run_id}-workflow-manifest.json",
         "score_version": "topic-baseline-v1",
+        "target_blog_id": "owner",
     }
     _write_json(root / ".automation" / "state" / f"{run_id}.json", state)
     _write_json(
@@ -167,6 +168,14 @@ def test_explicit_id_has_priority_and_approved_url_conflict_rejects(
 
     with pytest.raises(ContractError, match="conflicts with approved URL identity"):
         _ = link_publication(replace(request, blog_post_id="DIFFERENT"))
+
+    with pytest.raises(ContractError, match="does not match frozen target_blog_id"):
+        _ = link_publication(
+            replace(
+                request,
+                naver_post_url="https://blog.naver.com/another-owner/12345",
+            )
+        )
 
 
 def test_real_cli_links_current_run_with_deterministic_json(tmp_path: Path) -> None:

@@ -55,6 +55,7 @@ class _Identity:
     legacy_identity: str | None
     historical_url: str | None
     historical_published_at: str | None
+    target_blog_id: str | None
 
 
 def _json_map(path: Path, label: str) -> JSONMap:
@@ -145,6 +146,12 @@ def _current_identity(request: PublicationAttributionRequest) -> _Identity:
     score_version = CURRENT_SCORE_VERSION
     if any(value is not None and value != (manifest.topic_id, keyword, score_version)[index] for index, value in enumerate((request.topic_id, request.keyword, request.score_version))):
         raise ContractError("caller identity does not match the frozen run")
+    target_blog_id_value = state.get("target_blog_id")
+    target_blog_id = (
+        _required_text(target_blog_id_value, "target_blog_id")
+        if target_blog_id_value is not None
+        else None
+    )
     url, published_at = _historical_link(request.root, request.run_id)
     return _Identity(
         request.run_id,
@@ -155,6 +162,7 @@ def _current_identity(request: PublicationAttributionRequest) -> _Identity:
         None,
         url,
         published_at,
+        target_blog_id,
     )
 
 
@@ -169,10 +177,15 @@ def _legacy_identity(request: PublicationAttributionRequest) -> _Identity:
         _required_text(request.legacy_identity, "legacy_identity"),
         None,
         None,
+        None,
     )
 
 
-def _approved_url_post_id(request: PublicationAttributionRequest, url: str | None) -> str | None:
+def _approved_url_post_id(
+    request: PublicationAttributionRequest,
+    url: str | None,
+    expected_blog_id: str | None,
+) -> str | None:
     if request.url_rule_approval is None and request.url_rule_approval_sha256 is None:
         return None
     if request.url_rule_approval is None or request.url_rule_approval_sha256 is None:
@@ -200,6 +213,11 @@ def _approved_url_post_id(request: PublicationAttributionRequest, url: str | Non
     parts = tuple(unquote(part) for part in parsed.path.split("/") if part)
     if parsed.scheme != "https" or parsed.hostname != "blog.naver.com" or parsed.query or parsed.fragment or len(parts) != 2:
         raise ContractError("Naver URL does not exactly match the approved rule")
+    blog_id = _required_text(parts[0], "approved blog_id")
+    if request.source_identity == "current-run" and (
+        expected_blog_id is None or blog_id != expected_blog_id
+    ):
+        raise ContractError("Naver URL blog_id does not match frozen target_blog_id")
     return _required_text(parts[1], "approved blog_post_id")
 
 
@@ -214,7 +232,9 @@ def link_publication(request: PublicationAttributionRequest) -> JSONMap:
     if identity.historical_published_at is not None and _kst_timestamp(identity.historical_published_at, "published_at") != published_at:
         raise ContractError("published_at conflicts with the historical publication link")
     source_url = request.naver_post_url or identity.historical_url
-    parsed_post_id = _approved_url_post_id(request, source_url)
+    parsed_post_id = _approved_url_post_id(
+        request, source_url, identity.target_blog_id
+    )
     explicit_post_id = _required_text(request.blog_post_id, "blog_post_id") if request.blog_post_id is not None else None
     if explicit_post_id is not None and parsed_post_id is not None and explicit_post_id != parsed_post_id:
         raise ContractError("explicit blog_post_id conflicts with approved URL identity")

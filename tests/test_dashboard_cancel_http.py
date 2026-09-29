@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from http import HTTPStatus
 from pathlib import Path
@@ -21,9 +22,24 @@ class Reply:
     body: JSONMap
 
 
+def _csrf_token(base_url: str) -> str:
+    with urlopen(Request(base_url)) as response:
+        html = response.read().decode("utf-8")
+    match = re.search(
+        r'<meta name="dashboard-csrf-token" content="([A-Za-z0-9_-]+)">',
+        html,
+    )
+    if match is None:
+        raise AssertionError("dashboard HTML did not expose its CSRF token")
+    return match.group(1)
+
+
 def request_json(base_url: str, path: str, *, method: str = "GET", body: JSONMap | None = None) -> Reply:
     encoded = json.dumps(body).encode() if body is not None else None
-    request = Request(f"{base_url}{path}", data=encoded, method=method, headers={"Content-Type": "application/json"} if encoded else {})
+    headers = {"Content-Type": "application/json"} if encoded else {}
+    if method.upper() == "POST":
+        _ = headers.setdefault("X-Dashboard-CSRF", _csrf_token(base_url))
+    request = Request(f"{base_url}{path}", data=encoded, method=method, headers=headers)
     try:
         with urlopen(request) as response:
             return Reply(HTTPStatus(response.status), json.loads(response.read()))

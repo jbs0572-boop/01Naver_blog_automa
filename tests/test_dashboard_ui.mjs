@@ -476,7 +476,7 @@ test("job polling skips identical list DOM and redraws when observed tokens chan
   elements.get("#task-status-filter").value = "all";
   const document = {hidden:false,querySelector:selector=>elements.get(selector)||null,querySelectorAll:()=>[],addEventListener:(type,handler)=>{documentListeners[type]=handler;},createElement:()=>new TaskElement(),dispatchEvent(){}};
   const item = () => ({task_id:"JOB-1",display_id:"2026-09-13_001",run_id:"RUN-1",keyword:"긴 한국어 작업 제목",effective_status:"running",current_stage:"researcher",completed_stage_count:1,duration_seconds:12,usage:{total_tokens:tokens,usage_observed_at:"2026-09-13T12:00:00+09:00"}});
-  const context = vm.createContext({document,URLSearchParams,Intl,CustomEvent:class{},clearTimeout,setTimeout,fetch:async url=>({ok:true,json:async()=>url === "/api/schedule" ? {next_run:null} : {items:[item()],global_summary:{by_status:{running:1}},server_now:"2026-09-13T12:00:00+09:00"}}),window:{DashboardNavigation:{route:()=>"tasks"},addEventListener(){},setInterval:(handler,delay)=>{intervals.push({handler,delay});}}});
+  const context = vm.createContext({document,URLSearchParams,Intl,CustomEvent:class{},clearTimeout,setTimeout,fetch:async url=>({ok:true,json:async()=>url === "/api/schedule" ? {next_run:null} : {items:[item()],global_summary:{by_status:{running:1}},server_now:"2026-09-13T12:00:00+09:00"}}),window:{dashboardMutationHeaders, DashboardNavigation:{route:()=>"tasks"},addEventListener(){},setInterval:(handler,delay)=>{intervals.push({handler,delay});}}});
   vm.runInContext(source, context);
   await documentListeners.DOMContentLoaded();
   await new Promise(resolve => setImmediate(resolve));
@@ -561,7 +561,7 @@ test("schedule retry recovers accepted work after reload, rotates terminal failu
   };
   let now = 0;
   class TestDate extends Date { static now() { now += 1; return 1_800_000_000_000 + now; } }
-  const context = vm.createContext({document, fetch, Date:TestDate, Intl, window:{crypto:{randomUUID:()=>"ENTRY-NEW"}, setInterval() {}}});
+  const context = vm.createContext({document, fetch, Date:TestDate, Intl, window:{dashboardMutationHeaders, crypto:{randomUUID:()=>"ENTRY-NEW"}, setInterval() {}}});
   vm.runInContext(scheduleSource, context);
   const history = elements.get("#schedule-history");
   let retry;

@@ -208,7 +208,7 @@ class ManualRunManager:
             batch = replace(batch, status=aggregate_status(batch), updated_at=accepted_at)
             self._store.save(batch)
         self._futures.append(
-            self._pool.submit(self._execute_action, batch_id, child_id, kind)
+            self._pool.submit(self._execute_action, batch_id, child_id, kind, child)
         )
         return batch
 
@@ -423,6 +423,7 @@ class ManualRunManager:
         batch_id: str,
         child_id: str,
         kind: ActionKind,
+        accepted_child: ManualRunView,
     ) -> None:
         with self._lock:
             batch = self._required_batch(batch_id)
@@ -458,11 +459,11 @@ class ManualRunManager:
             return
         try:
             updated = execute_child_action(
-                self._context, self._dependencies, child, kind
+                self._context, self._dependencies, accepted_child, kind
             )
         except (ContractError, OSError, TimeoutError, ValueError) as error:
             uncertain_save = kind == "confirm" and _naver_save_outcome_uncertain(
-                self._context.root, child.run_id
+                self._context.root, accepted_child.run_id
             )
             updated = replace(
                 child,

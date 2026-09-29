@@ -63,6 +63,7 @@ def _stat(
     run_id: str = "RUN-001",
     post_id: str = "POST-001",
     exposure: int | None = None,
+    coverage_end: str | None = None,
 ) -> None:
     day = captured_at[:10]
     missing: list[JSONValue] = (
@@ -87,7 +88,7 @@ def _stat(
         "publication_run_id": run_id,
         "publication_link_digest": link_digest,
         "coverage_start": "2026-09-01",
-        "coverage_end": day,
+        "coverage_end": day if coverage_end is None else coverage_end,
         "views": views,
         "search_inflow": search_inflow,
         "exposure": exposure,
@@ -598,3 +599,24 @@ def test_visible_symlink_namespace_is_rejected(tmp_path: Path) -> None:
     # When/Then: root traversal fails closed instead of following it.
     with pytest.raises(ContractError, match="unsafe"):
         _ = compute_cohorts(tmp_path, "2026-09-11T09:00:00+09:00")
+
+def test_horizon_ignores_late_capture_with_coverage_before_cutoff(
+    tmp_path: Path,
+) -> None:
+    link_digest = _link(tmp_path)
+    _stat(
+        tmp_path,
+        link_digest=link_digest,
+        capture_id="CAP-LAGGED-28D",
+        captured_at="2026-09-30T09:00:00+09:00",
+        coverage_end="2026-09-08",
+        views=10,
+        search_inflow=1,
+    )
+
+    result = compute_cohorts(tmp_path, "2026-10-01T09:00:00+09:00")
+    horizon = _horizon(result, "28d")
+
+    assert horizon["status"] == "delayed"
+    assert horizon["observation_id"] is None
+

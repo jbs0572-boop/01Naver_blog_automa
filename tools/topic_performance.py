@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Final
 
@@ -62,10 +62,22 @@ def _delta(current: JSONMap, prior: JSONMap | None) -> JSONMap | None:
     return result
 
 
+def _covers_cutoff(item: Observation, cutoff: datetime) -> bool:
+    coverage_end = item.payload.get("coverage_end")
+    if not isinstance(coverage_end, str):
+        return False
+    try:
+        return date.fromisoformat(coverage_end) >= cutoff.date()
+    except ValueError:
+        return False
+
+
 def _horizon(observations: tuple[Observation, ...], as_of: datetime, cutoff: datetime) -> JSONMap:
     grace_end = cutoff + timedelta(hours=48)
     eligible = tuple(
-        item for item in observations if cutoff <= item.observed_at <= grace_end
+        item
+        for item in observations
+        if cutoff <= item.observed_at <= grace_end and _covers_cutoff(item, cutoff)
     )
     selected = eligible[0] if eligible else None
     through = selected.observed_at if selected is not None else min(as_of, grace_end)
