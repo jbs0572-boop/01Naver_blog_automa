@@ -47,20 +47,31 @@ class DashboardHealth:
             return dict(self._result)
 
     def _run(self) -> None:
-        ok, error_code = self.probe(self.root)
-        with self._lock:
-            self._result = {
-                "status": "ready" if ok else "failed",
-                "revision": self._revision,
-                "checked_at": datetime.now(UTC).isoformat(),
-                "error_code": error_code,
-                "next_action": (
-                    "모든 읽기 전용 점검이 통과했습니다."
-                    if ok
-                    else "설정과 연결을 확인한 뒤 다시 점검하세요."
-                ),
-            }
-            self._done.set()
+        try:
+            ok, error_code = self.probe(self.root)
+            with self._lock:
+                self._result = {
+                    "status": "ready" if ok else "failed",
+                    "revision": self._revision,
+                    "checked_at": datetime.now(UTC).isoformat(),
+                    "error_code": error_code,
+                    "next_action": (
+                        "모든 읽기 전용 점검이 통과했습니다."
+                        if ok
+                        else "설정과 연결을 확인한 뒤 다시 점검하세요."
+                    ),
+                }
+        finally:
+            with self._lock:
+                if self._result["status"] == "checking":
+                    self._result = {
+                        "status": "failed",
+                        "revision": self._revision,
+                        "checked_at": datetime.now(UTC).isoformat(),
+                        "error_code": "health_probe_exception",
+                        "next_action": "점검 중 예외가 발생했습니다. 연결 상태를 확인한 뒤 다시 시도하세요.",
+                    }
+                self._done.set()
 
     def view(self) -> JSONMap:
         with self._lock:

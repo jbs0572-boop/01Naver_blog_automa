@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 from datetime import datetime
 from pathlib import Path
+
+import pytest
 
 from tools.dashboard_health import DashboardHealth
 from tools.dashboard_notifications import DashboardNotifications
@@ -193,3 +196,32 @@ def test_health_check_is_read_only_and_reports_revision(tmp_path: Path) -> None:
     assert result["status"] == "ready"
     assert result["revision"] == 1
     assert calls == [tmp_path]
+
+
+def test_health_probe_exception_completes_with_failed_status(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Given: a health probe that raises unexpectedly in its worker thread.
+    expected_error = RuntimeError("probe failed")
+    errors: list[BaseException | None] = []
+
+    def fail_probe(_root: Path) -> tuple[bool, str | None]:
+        raise expected_error
+
+    def capture_thread_error(args: threading.ExceptHookArgs) -> None:
+        errors.append(args.exc_value)
+
+    monkeypatch.setattr(threading, "excepthook", capture_thread_error)
+    health = DashboardHealth(tmp_path, fail_probe)
+
+    # When: the read-only health check runs.
+    _ = health.start()
+    completed = health.wait(timeout=1)
+    result = health.view()
+
+    # Then: clients see a completed failure instead of an endless checking state.
+    assert completed is True
+    assert result["status"] == "failed"
+    assert result["error_code"] == "health_probe_exception"
+    assert result["revision"] == 1
+    assert errors == [expected_error]

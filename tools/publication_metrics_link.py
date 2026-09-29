@@ -216,9 +216,29 @@ def _approved_url_post_id(
         raise ContractError("URL rule approval is invalid")
     if url is None:
         return None
-    parsed = urlsplit(url)
-    parts = tuple(unquote(part) for part in parsed.path.split("/") if part)
-    if parsed.scheme != "https" or parsed.hostname != "blog.naver.com" or parsed.query or parsed.fragment or len(parts) != 2:
+    try:
+        parsed = urlsplit(url)
+    except ValueError as error:
+        raise ContractError("Naver URL does not exactly match the approved rule") from error
+    raw_parts = parsed.path.split("/")
+    if (
+        parsed.scheme != "https"
+        or parsed.netloc.lower() != "blog.naver.com"
+        or parsed.query
+        or parsed.fragment
+        or len(raw_parts) != 3
+        or raw_parts[0] != ""
+        or not raw_parts[1]
+        or not raw_parts[2]
+    ):
+        raise ContractError("Naver URL does not exactly match the approved rule")
+    parts = tuple(unquote(part) for part in raw_parts[1:])
+    encoded_separators = ("%2f", "%5c")
+    if any(
+        separator in segment.lower() or separator in decoded.lower()
+        for segment, decoded in zip(raw_parts[1:], parts, strict=True)
+        for separator in encoded_separators
+    ) or any("/" in part or "\\" in part for part in parts):
         raise ContractError("Naver URL does not exactly match the approved rule")
     blog_id = _required_text(parts[0], "approved blog_id")
     if expected_blog_id is None or blog_id != expected_blog_id:

@@ -179,6 +179,49 @@ def test_explicit_id_has_priority_and_approved_url_conflict_rejects(
         )
 
 
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://blog.naver.com/owner/123%2Fextra",
+        "https://blog.naver.com/owner/123%5Cextra",
+        "https://blog.naver.com/owner/123%252fextra",
+        "https://blog.naver.com/owner//123",
+        "https://blog.naver.com/owner/123/",
+        "https://blog.naver.com:8443/owner/123",
+        "https://attacker@blog.naver.com/owner/123",
+    ],
+)
+def test_approved_url_rejects_ambiguous_authority_and_path(
+    tmp_path: Path, url: str
+) -> None:
+    # Given: an approved URL rule for the exact host and two path segments.
+    _ = frozen_run_fixture(tmp_path, "RUN-fixture", "fixture", "12345")
+    approval = tmp_path / "approved-url-rule.json"
+    _write_json(
+        approval,
+        {
+            "schema_version": "naver-url-rule-approval-v1",
+            "approval_status": "approved",
+            "official_reference_url": "https://help.naver.com/service/5593",
+            "host": "blog.naver.com",
+            "path_template": "/{blog_id}/{blog_post_id}",
+            "approved_at": "2026-09-08T09:00:00+09:00",
+        },
+    )
+    request = replace(
+        publication_request(tmp_path, "RUN-fixture", None),
+        naver_post_url=url,
+        url_rule_approval=approval,
+        url_rule_approval_sha256=(
+            "sha256:" + hashlib.sha256(approval.read_bytes()).hexdigest()
+        ),
+    )
+
+    # When / Then: ambiguous URL forms cannot establish a publication identity.
+    with pytest.raises(ContractError, match="does not exactly match"):
+        _ = link_publication(request)
+
+
 def test_real_cli_links_current_run_with_deterministic_json(tmp_path: Path) -> None:
     _ = frozen_run_fixture(tmp_path, "RUN-fixture", "fixture", "12345")
     command = [
