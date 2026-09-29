@@ -15,7 +15,7 @@ from tools.article_quality import (
     assessment_path,
 )
 from tools.image_quality import post_q2_image_review_path
-from tools.manifest import ManifestBuildInput
+from tools.manifest import ManifestBuildInput, verify_manifest
 from tools.naver_gate import canonical_naver_input
 from tools.workflow_contract import (
     PIPELINE_VERSION,
@@ -143,8 +143,15 @@ class NaverGateContractTests(unittest.TestCase):
             "[TITLE]Inline fixture title[/TITLE]\n[TEXT]Fixture body[/TEXT]\n",
             encoding="utf-8",
         )
+        self.manifest = build_manifest(self._manifest_input())
+        _ = self.manifest_path.write_text(
+            json.dumps(self.manifest, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
 
-        canonical = canonical_naver_input(self.manifest, self.root)
+        manifest = verify_manifest(self.root, self.manifest_path)
+
+        canonical = canonical_naver_input(manifest, self.root)
 
         self.assertEqual(canonical.title, "Inline fixture title")
 

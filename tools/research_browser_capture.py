@@ -410,6 +410,26 @@ def _capture(keyword: str) -> JSONMap:
     return capture_research_browser(keyword)
 
 
+
+def _is_expected_naver_search_url(value: str, keyword: str) -> bool:
+    try:
+        parsed = urlparse(value)
+        port = parsed.port
+    except ValueError:
+        return False
+    return (
+        parsed.scheme == "https"
+        and parsed.hostname is not None
+        and parsed.hostname.lower() == "search.naver.com"
+        and parsed.path == "/search.naver"
+        and port in {None, 443}
+        and parsed.username is None
+        and parsed.password is None
+        and not parsed.fragment
+        and parse_qs(parsed.query).get("query") == [keyword]
+    )
+
+
 def capture_research_sources(
     keyword: str,
     root: Path | None = None,
@@ -468,14 +488,13 @@ def capture_research_sources(
     requested_keyword = observation.get("requested_keyword")
     requested_url = observation.get("requested_url")
     if (
-        not isinstance(source_url, str)
-        or requested_keyword != keyword
+        requested_keyword != keyword
         or not isinstance(requested_url, str)
-        or parse_qs(urlparse(source_url).query).get("query") != [keyword]
-        or parse_qs(urlparse(requested_url).query).get("query") != [keyword]
+        or not _is_expected_naver_search_url(requested_url, keyword)
+        or not _is_expected_naver_search_url(source_url, keyword)
     ):
         raise ContractError(
-            "자료조사 브라우저가 요청한 정확한 검색어를 표시하지 않습니다. 모델은 호출하지 않았습니다."
+            "자료조사 브라우저가 요청한 정확한 네이버 검색 페이지를 표시하지 않습니다. 모델은 호출하지 않았습니다."
         )
     search_observation: JSONMap = {
         **{

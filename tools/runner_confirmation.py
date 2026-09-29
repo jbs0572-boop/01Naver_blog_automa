@@ -81,18 +81,6 @@ def _record_confirmation(confirmation_input: ConfirmationInput) -> RunnerRequest
     )
     if not all(isinstance(confirmation.get(key), str) for key in required):
         raise ContractError("confirmation preview is incomplete")
-    state["confirmation"] = confirmation
-    if "confirmation_nonce" in state:
-        del state["confirmation_nonce"]
-    state["status"] = RunStatus.RUNNING.value
-    state["message"] = "operator confirmation received; resuming Naver draft save"
-    stages = state.get("stages")
-    executions = state.get("stage_execution")
-    if isinstance(stages, dict):
-        stages["naver-rider"] = RunStatus.PENDING.value
-    if isinstance(executions, dict):
-        executions["naver-rider"] = StageExecution.NOT_CALLED.value
-    atomic_write_json(state_path, state)
     append_event(
         log_path,
         {
@@ -111,6 +99,18 @@ def _record_confirmation(confirmation_input: ConfirmationInput) -> RunnerRequest
             "actor": confirmation_input.actor,
         },
     )
+    state["confirmation"] = confirmation
+    if "confirmation_nonce" in state:
+        del state["confirmation_nonce"]
+    state["status"] = RunStatus.RUNNING.value
+    state["message"] = "operator confirmation received; resuming Naver draft save"
+    stages = state.get("stages")
+    executions = state.get("stage_execution")
+    if isinstance(stages, dict):
+        stages["naver-rider"] = RunStatus.PENDING.value
+    if isinstance(executions, dict):
+        executions["naver-rider"] = StageExecution.NOT_CALLED.value
+    atomic_write_json(state_path, state)
     return RunnerRequest(
         root=root,
         job="",

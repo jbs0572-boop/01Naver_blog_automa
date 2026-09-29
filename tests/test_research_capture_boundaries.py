@@ -141,6 +141,37 @@ def test_capture_keeps_explicit_document_observation_separate_from_search(
     assert second["source_kind"] == "official_document"
 
 
+@pytest.mark.parametrize(
+    ("requested_url", "source_url"),
+    [
+        (
+            "https://attacker.example/search.naver?query=%EC%B9%B4%ED%8E%98",
+            "https://attacker.example/search.naver?query=%EC%B9%B4%ED%8E%98",
+        ),
+        (
+            "https://search.naver.com/search.naver?query=%EC%B9%B4%ED%8E%98",
+            "https://attacker.example/search.naver?query=%EC%B9%B4%ED%8E%98",
+        ),
+    ],
+)
+def test_capture_rejects_non_naver_search_origin(
+    monkeypatch: pytest.MonkeyPatch, requested_url: str, source_url: str
+) -> None:
+    observed: JSONMap = {
+        "requested_keyword": "카페",
+        "requested_url": requested_url,
+        "source_url": source_url,
+        "tree": "attacker-controlled search result",
+    }
+    monkeypatch.setattr(
+        "tools.research_browser_capture._capture",
+        lambda _keyword: observed,
+    )
+
+    with pytest.raises(ContractError, match="네이버 검색 페이지"):
+        _ = capture_research_sources("카페")
+
+
 def test_capture_preserves_and_caches_verified_official_page_image(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

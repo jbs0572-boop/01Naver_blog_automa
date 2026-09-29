@@ -17,7 +17,6 @@ from tools.image_quality import post_q2_image_review_path
 from tools.manifest import verify_manifest
 from tools.model_presets import default_stage_settings, model_config_snapshot
 from tools.notion_resume import NotionQ2Failure
-from tools.runner_cli import _live_naver_adapter
 from tools.runner_cli import main as runner_main
 from tools.runner_execution import (
     confirm_job,
@@ -704,8 +703,10 @@ def test_cli_naver_adapter_preserves_recoverable_drafts(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     adapter = FixtureNaver()
+    notion = FixtureNotion()
     recovery_options: list[bool] = []
     closed: list[bool] = []
+    captured: list[ConfirmationInput] = []
 
     class Gateway:
         def create_naver_adapter(self, *, discard_recovery: bool) -> FixtureNaver:
@@ -716,15 +717,44 @@ def test_cli_naver_adapter_preserves_recoverable_drafts(
             closed.append(True)
 
     gateway = Gateway()
-    monkeypatch.setattr(
-        "tools.runner_cli.load_aside_browser_gateway",
-        lambda *_args, **_kwargs: gateway,
+
+    def load_gateway(
+        _root: Path, *, required_capabilities: frozenset[object]
+    ) -> Gateway:
+        _ = required_capabilities
+        return gateway
+
+    def confirm(confirmation: ConfirmationInput) -> RunnerResult:
+        captured.append(confirmation)
+        return RunnerResult(
+            "RUN-cli-recovery",
+            RunStatus.DRAFT_SAVED,
+            tmp_path / "state.json",
+            tmp_path / "run.jsonl",
+            (),
+            "saved",
+        )
+
+    monkeypatch.setattr("tools.runner_cli.load_aside_browser_gateway", load_gateway)
+    monkeypatch.setattr("tools.runner_cli.confirm_job", confirm)
+    result = runner_main(
+        [
+            "automation-runner",
+            "confirm",
+            "--root",
+            str(tmp_path),
+            "--run-id",
+            "RUN-cli-recovery",
+            "--action",
+            "naver-draft-save",
+            "--confirmation-nonce",
+            "nonce",
+        ],
+        notion_adapter_factory=lambda _root: notion,
     )
 
-    actual, cleanup = _live_naver_adapter(tmp_path, None)
-    cleanup()
-
-    assert actual is adapter
+    assert result == 0
+    assert captured[0].naver_adapter is adapter
     assert recovery_options == [False]
     assert closed == [True]
 
@@ -974,6 +1004,56 @@ def test_both_topic_sources_follow_same_pipeline_to_draft_saved(
         )
     )
     assert saved.status is RunStatus.DRAFT_SAVED
+
+
+def test_failed_confirmation_audit_keeps_nonce_retryable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _ = (tmp_path / "notion-config.md").write_text(
+        "- 데이터 소스 ID: `datasource-fixture`\n", encoding="utf-8"
+    )
+    naver = CountingNaver()
+    waiting = _run_through_q3_fixture(
+        RunnerRequest(
+            root=tmp_path,
+            job="daily-generate",
+            keyword="fixture",
+            now=NOW,
+            selection_context=DATE_CONTEXT,
+            executor=FixtureExecutor(),
+            notion_adapter=FixtureNotion(),
+            naver_adapter=naver,
+        )
+    )
+    state_before = json.loads(waiting.state_path.read_text(encoding="utf-8"))
+    nonce = state_before["confirmation_nonce"]
+
+    def fail_append(_path: Path, _event: JSONMap) -> None:
+        raise OSError("audit log unavailable")
+
+    monkeypatch.setattr("tools.runner_confirmation.append_event", fail_append)
+    with pytest.raises(OSError, match="audit log unavailable"):
+        _ = confirm_job(
+            ConfirmationInput(
+                tmp_path,
+                waiting.run_id,
+                "naver-draft-save",
+                executor=FixtureExecutor(),
+                notion_adapter=FixtureNotion(),
+                naver_adapter=naver,
+                confirmation_nonce=nonce,
+            )
+        )
+
+    state_after = json.loads(waiting.state_path.read_text(encoding="utf-8"))
+    events = [
+        json.loads(line)
+        for line in waiting.log_path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert state_after["status"] == RunStatus.AWAITING_USER_CONFIRMATION.value
+    assert state_after["confirmation_nonce"] == nonce
+    assert not any(event.get("event_type") == "confirmation" for event in events)
+    assert naver.save_calls == 0
 
 
 def test_auto_save_flag_cannot_bypass_explicit_naver_confirmation(
