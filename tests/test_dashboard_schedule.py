@@ -102,6 +102,66 @@ def test_empty_launch_receipt_is_recorded_as_failure(tmp_path: Path) -> None:
     assert "batch_id" not in history[0]
 
 
+
+def test_accepted_retry_recovery_relaunches_idempotently_after_restart(
+    tmp_path: Path,
+) -> None:
+    scheduler = DailySchedule(tmp_path)
+    configured_at = datetime.fromisoformat("2026-09-10T07:00:00+09:00")
+    _ = scheduler.save({"times": ["08:00"], "enabled": True}, configured_at)
+    scheduler.tick(
+        datetime.fromisoformat("2026-09-10T09:00:00+09:00"),
+        lambda: False,
+        lambda _day, _at, _occurrence_id, _model_config: "unused",
+    )
+    history = scheduler.data["history"]
+    assert isinstance(history, list) and isinstance(history[0], dict)
+    occurrence_id = history[0]["occurrence_id"]
+    assert isinstance(occurrence_id, str)
+
+    calls: list[str] = []
+
+    def interrupted_launch(
+        _day: str,
+        _at: str,
+        launch_occurrence_id: str,
+        _model_config: ModelConfigSnapshot,
+    ) -> str:
+        calls.append(launch_occurrence_id)
+        raise SystemExit("crash after accepted retry record")
+
+    with pytest.raises(SystemExit, match="accepted retry record"):
+        scheduler.retry(occurrence_id, "same-ui-nonce", interrupted_launch)
+
+    restarted = DailySchedule(tmp_path)
+
+    def idempotent_launch(
+        _day: str,
+        _at: str,
+        launch_occurrence_id: str,
+        _model_config: ModelConfigSnapshot,
+    ) -> str:
+        calls.append(launch_occurrence_id)
+        return "BATCH-stable"
+
+    recovery = restarted.retry(occurrence_id, "same-ui-nonce", idempotent_launch)
+    assert recovery["status"] == "submitted"
+    assert recovery["batch_id"] == "BATCH-stable"
+    assert calls == [occurrence_id, occurrence_id]
+
+    def must_not_launch(
+        _day: str,
+        _at: str,
+        _occurrence_id: str,
+        _model_config: ModelConfigSnapshot,
+    ) -> str:
+        raise AssertionError("terminal retry result must remain idempotent")
+
+    repeated = DailySchedule(tmp_path).retry(
+        occurrence_id, "same-ui-nonce", must_not_launch
+    )
+    assert repeated == recovery
+
 def test_pause_invalid_time_and_missed_occurrences(tmp_path: Path) -> None:
     scheduler = DailySchedule(tmp_path)
     now = datetime.fromisoformat("2026-09-10T07:00:00+09:00")
