@@ -194,6 +194,11 @@ def _capture_media_candidates(
             )
             _ = temporary.write_bytes(payload)
             _ = temporary.replace(destination)
+        if not has_image_signature(destination):
+            _ = destination.unlink(missing_ok=True)
+            candidate["fetch_status"] = "invalid_image_payload"
+            candidates.append(candidate)
+            continue
         candidate["local_path"] = relative_path.as_posix()
         candidate["sha256"] = f"sha256:{digest}"
         candidate["fetch_status"] = "cached_verified"
@@ -413,7 +418,8 @@ let unprofiledCandidates = 0;
 for (const requestedUrl of hrefs) {{
   let requested;
   try {{ requested = new URL(requestedUrl); }} catch {{ continue; }}
-  const profile = profiles.find(value => value.host === requested.host);
+  if (requested.protocol !== 'https:' || requested.username || requested.password || (requested.port && requested.port !== '443') || requested.hash) {{ unprofiledCandidates += 1; continue; }}
+  const profile = profiles.find(value => value.host === requested.hostname.toLowerCase());
   if (!profile) {{ unprofiledCandidates += 1; continue; }}
   if (seen.has(requested.href)) continue;
   seen.add(requested.href);

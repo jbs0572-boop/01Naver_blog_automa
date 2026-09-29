@@ -464,7 +464,7 @@ test("job table owns list polling and fetches detail only for the selected run",
   assert.doesNotMatch(app, /\/api\/runs\?/);
 });
 
-test("bulk cancellation sends a request for every selected queued task", async () => {
+test("bulk cancellation sends every selected task across pages before reloading", async () => {
   const source = await readFile(new URL("../dashboard/tasks.js", import.meta.url), "utf8");
   const elements = new Map(); const documentListeners = {}; const requests = [];
   class TaskElement extends FakeElement {
@@ -472,7 +472,7 @@ test("bulk cancellation sends a request for every selected queued task", async (
   }
   for (const selector of ["#task-summary", "#task-list", "#task-search", "#task-status-filter", "#task-cancel-selected", "#task-more", "#task-status-message", "#detail"]) elements.set(selector, new TaskElement());
   elements.get("#task-status-filter").value = "all";
-  const taskIds = ["JOB-1", "JOB-2", "JOB-3", "JOB-4"];
+  const taskIds = Array.from({length: 25}, (_, index) => `JOB-${index + 1}`);
   const cancelButtons = taskIds.map(taskId => {
     const button = new TaskElement("button");
     button.dataset.taskId = taskId;
@@ -483,19 +483,28 @@ test("bulk cancellation sends a request for every selected queued task", async (
     keyword: `주제 ${index + 1}`, effective_status: "queued",
     cancel_action: {scope: "queued_only", nonce: `nonce-${index + 1}`},
   }));
+  let visibleButtons = [];
   const document = {
     hidden: false,
     querySelector: selector => elements.get(selector) || null,
-    querySelectorAll: selector => selector === ".task-cancel" ? cancelButtons : [],
+    querySelectorAll: selector => selector === ".task-cancel" ? visibleButtons : [],
     addEventListener: (type, handler) => { documentListeners[type] = handler; },
   };
   const fetch = async (url, options = {}) => {
     if (options.method === "POST") requests.push([url, JSON.parse(options.body)]);
+    const paginatedItems = url.includes("cursor=next")
+      ? items.slice(20)
+      : items.slice(0, 20);
+    if (url.startsWith("/api/tasks")) {
+      visibleButtons = url.includes("cursor=next")
+        ? cancelButtons
+        : cancelButtons.slice(0, 20);
+    }
     return {
       ok: true,
       json: async () => url === "/api/schedule"
         ? {next_run: null}
-        : {items, global_summary: {by_status: {queued: items.length}}, server_now: "2026-09-29T12:00:00+09:00"},
+        : {items: paginatedItems, next_cursor: url.startsWith("/api/tasks") && !url.includes("cursor=next") ? "next" : null, global_summary: {by_status: {queued: items.length}}, server_now: "2026-09-29T12:00:00+09:00"},
     };
   };
   const context = vm.createContext({document, URLSearchParams, Intl, fetch, window: {
@@ -505,11 +514,13 @@ test("bulk cancellation sends a request for every selected queued task", async (
   vm.runInContext(source, context);
   documentListeners.DOMContentLoaded();
   await new Promise(resolve => setImmediate(resolve));
+  await elements.get("#task-more").click();
+  await new Promise(resolve => setImmediate(resolve));
   context.window.DashboardTasks.state.selectedIds = new Set(taskIds);
   await elements.get("#task-cancel-selected").click();
 
-  assert.equal(requests.length, 4);
-  assert.deepEqual(requests.map(([, body]) => body.nonce), ["nonce-1", "nonce-2", "nonce-3", "nonce-4"]);
+  assert.equal(requests.length, 25);
+  assert.deepEqual(requests.map(([, body]) => body.nonce), taskIds.map((_, index) => `nonce-${index + 1}`));
 });
 
 test("job polling skips identical list DOM and redraws when observed tokens change", async () => {

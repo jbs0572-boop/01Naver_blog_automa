@@ -8,6 +8,7 @@ import pytest
 
 from tools.contract_types import ContractError, JSONMap, JSONValue
 from tools.research_browser_capture import (
+    capture_research_browser,
     capture_research_sources,
     compact_research_evidence,
 )
@@ -72,6 +73,87 @@ def test_profiles_allow_only_configured_aside_hosts() -> None:
 def test_profiles_reject_insecure_or_ambiguous_urls(url: str) -> None:
     with pytest.raises(ContractError):
         _ = profile_for_url(url, load_source_profiles())
+
+
+def test_browser_capture_rejects_insecure_profile_urls_before_opening(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, str] = {}
+
+    class FakeAsideSession:
+        def __init__(self, _config: object) -> None:
+            pass
+
+        def run_json(self, operation: str) -> JSONMap:
+            captured["operation"] = operation
+            return {
+                "requested_keyword": "카페",
+                "requested_url": "https://search.naver.com/search.naver?query=%EC%B9%B4%ED%8E%98",
+                "source_url": "https://search.naver.com/search.naver?query=%EC%B9%B4%ED%8E%98",
+                "tree": "검색 결과",
+                "document_observations": [],
+            }
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr("tools.research_browser_capture.resolve_aside_cli", lambda: Path("/aside"))
+    monkeypatch.setattr("tools.research_browser_capture.AsideReplSession", FakeAsideSession)
+
+    _ = capture_research_browser("카페")
+
+    operation = captured["operation"]
+    assert operation.index("requested.protocol !== 'https:'") < operation.index(
+        "documents.push(await readOriginal(requested, profile))"
+    )
+
+
+def test_initial_capture_does_not_cache_undecodable_images(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _copy_capture_config(tmp_path)
+    payload = b"\xff\xd8\xff" + b"x" * 16 + b"\xff\xd9"
+    selection_path = tmp_path / "research/topic-selection-행사.md"
+    selection_path.parent.mkdir(parents=True)
+    _ = selection_path.write_text("행사", encoding="utf-8")
+    def fake_capture(_keyword: str) -> JSONMap:
+        return {
+            "requested_keyword": "행사",
+            "requested_url": "https://search.naver.com/search.naver?query=%ED%96%89%EC%82%AC",
+            "source_url": "https://search.naver.com/search.naver?query=%ED%96%89%EC%82%AC",
+            "tree": "검색 결과",
+            "document_observations": [
+                {
+                    "source_kind": "official_document",
+                    "requested_url": "https://www.buan.go.kr/tour/",
+                    "source_url": "https://www.buan.go.kr/tour/",
+                    "tree": "공식 행사 페이지",
+                    "media_candidates": [
+                        {
+                            "image_url": "https://www.buan.go.kr/image.jpg",
+                            "final_image_url": "https://www.buan.go.kr/image.jpg",
+                            "fetch_status": "downloaded",
+                            "content_type": "image/jpeg",
+                            "content_base64": base64.b64encode(payload).decode("ascii"),
+                            "width": 640,
+                            "height": 480,
+                        }
+                    ],
+                }
+            ],
+        }
+
+    monkeypatch.setattr("tools.research_browser_capture._capture", fake_capture)
+
+    result = capture_research_sources(
+        "행사", tmp_path, "RUN-undecodable", "2026-09-20", selection_path
+    )
+
+    observations = result["observations"]
+    assert isinstance(observations, list) and isinstance(observations[1], dict)
+    candidates = observations[1]["media_candidates"]
+    assert isinstance(candidates, list) and isinstance(candidates[0], dict)
+    assert candidates[0]["fetch_status"] == "invalid_image_payload"
+    assert "local_path" not in candidates[0]
+    assert not tuple((tmp_path / ".automation/work/RUN-undecodable/research-media").glob("*"))
 
 
 def test_profiles_allow_explicit_official_image_cdn_hosts(tmp_path: Path) -> None:
