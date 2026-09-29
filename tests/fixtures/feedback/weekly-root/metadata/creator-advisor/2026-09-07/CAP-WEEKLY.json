@@ -1,0 +1,38 @@
+{
+  "access_status": "read_only_success",
+  "as_of_date": "2026-09-07",
+  "candidates": [
+    {
+      "average_exposure_rank": null,
+      "channel_inflow": null,
+      "competition_index": null,
+      "duplicate_key": null,
+      "exposure": null,
+      "keyword": "첫 후보",
+      "missing_fields": [],
+      "rank": 1,
+      "raw_observation": {},
+      "trend_index": null
+    },
+    {
+      "average_exposure_rank": null,
+      "channel_inflow": null,
+      "competition_index": null,
+      "duplicate_key": null,
+      "exposure": null,
+      "keyword": "둘째 후보",
+      "missing_fields": [],
+      "rank": 2,
+      "raw_observation": {},
+      "trend_index": null
+    }
+  ],
+  "capture_id": "CAP-WEEKLY",
+  "captured_at": "2026-09-07T09:00:00+09:00",
+  "channel_id": "naver_blog",
+  "limitations": [],
+  "query_period": null,
+  "schema_version": "creator-advisor-snapshot-v1",
+  "source_url": "https://creator-advisor.naver.com/naver_blog/sola_note",
+  "timezone": "Asia/Seoul"
+}

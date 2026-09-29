@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Dashboard run cancellation request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "run_id", "batch_id", "child_id", "scope", "requested_at", "nonce_sha256"],
+  "properties": {
+    "schema_version": { "const": "run-cancellation-v1" },
+    "run_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "batch_id": { "type": "string", "pattern": "^BATCH-[A-Za-z0-9][A-Za-z0-9-]{2,159}$" },
+    "child_id": { "type": "string", "pattern": "^CHILD-[0-9]{2}$" },
+    "scope": { "enum": ["queued_only", "remaining"] },
+    "requested_at": { "type": "string", "format": "date-time" },
+    "nonce_sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  }
+}

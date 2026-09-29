@@ -47,10 +47,13 @@ def aware_datetime(value: str, field: str) -> datetime:
 
 def ensure_canonical_layout(entries: tuple[tuple[str, str, int], ...]) -> None:
     roles = tuple(entry[0] for entry in entries)
-    expected_prefix = ("final_markdown", "naver_layout", "naver_copy", "image_map")
+    expected_prefix = ("final_markdown", "naver_layout", "naver_copy", "naver_input")
     if roles[:4] != expected_prefix or roles[-1] != "thumbnail":
         raise ContractError("manifest roles are not in canonical order")
-    if any(role != "body_image" for role in roles[4:-1]):
+    image_map_index = 4
+    if roles[image_map_index] != "image_map":
+        raise ContractError("manifest image map is not in canonical order")
+    if any(role != "body_image" for role in roles[image_map_index + 1 : -1]):
         raise ContractError("manifest body images are not in canonical order")
     if tuple(entry[2] for entry in entries) != tuple(range(1, len(entries) + 1)):
         raise ContractError("manifest orders are not contiguous and canonical")
@@ -58,16 +61,23 @@ def ensure_canonical_layout(entries: tuple[tuple[str, str, int], ...]) -> None:
     if final_path.parent != Path("final") or final_path.suffix != ".md":
         raise ContractError("manifest final markdown path is not canonical")
     keyword = final_path.stem
-    expected_paths = (
+    expected_paths = [
         f"final/{keyword}.md",
         f"final/{keyword}-naver-layout.md",
         f"final/{keyword}-naver-copy.md",
+        f"final/{keyword}-naver-input.md",
+    ]
+    expected_paths.append(
         f"assets/{keyword}/image-map.md",
     )
-    if tuple(entry[1] for entry in entries[:4]) != expected_paths:
+    if tuple(entry[1] for entry in entries[: image_map_index + 1]) != tuple(
+        expected_paths
+    ):
         raise ContractError("manifest final artifact paths are not canonical")
     asset_dir = Path("assets") / keyword
-    if any(Path(entry[1]).parent != asset_dir for entry in entries[4:]):
+    if any(
+        Path(entry[1]).parent != asset_dir for entry in entries[image_map_index + 1 :]
+    ):
         raise ContractError("manifest image path is not in the topic asset directory")
     if Path(entries[-1][1]).name not in {
         "thumbnail.png",

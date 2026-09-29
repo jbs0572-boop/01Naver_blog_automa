@@ -1,0 +1,14 @@
+{
+  "access_mode": "manual_import_fixture",
+  "capture_id": "synthetic-search-ads-001",
+  "raw_payload": {
+    "missing_fields": ["monthly_search_volume"],
+    "rows": [
+      {"mobile_monthly": null, "pc_monthly": 0, "term": "synthetic-beta"},
+      {"mobile_monthly": null, "pc_monthly": 0, "term": "synthetic-beta"}
+    ],
+    "status": "delayed"
+  },
+  "source_id": "naver-search-ads",
+  "terms_checked_at": "2026-09-08"
+}

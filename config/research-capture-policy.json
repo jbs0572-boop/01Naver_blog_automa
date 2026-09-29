@@ -1,0 +1,17 @@
+{
+  "schema_version": "research-capture-policy-v1",
+  "max_searches": 3,
+  "max_documents": 5,
+  "default_documents": 3,
+  "max_social_sources": 1,
+  "link_depth": 1,
+  "same_url_retry_limit": 1,
+  "host_budget_seconds": 300,
+  "read_timeout_seconds": 30,
+  "instagram": {
+    "enabled": true,
+    "requires_public_official_account": true,
+    "max_posts": 1,
+    "credentials_optional": true
+  }
+}

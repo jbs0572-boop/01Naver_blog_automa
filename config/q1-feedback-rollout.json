@@ -1,0 +1,7 @@
+{
+  "schema_version": "q1-feedback-rollout-v1",
+  "mode": "shadow",
+  "lookback_days": 90,
+  "minimum_repaired_runs": 3,
+  "max_active_codes": 10
+}

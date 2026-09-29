@@ -1,35 +1,51 @@
 from __future__ import annotations
 
 import re
-from datetime import UTC, datetime
 from pathlib import Path
 
 from tools.contract_types import ContractError, JSONMap
+from tools.gate_models import GateRequest, parse_aware_datetime
 from tools.log_contract import read_events
 from tools.manifest import Manifest, verify_manifest
-
-
-def parse_aware_datetime(value: object, field: str) -> datetime:
-    if not isinstance(value, str):
-        raise ContractError(f"{field} must be an ISO-8601 string")
-    try:
-        parsed = datetime.fromisoformat(value)
-    except ValueError as error:
-        raise ContractError(f"{field} is not a valid ISO-8601 timestamp") from error
-    if parsed.tzinfo is None or parsed.utcoffset() is None:
-        raise ContractError(f"{field} must include a timezone")
-    return parsed.astimezone(UTC)
+from tools.naver_adapter import load_naver_config
+from tools.naver_gate import (
+    NaverToolRequest,
+    authorize_naver_target,
+    canonical_naver_input,
+    verify_article_quality,
+    verify_naver_confirmation,
+    verify_q2_identity,
+)
 
 
 def _passed(event: JSONMap) -> bool:
     return event.get("status") in {"passed", "success", "completed"}
 
 
-def _matches_run(event: JSONMap, run_id: str) -> bool:
-    if event.get("run_id") == run_id:
-        return True
-    run_ids = event.get("run_ids")
-    return isinstance(run_ids, list) and run_id in run_ids
+def _ensure_manifest_run(manifest: Manifest, run_id: str) -> None:
+    if manifest.run_id != run_id:
+        raise ContractError("manifest run_id does not match workflow run_id")
+
+
+def _verify_latest_q1(events: list[JSONMap], manifest: Manifest) -> None:
+    for event in reversed(events):
+        if (
+            event.get("run_id") != manifest.run_id
+            or event.get("topic_id") != manifest.topic_id
+            or event.get("stage") != "content-assembler"
+        ):
+            continue
+        quality = event.get("quality")
+        if event.get("telemetry_version") != 2 or not _passed(event):
+            raise ContractError("latest content-assembler Q1 result did not pass")
+        if not isinstance(quality, dict):
+            raise ContractError("latest content-assembler Q1 identity is missing")
+        if quality.get("artifact_digest") != manifest.artifact_digest:
+            raise ContractError(
+                "latest content-assembler Q1 artifact digest does not match manifest"
+            )
+        return
+    raise ContractError("latest content-assembler Q1 result is missing")
 
 
 def _configured_data_source_id(root: Path) -> str:
@@ -44,145 +60,85 @@ def _configured_data_source_id(root: Path) -> str:
     return match.group(1)
 
 
-def _approval_events(
-    events: list[JSONMap], gate: str, target_id: str, run_id: str
-) -> list[tuple[datetime, JSONMap]]:
-    approvals: list[tuple[datetime, JSONMap]] = []
-    for event in events:
-        if (
-            event.get("event_type") == "approval"
-            and event.get("gate") == gate
-            and event.get("target_id") == target_id
-            and _matches_run(event, run_id)
-        ):
-            approvals.append(
-                (
-                    parse_aware_datetime(
-                        event.get("decided_at"), "approval.decided_at"
-                    ),
-                    event,
-                )
+def verify_gate(request: GateRequest) -> JSONMap:
+    manifest = verify_manifest(request.root, request.manifest_path)
+    _ensure_manifest_run(manifest, request.run_id)
+    if request.gate not in {"notion_write", "naver_draft_save"}:
+        raise ContractError(f"unsupported gate: {request.gate}")
+    if request.gate == "notion_write" and request.target_id != _configured_data_source_id(request.root):
+        raise ContractError(
+            "Notion target_id does not match notion-config.md data source ID"
+        )
+    events = read_events(request.run_log)
+    _verify_latest_q1(events, manifest)
+    if request.gate == "naver_draft_save":
+        verify_q2_identity(
+            events, manifest, request, _configured_data_source_id(request.root)
+        )
+        return {
+            "gate": request.gate,
+            "decision": "not_required",
+            "scope": "production",
+            "target_id": request.target_id,
+            "verified_artifact_digest": manifest.artifact_digest,
+            "notion_page_id": request.notion_page_id,
+            "notion_verified_at": request.notion_verified_at,
+            "blog_id": request.blog_id,
+            **verify_article_quality(request.root, events, manifest),
+        }
+    return {
+        "gate": request.gate,
+        "decision": "not_required",
+        "scope": "production",
+        "target_id": request.target_id,
+        "verified_artifact_digest": manifest.artifact_digest,
+    }
+
+
+def authorize_external_write(request: GateRequest) -> JSONMap:
+    manifest = verify_manifest(request.root, request.manifest_path)
+    _ensure_manifest_run(manifest, request.run_id)
+    if request.gate == "naver_draft_save":
+        config = load_naver_config(request.root / "naver-config.md")
+        canonical = canonical_naver_input(manifest, request.root)
+        authorize_naver_target(
+            NaverToolRequest(
+                request.target_id,
+                request.blog_id,
+                request.naver_connector,
+                request.naver_operation,
+                request.naver_url,
+                request.naver_locator,
+                request.naver_value,
+                request.naver_phase,
+            ),
+            config,
+            canonical,
+        )
+        result = verify_gate(request)
+        if request.naver_phase == "save":
+            verify_naver_confirmation(
+                read_events(request.run_log), manifest, request.blog_id, canonical.title
             )
-    approvals.sort(key=lambda item: item[0])
-    return approvals
+        return result
+    if request.gate != "notion_write":
+        return verify_gate(request)
+    if not request.notion_connector:
+        raise ContractError("Notion writes are limited to the Notion connector")
+    if request.notion_operation not in {
+        "create_attachment",
+        "create_page",
+        "create_pages",
+    }:
+        raise ContractError("Notion operation is not allowed")
+    if request.notion_resource_id != request.target_id:
+        raise ContractError("Notion write target does not match target_id")
+    return verify_gate(request)
 
 
-def _ensure_not_expired(event: JSONMap, now: datetime) -> None:
-    expires_at = event.get("expires_at")
-    if expires_at is None:
-        return
-    if parse_aware_datetime(expires_at, "approval.expires_at") < now:
-        raise ContractError("latest matching approval has expired")
-
-
-def batch_artifact_digest(event: JSONMap, run_id: str) -> str:
-    run_ids = event.get("run_ids")
-    max_items = event.get("max_items")
-    if (
-        not isinstance(run_ids, list)
-        or any(not isinstance(item, str) for item in run_ids)
-        or len(set(run_ids)) != len(run_ids)
-        or isinstance(max_items, bool)
-        or not isinstance(max_items, int)
-        or max_items < len(run_ids)
-    ):
-        raise ContractError("batch approval run_ids or max_items is invalid")
-    if run_id not in run_ids:
-        raise ContractError("current run_id is outside the batch approval list")
-    per_run = event.get("per_run_artifact_digests")
-    if not isinstance(per_run, dict):
-        raise ContractError("batch approval is missing per_run_artifact_digests")
-    if set(per_run) != set(run_ids):
-        raise ContractError("batch approval digest map does not exactly match run_ids")
-    digest = per_run.get(run_id)
-    if not isinstance(digest, str):
-        raise ContractError("batch approval digest for current run is missing")
-    return digest
-
-
-def _verify_identity(
-    event: JSONMap,
-    manifest: Manifest,
-    target_id: str,
-    notion_page_id: str | None,
-    notion_verified_at: str | None,
-    blog_id: str | None,
-) -> None:
-    if not isinstance(notion_verified_at, str):
-        raise ContractError("Gate B verification timestamp is missing")
-    _ = parse_aware_datetime(notion_verified_at, "Gate B notion_verified_at")
-    _ = parse_aware_datetime(
-        event.get("notion_last_verified_at"), "approval.notion_last_verified_at"
-    )
-    if (
-        target_id != blog_id
-        or event.get("notion_page_id") != notion_page_id
-        or event.get("notion_last_verified_at") != notion_verified_at
-        or event.get("blog_id") != blog_id
-        or event.get("notion_roundtrip_digest") != manifest.artifact_digest
-    ):
-        raise ContractError(
-            "Gate B Notion page, verification time, blog id, or round-trip digest does not match"
-        )
-
-
-def verify_gate(
-    root: Path,
-    manifest_path: Path,
-    run_log: Path,
-    gate: str,
-    run_id: str,
-    target_id: str,
-    *,
-    notion_page_id: str | None = None,
-    notion_verified_at: str | None = None,
-    blog_id: str | None = None,
-) -> JSONMap:
-    manifest = verify_manifest(root, manifest_path)
-    if gate not in {"notion_write", "naver_draft_save"}:
-        raise ContractError(f"unsupported gate: {gate}")
-    if gate == "naver_draft_save" and manifest.mode != "formal":
-        raise ContractError("Gate B is only valid in formal mode")
-    if gate == "notion_write" and target_id != _configured_data_source_id(root):
-        raise ContractError(
-            "Gate A target_id does not match notion-config.md data source ID"
-        )
-    events = read_events(run_log)
-    if not any(
-        event.get("run_id") == run_id
-        and event.get("stage") == "content-assembler"
-        and _passed(event)
-        for event in events
-    ):
-        raise ContractError("content-assembler Q1 pass is missing")
-    if gate == "naver_draft_save" and not any(
-        event.get("run_id") == run_id
-        and event.get("stage") == "notion-rider"
-        and _passed(event)
-        for event in events
-    ):
-        raise ContractError("Notion Q2 pass is missing before Gate B")
-    approvals = _approval_events(events, gate, target_id, run_id)
-    if not approvals:
-        raise ContractError("approval event with matching target and run is missing")
-    _, approval = approvals[-1]
-    if approval.get("decision") != "approved":
-        raise ContractError("latest matching approval is not approved")
-    _ensure_not_expired(approval, datetime.now(UTC))
-    artifact_digest: object = approval.get("artifact_digest")
-    if approval.get("scope") == "batch":
-        artifact_digest = batch_artifact_digest(approval, run_id)
-    if artifact_digest != manifest.artifact_digest:
-        raise ContractError(
-            "approval artifact_digest does not match the current manifest"
-        )
-    if gate == "naver_draft_save":
-        _verify_identity(
-            approval, manifest, target_id, notion_page_id, notion_verified_at, blog_id
-        )
-    result = dict(approval)
-    result["verified_artifact_digest"] = manifest.artifact_digest
-    return result
-
-
-__all__ = ["batch_artifact_digest", "parse_aware_datetime", "verify_gate"]
+__all__ = [
+    "GateRequest",
+    "authorize_external_write",
+    "parse_aware_datetime",
+    "verify_gate",
+]

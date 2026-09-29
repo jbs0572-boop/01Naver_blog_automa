@@ -1,0 +1,81 @@
+name: Quality
+
+on:
+  pull_request:
+    paths:
+      - "**/*.md"
+      - ".github/pull_request_template.md"
+      - ".github/workflows/quality.yml"
+      - "AGENTS.md"
+      - "benchmarks/**"
+      - "EXECUTION_AGENT.md"
+      - "Plan.md"
+      - ".codex/**"
+      - "config/**"
+      - "DESIGN.md"
+      - "content-assembler.md"
+      - "evaluation-rubric.md"
+      - "image-maker.md"
+      - "image-style-guide.md"
+      - "metrics-spec.md"
+      - "naver-config.md"
+      - "naver-rider.md"
+      - "notion-config.md"
+      - "notion-rider.md"
+      - "n8n-replacement-prd.md"
+      - "researcher.md"
+      - "seo-guide.md"
+      - "style-guide.md"
+      - "test-dashboard.md"
+      - "topic-selector.md"
+      - "writer.md"
+      - "launchd/**"
+      - "dashboard/**"
+      - "schemas/**"
+      - "tools/**"
+      - "tests/**"
+      - "package.json"
+      - "pyproject.toml"
+      - "uv.lock"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.13"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57
+
+      - name: Install locked Python dependencies
+        run: uv sync --frozen --group dev
+
+      - name: Ruff
+        run: uv run --no-sync ruff check tools tests
+
+      - name: basedpyright
+        run: uv run --no-sync basedpyright
+
+      - name: Python tests
+        run: uv run --no-sync pytest -q tests benchmarks
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: "22"
+
+      - name: Node tests
+        run: npm test

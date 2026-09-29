@@ -1,0 +1,214 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Dashboard manual batch",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "batch_id",
+    "status",
+    "topic_source",
+    "as_of_date",
+    "submitted_at",
+    "updated_at",
+    "snapshot",
+    "children"
+  ],
+  "properties": {
+    "schema_version": { "const": "manual-batch-v1" },
+    "batch_id": { "type": "string", "pattern": "^BATCH-[A-Za-z0-9][A-Za-z0-9-]{2,159}$" },
+    "status": { "enum": ["queued", "running", "cancelling", "blocked", "completed", "failed", "cancelled"] },
+    "topic_source": { "enum": ["user_defined", "auto_selected"] },
+    "as_of_date": { "type": "string", "format": "date" },
+    "submitted_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "snapshot": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["capture_id", "path", "sha256"],
+      "properties": {
+        "capture_id": { "type": "string", "pattern": "^CAPTURE-[A-Za-z0-9][A-Za-z0-9-]{2,159}$" },
+        "path": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "sha256": { "type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{16,128}$" }
+      }
+    },
+    "children": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "items": { "$ref": "#/$defs/child" }
+    },
+    "request_nonce_sha256": { "type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$" },
+    "request_payload_sha256": { "type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$" }
+  },
+  "$defs": {
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "nonce"],
+      "properties": {
+        "kind": { "enum": ["retry", "external", "confirm"] },
+        "nonce": { "type": "string", "minLength": 1, "maxLength": 512 }
+      }
+    },
+    "active_action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "operation_id", "nonce_sha256", "accepted_at", "state"],
+      "properties": {
+        "kind": { "enum": ["initial", "retry", "external", "confirm"] },
+        "operation_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "nonce_sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{16,128}$" },
+        "accepted_at": { "type": "string", "format": "date-time" },
+        "state": { "enum": ["queued", "running"] }
+      }
+    },
+    "cancellation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope", "requested_at", "nonce_sha256", "completed_at"],
+      "properties": {
+        "scope": { "enum": ["queued_only", "remaining"] },
+        "requested_at": { "type": "string", "format": "date-time" },
+        "nonce_sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "completed_at": { "anyOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }] }
+      }
+    },
+    "cancel_action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "nonce", "scope"],
+      "properties": {
+        "kind": { "const": "cancel" },
+        "nonce": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "scope": { "enum": ["queued_only", "remaining"] }
+      }
+    },
+    "selection_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["as_of_date", "timezone"],
+      "properties": {
+        "category": { "type": "string", "maxLength": 500 },
+        "audience": { "type": "string", "maxLength": 500 },
+        "publish_purpose": { "type": "string", "maxLength": 500 },
+        "as_of_date": { "type": "string", "format": "date" },
+        "timezone": { "const": "Asia/Seoul" },
+        "batch_id": { "type": "string", "pattern": "^BATCH-[A-Za-z0-9][A-Za-z0-9-]{2,159}$" },
+        "batch_slot": { "type": "integer", "minimum": 1, "maximum": 3 },
+        "snapshot_policy": { "enum": ["capture_once", "reuse_only"] },
+        "capture_id": { "type": "string", "pattern": "^CAPTURE-[A-Za-z0-9][A-Za-z0-9-]{2,159}$" },
+        "snapshot_path": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "snapshot_sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{16,128}$" },
+        "excluded_keywords": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "maxLength": 500 }
+        }
+      }
+    },
+    "confirmation_preview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "target_blog_id", "title", "images", "artifact_digest"],
+      "properties": {
+        "action": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "target_blog_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "images": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 50,
+          "items": { "type": "string", "minLength": 1, "maxLength": 1024 }
+        },
+        "artifact_digest": { "type": "string", "minLength": 1, "maxLength": 256 }
+      }
+    },
+    "child": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "task_id",
+        "status",
+        "submitted_at",
+        "updated_at",
+        "run_id",
+        "result_status",
+        "message",
+        "error",
+        "retryable",
+        "confirmation_preview",
+        "child_id",
+        "slot",
+        "keyword",
+        "next_action",
+        "requested_keyword",
+        "resolved_keyword",
+        "selection_context",
+        "active_action"
+      ],
+      "properties": {
+        "task_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "status": { "enum": ["queued", "running", "cancelling", "completed", "failed", "cancelled"] },
+        "submitted_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" },
+        "run_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "result_status": { "type": ["string", "null"], "maxLength": 128 },
+        "message": { "type": ["string", "null"], "maxLength": 500 },
+        "error": { "type": ["string", "null"], "maxLength": 500 },
+        "retryable": { "type": "boolean" },
+        "confirmation_preview": { "anyOf": [{ "$ref": "#/$defs/confirmation_preview" }, { "type": "null" }] },
+        "child_id": { "type": "string", "pattern": "^CHILD-[0-9]{2}$" },
+        "slot": { "type": "integer", "minimum": 1, "maximum": 3 },
+        "keyword": { "type": ["string", "null"], "maxLength": 500 },
+        "next_action": { "anyOf": [{ "$ref": "#/$defs/action" }, { "type": "null" }] },
+        "requested_keyword": { "type": ["string", "null"], "maxLength": 500 },
+        "resolved_keyword": { "type": ["string", "null"], "maxLength": 500 },
+        "selection_context": { "anyOf": [{ "$ref": "#/$defs/selection_context" }, { "type": "null" }] },
+        "active_action": { "anyOf": [{ "$ref": "#/$defs/active_action" }, { "type": "null" }] }
+        ,"cancellation": { "anyOf": [{ "$ref": "#/$defs/cancellation" }, { "type": "null" }] }
+        ,"cancel_action": { "anyOf": [{ "$ref": "#/$defs/cancel_action" }, { "type": "null" }] }
+        ,"model_config": {
+          "anyOf": [
+            { "$ref": "#/$defs/model_config" },
+            { "type": "null" }
+          ]
+        },
+        "display_id": { "type": ["string", "null"], "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{3,}$" },
+        "scheduled_at": { "anyOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }] },
+        "started_at": { "anyOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }] },
+        "ended_at": { "anyOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }] }
+      }
+    },
+    "stage_model": {
+      "type": "object",
+      "enum": [
+        { "model": "gpt-5.6-sol", "reasoning_effort": "high" },
+        { "model": "gpt-5.6-luna", "reasoning_effort": "medium" },
+        { "model": "gpt-5.6-luna", "reasoning_effort": "low" },
+        { "model": "gpt-5.6-terra", "reasoning_effort": "medium" }
+      ]
+    },
+    "model_config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["preset_id", "revision", "stages", "digest"],
+      "properties": {
+        "preset_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "revision": { "type": "integer", "minimum": 1 },
+        "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "stages": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["topic-selector", "researcher", "writer", "image-maker", "content-assembler"],
+          "properties": {
+            "topic-selector": { "$ref": "#/$defs/stage_model" },
+            "researcher": { "$ref": "#/$defs/stage_model" },
+            "writer": { "$ref": "#/$defs/stage_model" },
+            "image-maker": { "$ref": "#/$defs/stage_model" },
+            "content-assembler": { "$ref": "#/$defs/stage_model" }
+          }
+        }
+      }
+    }
+  }
+}

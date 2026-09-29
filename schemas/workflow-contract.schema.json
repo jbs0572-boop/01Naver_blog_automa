@@ -2,10 +2,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://local.invalid/naver-blog/workflow-contract.schema.json",
   "title": "Naver Blog Workflow Optimized v1 Contract",
-  "description": "Single contract for stages, visual slots, image generation metadata, approvals, and canonical manifests.",
+  "description": "Single contract for stages, visual slots, image generation metadata, and canonical manifests.",
   "oneOf": [
     { "$ref": "#/$defs/stageEvent" },
-    { "$ref": "#/$defs/approvalEvent" },
+    { "$ref": "#/$defs/confirmationEvent" },
+    { "$ref": "#/$defs/workflowAuthorizationEvent" },
     { "$ref": "#/$defs/manifest" },
     { "$ref": "#/$defs/visualSlot" },
     { "$ref": "#/$defs/imageGeneration" },
@@ -38,11 +39,15 @@
     },
     "status": {
       "type": "string",
-      "enum": ["pending", "running", "passed", "failed", "blocked", "skipped"]
+      "enum": ["pending", "running", "passed", "validated", "failed", "blocked", "skipped"]
+    },
+    "stageExecution": {
+      "type": "string",
+      "enum": ["not_called", "attempted", "produced", "validated", "aggregated"]
     },
     "mode": {
       "type": "string",
-      "enum": ["beta", "formal"]
+      "const": "formal"
     },
     "visualIntent": {
       "type": "string",
@@ -73,6 +78,7 @@
         "batch_id": { "type": "string", "minLength": 1 },
         "run_id": { "type": "string", "minLength": 1 },
         "topic_id": { "type": "string", "minLength": 1 },
+        "topic_source": { "enum": ["user_defined", "auto_selected"] },
         "stage": { "$ref": "#/$defs/stage" },
         "parent_stage": { "anyOf": [{ "$ref": "#/$defs/stage" }, { "type": "null" }] },
         "lane_id": { "type": ["string", "null"] },
@@ -83,7 +89,11 @@
         "status": { "$ref": "#/$defs/status" },
         "attempt": { "type": "integer", "minimum": 1 },
         "artifacts": { "type": "array", "items": { "$ref": "#/$defs/artifact" } },
-        "quality": { "type": "object", "additionalProperties": true },
+        "quality": {
+          "type": "object",
+          "properties": { "execution": { "$ref": "#/$defs/stageExecution" } },
+          "additionalProperties": true
+        },
         "error_type": { "type": ["string", "null"] },
         "error_message_safe": { "type": ["string", "null"] }
       },
@@ -104,48 +114,48 @@
       },
       "additionalProperties": false
     },
-    "approvalEvent": {
+    "confirmationEvent": {
       "type": "object",
-      "required": ["event_type", "pipeline_version", "run_id", "gate", "decision", "scope", "target_id", "artifact_digest", "requested_at", "decided_at"],
+      "required": ["event_type", "pipeline_version", "run_id", "action", "target_blog_id", "title", "artifact_digest", "requested_at", "confirmed_at", "actor"],
       "properties": {
-        "event_type": { "const": "approval" },
+        "event_type": { "const": "confirmation" },
         "pipeline_version": { "const": "workflow-optimized-v1" },
         "run_id": { "type": "string", "minLength": 1 },
-        "batch_id": { "type": "string" },
-        "topic_id": { "type": "string" },
-        "gate": { "enum": ["notion_write", "naver_draft_save"] },
-        "decision": { "enum": ["approved", "rejected", "expired"] },
-        "scope": { "enum": ["per-run", "batch"] },
-        "target_id": { "type": "string", "minLength": 1 },
+        "action": { "const": "naver-draft-save" },
+        "target_blog_id": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
         "artifact_digest": { "$ref": "#/$defs/artifactDigest" },
-        "per_run_artifact_digests": { "type": "object", "additionalProperties": { "$ref": "#/$defs/artifactDigest" } },
-        "run_ids": { "type": "array", "minItems": 1, "items": { "type": "string" }, "uniqueItems": true },
-        "max_items": { "type": "integer", "minimum": 1 },
+        "confirmation_request_digest": { "$ref": "#/$defs/sha256" },
         "requested_at": { "$ref": "#/$defs/isoDateTime" },
-        "decided_at": { "$ref": "#/$defs/isoDateTime" },
-        "expires_at": { "anyOf": [{ "$ref": "#/$defs/isoDateTime" }, { "type": "null" }] },
-        "notion_page_id": { "type": "string" },
-        "notion_last_verified_at": { "$ref": "#/$defs/isoDateTime" },
-        "notion_roundtrip_digest": { "$ref": "#/$defs/artifactDigest" },
-        "blog_id": { "type": "string" }
+        "confirmed_at": { "$ref": "#/$defs/isoDateTime" },
+        "actor": { "type": "string", "minLength": 1 }
       },
-      "allOf": [
-        {
-          "if": { "properties": { "scope": { "const": "batch" } } },
-          "then": { "required": ["run_ids", "max_items", "expires_at", "per_run_artifact_digests"] }
-        },
-        {
-          "if": { "properties": { "gate": { "const": "naver_draft_save" } } },
-          "then": { "required": ["notion_page_id", "notion_last_verified_at", "notion_roundtrip_digest", "blog_id"] }
-        }
-      ],
-      "additionalProperties": true
+      "additionalProperties": false
+    },
+    "workflowAuthorizationEvent": {
+      "type": "object",
+      "required": ["event_type", "pipeline_version", "run_id", "action", "policy", "target_blog_id", "title", "artifact_digest", "authorization_digest", "requested_at", "authorized_at", "actor"],
+      "properties": {
+        "event_type": { "const": "workflow_authorization" },
+        "pipeline_version": { "const": "workflow-optimized-v1" },
+        "run_id": { "type": "string", "minLength": 1 },
+        "action": { "const": "naver-draft-save" },
+        "policy": { "const": "all_quality_gates_passed" },
+        "target_blog_id": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "artifact_digest": { "$ref": "#/$defs/artifactDigest" },
+        "authorization_digest": { "$ref": "#/$defs/sha256" },
+        "requested_at": { "$ref": "#/$defs/isoDateTime" },
+        "authorized_at": { "$ref": "#/$defs/isoDateTime" },
+        "actor": { "const": "dashboard-auto-save" }
+      },
+      "additionalProperties": false
     },
     "manifestFile": {
       "type": "object",
       "required": ["role", "path", "order", "size_bytes", "sha256"],
       "properties": {
-        "role": { "enum": ["final_markdown", "naver_layout", "naver_copy", "image_map", "body_image", "thumbnail"] },
+        "role": { "enum": ["final_markdown", "naver_layout", "naver_copy", "naver_input", "image_map", "body_image", "thumbnail"] },
         "path": { "type": "string", "pattern": "^(?!/)(?!.*\\.\\.).+" },
         "order": { "type": "integer", "minimum": 1 },
         "size_bytes": { "type": "integer", "minimum": 0 },
@@ -163,13 +173,14 @@
         "topic_id": { "type": "string", "minLength": 1 },
         "mode": { "$ref": "#/$defs/mode" },
         "created_at": { "$ref": "#/$defs/isoDateTime" },
-        "files": { "type": "array", "minItems": 5, "items": { "$ref": "#/$defs/manifestFile" }, "uniqueItems": true },
+        "files": { "type": "array", "minItems": 6, "items": { "$ref": "#/$defs/manifestFile" }, "uniqueItems": true },
         "artifact_digest": { "$ref": "#/$defs/artifactDigest" }
       },
       "allOf": [
         { "contains": { "properties": { "role": { "const": "final_markdown" } }, "required": ["role"] } },
         { "contains": { "properties": { "role": { "const": "naver_layout" } }, "required": ["role"] } },
         { "contains": { "properties": { "role": { "const": "naver_copy" } }, "required": ["role"] } },
+        { "contains": { "properties": { "role": { "const": "naver_input" } }, "required": ["role"] } },
         { "contains": { "properties": { "role": { "const": "image_map" } }, "required": ["role"] } },
         { "contains": { "properties": { "role": { "const": "thumbnail" } }, "required": ["role"] } }
       ],
@@ -194,10 +205,11 @@
       "type": "object",
       "required": ["generation_provider", "generation_model", "generation_snapshot", "generation_control", "quality", "size", "prompt_template_version", "prompt_sha256", "reference_sha256", "output_sha256", "generated_at", "provenance_status", "output_path"],
       "properties": {
-        "generation_provider": { "const": "openai" },
-        "generation_model": { "const": "gpt-image-2" },
-        "generation_snapshot": { "const": "gpt-image-2-2026-04-21" },
-        "generation_control": { "enum": ["locked", "unlocked"] },
+        "production_method": { "enum": ["ai_generation", "local_render"] },
+        "generation_provider": { "type": "string", "minLength": 1 },
+        "generation_model": { "type": "string", "minLength": 1 },
+        "generation_snapshot": { "type": "string", "minLength": 1 },
+        "generation_control": { "enum": ["locked", "unlocked", "unavailable"] },
         "quality": { "type": "string", "enum": ["high"] },
         "size": { "type": "string", "pattern": "^[1-9][0-9]*x[1-9][0-9]*$" },
         "prompt_template_version": { "type": "string", "minLength": 1 },
@@ -206,14 +218,21 @@
         "output_sha256": { "$ref": "#/$defs/artifactDigest" },
         "generated_at": { "$ref": "#/$defs/isoDateTime" },
         "provenance_status": { "enum": ["generated", "official", "licensed", "captured"] },
+        "renderer_version": { "type": "string", "minLength": 1 },
+        "renderer_sha256": { "$ref": "#/$defs/artifactDigest" },
+        "input_sha256": { "$ref": "#/$defs/artifactDigest" },
         "output_path": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+" }
       },
       "additionalProperties": false
     },
     "imageQuality": {
       "type": "object",
-      "required": ["automated_checks", "scores", "immediate_failure", "mobile_rendered", "mobile_viewport", "mobile_render_path", "mobile_render_sha256", "human_verdict"],
+      "required": ["image_sha256", "automated_checks", "scores", "immediate_failure", "mobile_rendered", "mobile_viewport", "mobile_render_path", "mobile_render_sha256", "human_verdict"],
       "properties": {
+        "image_sha256": { "$ref": "#/$defs/artifactDigest" },
+        "run_id": { "type": "string", "minLength": 1 },
+        "article_quality_report_digest": { "$ref": "#/$defs/artifactDigest" },
+        "reviewed_at": { "type": "string", "format": "date-time" },
         "automated_checks": {
           "type": "object",
           "required": ["decode_check", "duplicate_check", "ocr_check", "visual_contract_check", "mobile_render_check"],

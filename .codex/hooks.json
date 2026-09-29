@@ -1,5 +1,5 @@
 {
-  "description": "Block Notion and Naver external writes unless the workflow verifier confirms the current approval and artifact digest.",
+  "description": "Allow only target-bound Notion creation after Q1 and manifest checks; require Q1/Q2/Q3, identity, artifact verification, and Gate-bound workflow authorization for Naver draft saves.",
   "hooks": {
     "PreToolUse": [
       {

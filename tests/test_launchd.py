@@ -7,28 +7,55 @@ import pytest
 
 ROOT = Path(__file__).parents[1]
 PLISTS = tuple(sorted((ROOT / "launchd").glob("*.plist")))
+DASHBOARD_PLIST = ROOT / "launchd/com.naverblog.dashboard.plist"
+
+
+def test_dashboard_launch_agent_is_present() -> None:
+    assert DASHBOARD_PLIST in PLISTS
 
 
 @pytest.mark.parametrize("path", PLISTS)
-def test_plist_has_absolute_disabled_dry_run_runner_contract(path: Path) -> None:
+def test_plist_has_absolute_runner_contract(path: Path) -> None:
     data = plistlib.loads(path.read_bytes())
     args = data["ProgramArguments"]
 
     assert data["Label"] == path.stem
     assert Path(args[0]).is_absolute()
-    assert args[1:3] == ["-m", "tools.automation_runner"]
-    assert data["WorkingDirectory"] == str(ROOT)
+    if path == DASHBOARD_PLIST:
+        assert args[1:3] == ["-m", "tools.test_dashboard"]
+    else:
+        assert args[1:3] == ["-m", "tools.preflight_runner"]
+    assert "--mode" not in args
+    assert "beta" not in args
+    assert "formal" not in args
+    assert Path(data["WorkingDirectory"]).is_absolute()
     assert Path(data["StandardOutPath"]).is_absolute()
     assert Path(data["StandardErrorPath"]).is_absolute()
+    environment = data["EnvironmentVariables"]
+    assert environment["CODEX_HOME"] == "/Users/beomseok/.codex"
+    assert "/opt/homebrew/bin" in environment["PATH"].split(":")
     assert "/.automation/logs/launchd/" in data["StandardOutPath"]
     assert "/.automation/logs/launchd/" in data["StandardErrorPath"]
-    assert data["Disabled"] is True
-    assert "--dry-run" in args
-    assert "StartCalendarInterval" not in data
-    assert "KeepAlive" not in data
+    if path == DASHBOARD_PLIST:
+        assert data["RunAtLoad"] is True
+        assert data["KeepAlive"] is True
+        assert data["ThrottleInterval"] == 10
+        assert "StartCalendarInterval" not in data
+        assert "--root" in args
+        assert "--live-writes" not in args
+        assert "--demo" not in args
+    elif path.stem == "com.naverblog.naver-publish":
+        assert "StartCalendarInterval" not in data
+        assert "__SET_RUN_ID__" in args
+        assert "--dry-run" in args
+    else:
+        assert "StartCalendarInterval" in data
+        assert "--dry-run" not in args
+    if path != DASHBOARD_PLIST:
+        assert "KeepAlive" not in data
 
 
-def test_plist_placeholders_are_limited_to_required_inputs() -> None:
+def test_daily_and_naver_placeholders_are_manual_only() -> None:
     daily = plistlib.loads(
         (ROOT / "launchd/com.naverblog.daily-generate.plist").read_bytes()
     )
@@ -36,14 +63,20 @@ def test_plist_placeholders_are_limited_to_required_inputs() -> None:
         (ROOT / "launchd/com.naverblog.naver-publish.plist").read_bytes()
     )
 
-    assert "__SET_KEYWORD__" in daily["ProgramArguments"]
+    assert "--auto-topic" in daily["ProgramArguments"]
+    assert "--as-of-date" not in daily["ProgramArguments"]
+    assert daily["Disabled"] is True
     assert "__SET_RUN_ID__" in naver["ProgramArguments"]
 
 
-def test_launchd_files_contain_no_registration_or_schedule_actions() -> None:
+def test_launchd_files_contain_no_registration_actions() -> None:
     forbidden = ("launchctl", "bootstrap", "bootout", "kickstart")
     for path in PLISTS:
         text = path.read_text(encoding="utf-8")
         assert all(token not in text for token in forbidden)
-        assert "StartCalendarInterval" not in text
-        assert "KeepAlive" not in text
+        if path == DASHBOARD_PLIST:
+            assert "StartCalendarInterval" not in text
+            assert "KeepAlive" in text
+        elif path.stem != "com.naverblog.naver-publish":
+            assert "StartCalendarInterval" in text
+            assert "KeepAlive" not in text

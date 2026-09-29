@@ -1,0 +1,11 @@
+{
+  "access_mode": "read_only_fixture",
+  "capture_id": "synthetic-creator-link-001",
+  "raw_payload": {
+    "candidate_reference": "synthetic-candidate-001",
+    "publication_context": {"post_reference": "synthetic-post-001", "published_at": null},
+    "status": "pending"
+  },
+  "source_id": "creator-advisor-link",
+  "terms_checked_at": "2026-09-08"
+}

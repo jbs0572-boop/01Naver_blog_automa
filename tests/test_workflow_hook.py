@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from tools.contract_types import PIPELINE_VERSION, JSONMap, JSONValue
-from tools.manifest import build_manifest
+from tools.manifest import ManifestBuildInput, build_manifest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -31,16 +31,16 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, JSONMap, str]:
     _ = (final_dir / f"{keyword}-naver-copy.md").write_text(
         "# copy\n", encoding="utf-8"
     )
+    _ = (final_dir / f"{keyword}-naver-input.md").write_text(
+        "# copy\n", encoding="utf-8"
+    )
     _ = (tmp_path / "notion-config.md").write_text(
         "- 데이터 소스 ID: `datasource-hook`\n", encoding="utf-8"
     )
     _ = (tmp_path / "AGENTS.md").write_text("temporary test root\n", encoding="utf-8")
-    _ = (tmp_path / "workflow-optimization-implementation-plan.md").write_text(
-        "temporary test root\n", encoding="utf-8"
-    )
-    manifest = build_manifest(
-        tmp_path, keyword, run_id, "TOPIC-hook", "beta", "2026-08-27T00:00:00+00:00"
-    )
+    manifest = build_manifest(ManifestBuildInput(
+        tmp_path, keyword, run_id, "TOPIC-hook", "2026-08-27T00:00:00+00:00"
+    ))
     manifest_path = tmp_path / "manifest.json"
     _ = manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     run_log = tmp_path / "run.jsonl"
@@ -58,23 +58,6 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, JSONMap, str]:
     }
     _ = run_log.write_text(json.dumps(stage) + "\n", encoding="utf-8")
     return tmp_path, manifest_path, run_log, manifest, run_id
-
-
-def _approval(manifest: JSONMap, run_id: str, **changes: JSONValue) -> JSONMap:
-    approval: JSONMap = {
-        "event_type": "approval",
-        "pipeline_version": PIPELINE_VERSION,
-        "run_id": run_id,
-        "gate": "notion_write",
-        "decision": "approved",
-        "scope": "per-run",
-        "target_id": "datasource-hook",
-        "artifact_digest": manifest["artifact_digest"],
-        "requested_at": "2026-08-27T00:02:00+00:00",
-        "decided_at": "2026-08-27T00:03:00+00:00",
-    }
-    approval.update(changes)
-    return approval
 
 
 def _hook(tmp_path: Path, tool_name: str, **environment: str) -> JSONMap:
@@ -114,7 +97,7 @@ def _assert_deny(result: JSONMap) -> None:
 
 
 def test_hook_dry_run_matrix_denies_without_external_call(tmp_path: Path) -> None:
-    root, manifest_path, run_log, manifest, run_id = _fixture(tmp_path)
+    root, manifest_path, run_log, _, run_id = _fixture(tmp_path)
     cases: list[dict[str, str]] = [
         {"name": "missing-env"},
         {
@@ -126,7 +109,7 @@ def test_hook_dry_run_matrix_denies_without_external_call(tmp_path: Path) -> Non
             "WORKFLOW_TARGET_ID": "datasource-hook",
         },
         {
-            "name": "digest-mismatch",
+            "name": "missing-q1",
             "WORKFLOW_GATE": "notion_write",
             "WORKFLOW_MANIFEST": str(manifest_path),
             "WORKFLOW_RUN_LOG": str(run_log),
@@ -134,28 +117,12 @@ def test_hook_dry_run_matrix_denies_without_external_call(tmp_path: Path) -> Non
             "WORKFLOW_TARGET_ID": "datasource-hook",
         },
         {
-            "name": "rejected",
+            "name": "wrong-target",
             "WORKFLOW_GATE": "notion_write",
             "WORKFLOW_MANIFEST": str(manifest_path),
             "WORKFLOW_RUN_LOG": str(run_log),
             "WORKFLOW_RUN_ID": run_id,
-            "WORKFLOW_TARGET_ID": "datasource-hook",
-        },
-        {
-            "name": "expired",
-            "WORKFLOW_GATE": "notion_write",
-            "WORKFLOW_MANIFEST": str(manifest_path),
-            "WORKFLOW_RUN_LOG": str(run_log),
-            "WORKFLOW_RUN_ID": run_id,
-            "WORKFLOW_TARGET_ID": "datasource-hook",
-        },
-        {
-            "name": "batch-missing-map",
-            "WORKFLOW_GATE": "notion_write",
-            "WORKFLOW_MANIFEST": str(manifest_path),
-            "WORKFLOW_RUN_LOG": str(run_log),
-            "WORKFLOW_RUN_ID": run_id,
-            "WORKFLOW_TARGET_ID": "datasource-hook",
+            "WORKFLOW_TARGET_ID": "another-data-source",
         },
         {"name": "unknown-tool"},
         {
@@ -170,46 +137,8 @@ def test_hook_dry_run_matrix_denies_without_external_call(tmp_path: Path) -> Non
     ]
     _ = (root / "active.lock").write_text("active\n", encoding="utf-8")
     for case in cases:
-        if case["name"] == "digest-mismatch":
-            _ = run_log.write_text(
-                json.dumps(_fixture_stage(run_id))
-                + "\n"
-                + json.dumps(
-                    _approval(manifest, run_id, artifact_digest="sha256:" + "0" * 64)
-                )
-                + "\n",
-                encoding="utf-8",
-            )
-        elif case["name"] == "rejected":
-            _ = run_log.write_text(
-                json.dumps(_fixture_stage(run_id))
-                + "\n"
-                + json.dumps(_approval(manifest, run_id, decision="rejected"))
-                + "\n",
-                encoding="utf-8",
-            )
-        elif case["name"] == "expired":
-            _ = run_log.write_text(
-                json.dumps(_fixture_stage(run_id))
-                + "\n"
-                + json.dumps(
-                    _approval(manifest, run_id, expires_at="2020-01-01T00:00:00+00:00")
-                )
-                + "\n",
-                encoding="utf-8",
-            )
-        elif case["name"] == "batch-missing-map":
-            _ = run_log.write_text(
-                json.dumps(_fixture_stage(run_id))
-                + "\n"
-                + json.dumps(
-                    _approval(
-                        manifest, run_id, scope="batch", run_ids=[run_id], max_items=1
-                    )
-                )
-                + "\n",
-                encoding="utf-8",
-            )
+        if case["name"] == "missing-q1":
+            _ = run_log.write_text("", encoding="utf-8")
         result = _hook(
             root,
             "mcp__unknown__do"
@@ -218,21 +147,6 @@ def test_hook_dry_run_matrix_denies_without_external_call(tmp_path: Path) -> Non
             **{key: value for key, value in case.items() if key != "name"},
         )
         _assert_deny(result)
-
-
-def _fixture_stage(run_id: str) -> JSONMap:
-    return {
-        "event_type": "stage",
-        "pipeline_version": PIPELINE_VERSION,
-        "batch_id": "BATCH-hook",
-        "run_id": run_id,
-        "topic_id": "TOPIC-hook",
-        "stage": "content-assembler",
-        "started_at": "2026-08-27T00:00:00+00:00",
-        "ended_at": "2026-08-27T00:01:00+00:00",
-        "status": "passed",
-        "attempt": 1,
-    }
 
 
 def test_hook_read_query_ignores_write_words(tmp_path: Path) -> None:

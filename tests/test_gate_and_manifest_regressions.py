@@ -6,11 +6,12 @@ from pathlib import Path
 import pytest
 
 from tools.contract_types import PIPELINE_VERSION, ContractError, JSONMap, JSONValue
-from tools.gate import verify_gate
-from tools.manifest import build_manifest
+from tools.gate import GateRequest, verify_gate
+from tools.log_contract import read_events
+from tools.manifest import ManifestBuildInput, build_manifest
 
 
-def _fixture(tmp_path: Path, mode: str = "beta") -> tuple[Path, Path, JSONMap, str]:
+def _fixture(tmp_path: Path) -> tuple[Path, Path, JSONMap, str]:
     keyword = "fixture-topic"
     run_id = "RUN-fixture"
     final_dir = tmp_path / "final"
@@ -32,30 +33,60 @@ def _fixture(tmp_path: Path, mode: str = "beta") -> tuple[Path, Path, JSONMap, s
     _ = (final_dir / f"{keyword}-naver-copy.md").write_text(
         "# copy\n", encoding="utf-8"
     )
-    manifest = build_manifest(
-        tmp_path, keyword, run_id, "TOPIC-fixture", mode, "2026-08-27T00:00:00+00:00"
+    _ = (final_dir / f"{keyword}-naver-input.md").write_text(
+        "# copy\n", encoding="utf-8"
     )
+    manifest = build_manifest(ManifestBuildInput(
+        tmp_path, keyword, run_id, "TOPIC-fixture", "2026-08-27T00:00:00+00:00"
+    ))
     manifest_path = tmp_path / "manifest.json"
     _ = manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     return tmp_path, manifest_path, manifest, run_id
 
 
-def _stage(run_id: str) -> JSONMap:
+def _stage(run_id: str, artifact_digest: str, status: str = "passed") -> JSONMap:
     return {
         "event_type": "stage",
         "pipeline_version": PIPELINE_VERSION,
+        "telemetry_version": 2,
         "batch_id": "BATCH-fixture",
         "run_id": run_id,
         "topic_id": "TOPIC-fixture",
         "stage": "content-assembler",
         "started_at": "2026-08-27T00:00:00+00:00",
         "ended_at": "2026-08-27T00:01:00+00:00",
-        "status": "passed",
+        "duration_ms": 60_000,
+        "depends_on": ["image-maker"],
+        "status": status,
         "attempt": 1,
+        "quality": {"artifact_digest": artifact_digest},
     }
 
 
-def _approval(manifest: JSONMap, run_id: str, **overrides: JSONValue) -> JSONMap:
+def _write_log(path: Path, events: list[JSONMap]) -> None:
+    _ = path.write_text(
+        "".join(json.dumps(event) + "\n" for event in events), encoding="utf-8"
+    )
+
+
+def test_validated_stage_does_not_satisfy_q1(tmp_path: Path) -> None:
+    root, manifest_path, manifest, run_id = _fixture(tmp_path)
+    run_log = root / "run.jsonl"
+    digest = manifest["artifact_digest"]
+    assert isinstance(digest, str)
+    _write_log(run_log, [_stage(run_id, digest, status="validated")])
+
+    with pytest.raises(ContractError, match="Q1"):
+        _ = verify_gate(GateRequest(
+            root, manifest_path, run_log, "notion_write", run_id, "datasource-fixture"
+        ))
+
+
+def test_legacy_approval_event_does_not_control_notion_preflight(
+    tmp_path: Path,
+) -> None:
+    root, manifest_path, manifest, run_id = _fixture(tmp_path)
+    run_log = root / "run.jsonl"
     approval: JSONMap = {
         "event_type": "approval",
         "pipeline_version": PIPELINE_VERSION,
@@ -68,99 +99,15 @@ def _approval(manifest: JSONMap, run_id: str, **overrides: JSONValue) -> JSONMap
         "requested_at": "2026-08-27T00:02:00+00:00",
         "decided_at": "2026-08-27T00:03:00+00:00",
     }
-    approval.update(overrides)
-    return approval
+    digest = manifest["artifact_digest"]
+    assert isinstance(digest, str)
+    _write_log(run_log, [_stage(run_id, digest), approval])
 
-
-def _write_log(path: Path, events: list[JSONMap]) -> None:
-    _ = path.write_text(
-        "".join(json.dumps(event) + "\n" for event in events), encoding="utf-8"
-    )
-
-
-def test_mixed_offset_approval_order_uses_actual_time(tmp_path: Path) -> None:
-    root, manifest_path, manifest, run_id = _fixture(tmp_path)
-    run_log = root / "run.jsonl"
-    approved_later = _approval(manifest, run_id, decided_at="2026-08-27T08:00:00+00:00")
-    rejected_earlier = _approval(
-        manifest, run_id, decision="rejected", decided_at="2026-08-27T16:30:00+09:00"
-    )
-    _write_log(run_log, [_stage(run_id), approved_later, rejected_earlier])
-
-    result = verify_gate(
+    assert len(read_events(run_log)) == 2
+    result = verify_gate(GateRequest(
         root, manifest_path, run_log, "notion_write", run_id, "datasource-fixture"
-    )
-
-    assert result["decision"] == "approved"
-
-
-def test_rejected_approval_after_approved_blocks(tmp_path: Path) -> None:
-    root, manifest_path, manifest, run_id = _fixture(tmp_path)
-    run_log = root / "run.jsonl"
-    approved = _approval(manifest, run_id, decided_at="2026-08-27T08:00:00+00:00")
-    rejected_later = _approval(
-        manifest, run_id, decision="rejected", decided_at="2026-08-27T17:30:00+09:00"
-    )
-    _write_log(run_log, [_stage(run_id), approved, rejected_later])
-
-    with pytest.raises(ContractError, match="not approved"):
-        _ = verify_gate(
-            root, manifest_path, run_log, "notion_write", run_id, "datasource-fixture"
-        )
-
-
-def test_naive_approval_timestamp_is_not_accepted(tmp_path: Path) -> None:
-    root, manifest_path, manifest, run_id = _fixture(tmp_path)
-    run_log = root / "run.jsonl"
-    legacy_approval = _approval(
-        manifest, run_id, pipeline_version=None, decided_at="2026-08-27T08:00:00"
-    )
-    _write_log(run_log, [_stage(run_id), legacy_approval])
-
-    with pytest.raises(ContractError):
-        _ = verify_gate(
-            root, manifest_path, run_log, "notion_write", run_id, "datasource-fixture"
-        )
-
-
-_BATCH_CASES: tuple[tuple[JSONMap, str], ...] = (
-    (
-        {"per_run_artifact_digests": {"RUN-other": "sha256:" + "0" * 64}},
-        "exactly match",
-    ),
-    (
-        {"per_run_artifact_digests": {"RUN-fixture": "sha256:" + "0" * 63 + "1"}},
-        "does not match",
-    ),
-    ({"per_run_artifact_digests": None}, "missing"),
-)
-
-
-@pytest.mark.parametrize(
-    ("override", "message"),
-    _BATCH_CASES,
-)
-def test_batch_digest_map_requires_exact_keys_and_current_digest(
-    tmp_path: Path, override: JSONMap, message: str
-) -> None:
-    root, manifest_path, manifest, run_id = _fixture(tmp_path)
-    run_log = root / "run.jsonl"
-    batch = _approval(
-        manifest,
-        run_id,
-        scope="batch",
-        run_ids=[run_id],
-        max_items=1,
-        per_run_artifact_digests={run_id: manifest["artifact_digest"]},
-        pipeline_version=None,
-    )
-    batch.update(override)
-    _write_log(run_log, [_stage(run_id), batch])
-
-    with pytest.raises(ContractError, match=message):
-        _ = verify_gate(
-            root, manifest_path, run_log, "notion_write", run_id, "datasource-fixture"
-        )
+    ))
+    assert result["decision"] == "not_required"
 
 
 def test_manifest_rejects_path_traversal(tmp_path: Path) -> None:
@@ -188,11 +135,10 @@ def test_manifest_rejects_thumbnail_as_body_image(tmp_path: Path) -> None:
     )
 
     with pytest.raises(ContractError, match="thumbnail"):
-        _ = build_manifest(
+        _ = build_manifest(ManifestBuildInput(
             root,
             "fixture-topic",
             "RUN-fixture",
             "TOPIC-fixture",
-            "beta",
             "2026-08-27T00:00:00+00:00",
-        )
+        ))

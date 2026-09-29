@@ -4,6 +4,8 @@
 
 본문에 실제로 필요한 이미지를 제작·선정·검수한다. 작업 전에 `research/[키워드].md`의 시각 자산 원장, `drafts/[키워드].md`, `image-style-guide.md`, 본문의 모든 `[IMAGE:]` 마커를 읽는다.
 
+`research/[키워드].md`에 원문 URL과 문맥이 확인된 공식 `media_candidates`의 `local_path`가 있으면, 이미지가 현재 글 주제와 직접 일치하는지 확인하고 원본 파일을 그대로 자산 폴더에 복사해 우선 사용한다. 원본 해시와 출처 URL을 연결표에 보존한다. 출처 상태가 `official_same_origin` 또는 명시 허용된 `official_allowlisted_media_host`인 관련 원본이 확보되어 있으면 이를 생성 이미지로 대체하지 않는다. URL만 있고 로컬 파일이 없거나 출처 호스트가 검증되지 않은 후보는 사용 가능한 자산으로 간주하지 않는다. 공식 원본이 주제와 맞지 않는 경우에만 그 이유를 적고 계약에 허용된 대체 방식을 적용한다.
+
 출력은 본문 순서대로 `assets/[키워드]/`에 저장하고 `assets/[키워드]/image-map.md`에 본문 마커와 전용 썸네일의 연결표를 작성한다. 본문을 수정하거나 마커를 삭제하지 않는다.
 
 ## 공통 시각 슬롯 실행
@@ -12,9 +14,11 @@
 
 `official_asset`, `portrait_grid`, `character_cards`, `side_by_side`, `timeline`, `process_flow`, `relationship_map`, `official_screenshot`, `map`, `chart`, `original_photo`, `generated_illustration`, `text_only`
 
-선택 우선순위는 `제목 약속 > 독자 질문 > 근거 제시 > 독창성 > 장식`이다. `portrait_grid`는 공식·허가된 인물 자산을 우선 카드형으로 조립하는 유형이다. 해당 자산을 확보하지 못하고 슬롯의 `source_policy`를 `generated_allowed`로 전환한 경우에는 실존 인물 얼굴 생성 이미지로 대체할 수 있으며, 생성·합성 사실과 확인된 인물명·역할을 연결표와 캡션에 표시한다. 이 전환을 선택하면 `research/[키워드].md`, 초안 마커, `image-map.md`의 `source_policy`를 모두 `generated_allowed`로 갱신한다. 역할을 추정하거나 생성 얼굴을 공식 사진처럼 표시하지 않는다. `official_asset` 또는 `official_screenshot`이 요구된 슬롯은 생성 이미지로 대체하지 않는다. `generated_illustration`은 식별 가능한 실존 인물·제품·공식 화면·문서·로고를 재현하지 않는 경우에만 사용한다.
+선택 우선순위는 `제목 약속 > 독자 질문 > 근거 제시 > 독창성 > 장식`이다. `portrait_grid`는 공식 출처가 확인되거나 별도 허가된 인물 자산을 우선 카드형으로 조립하는 유형이다. 공식 원본 URL과 공식 출처가 확인되면 재사용 허가가 미확인이어도 원본을 그대로 사용할 수 있다. 해당 자산 자체를 확보하지 못하고 슬롯의 `source_policy`를 `generated_allowed`로 전환한 경우에는 실존 인물 얼굴 생성 이미지로 대체할 수 있으며, 생성·합성 사실과 확인된 인물명·역할을 연결표와 자산 메타데이터에 표시한다. 네이버 화면에서는 외부 출처가 있는 이미지에만 출처명 캡션을 표시하고, 생성·합성 이미지는 하단 캡션을 쓰지 않는다. 생성·합성 사실과 역할 확인 범위는 `image-map.md`에 기록하되 공개 본문·출처 목록·대체텍스트에는 제작 사정을 쓰지 않는다. 이 전환을 선택하면 `research/[키워드].md`, 초안 마커, `image-map.md`의 `source_policy`를 모두 `generated_allowed`로 갱신한다. 역할을 추정하거나 생성 얼굴을 공식 사진처럼 표시하지 않는다. `official_asset` 또는 `official_screenshot`이 요구된 슬롯은 생성 이미지로 대체하지 않는다. `generated_illustration`은 식별 가능한 실존 인물·제품·공식 화면·문서·로고를 재현하지 않는 경우에만 사용한다.
 
 ## 단계적 병렬 처리
+
+이 실행 환경에서는 이미지 생성 API를 호출하지 않는다. 즉시 스테이징 작업공간에서 Pillow로 제작하며, API 재시도·대기를 하지 않는다.  스테이징 작업공간에서 Python Pillow로 주제와 슬롯의 시각 의도를 반영한 비어 있지 않은 PNG를 직접 제작한다. 이 로컬 제작 경로도 `origin=generated`, 고정된 `generation_snapshot`, `generation_control=locked` 메타데이터와 품질 검수를 남긴다.
 
 1차 적용에서는 다음 읽기·준비 작업만 최대 2개의 Lane으로 병렬화할 수 있다.
 
@@ -24,9 +28,9 @@
 
 각 Lane은 고유한 Lane ID와 담당 범위를 갖고 결과·근거·한계를 주 담당 image-maker에게 반환한다. 실제 이미지 생성, 파일 저장·해시 기록, image-map.md 작성, 썸네일 확정, 전체 이미지 최종 검수는 주 담당자가 직렬로 수행하며, Lane이 정식 자산이나 연결표를 직접 수정하지 않는다.
 
-독립된 이미지 슬롯의 실제 생성을 최대 2개까지 병렬화하는 2차 적용은 베타 10회 검증 후에만 허용한다. 다음 조건을 모두 충족해야 한다.
+독립된 이미지 슬롯의 실제 생성을 최대 2개까지 병렬화하는 2차 적용은 검증된 실행 10회 후에만 허용한다. 다음 조건을 모두 충족해야 한다.
 
-- 정식 산출물 파일 충돌이 0건이다.
+- 운영 산출물 파일 충돌이 0건이다.
 - 필수 이미지와 image-map.md 누락이 0건이다.
 - 기존 품질 Gate 통과율이 저하되지 않았다.
 - 병렬 대상 단계의 중앙값 소요 시간이 기준선보다 감소했다.
@@ -38,9 +42,9 @@
 
 1. 각 마커를 대표 이미지, 상황 사진, 정보 도식, 인물 카드, 관계도 등으로 분류한다.
 2. 공식 화면·앱 화면·제품 화면·지도·통계표·실제 문서처럼 정확성이 필요한 것은 공식 자료를 확보해 사용한다. 관계도·비교표·확실도 도식은 주장별 출처와 상태가 연결된 코드 기반 또는 편집 도식으로 제작할 수 있다. 확보하지 못하면 가짜 화면이나 검증되지 않은 생성 이미지로 대체하지 않고 실패한다.
-3. 주제와 직접 연결된 공식 대표 시각 자산이 있는지 먼저 검토한다. 포스터·스틸·제품 사진·공식 화면·문서·지도·행사 사진·로고·예고편/홍보 영상 장면 등 주제의 정체성과 사실성을 보여주는 원본을 우선 검토한다. 사용한 원본의 공식 출처를 확인하고 이미지 하단에 짧은 출처 표기를 넣으며, 연결표에도 원본 URL과 사용 범위를 기록한다.
+3. 주제와 직접 연결된 공식 대표 시각 자산이 있는지 먼저 검토한다. 포스터·스틸·제품 사진·공식 화면·문서·지도·행사 사진·로고·예고편/홍보 영상 장면 등 주제의 정체성과 사실성을 보여주는 원본을 우선 검토한다. 공식 원본 URL과 공식 출처가 확인되면 네이버 블로그 재사용 허가가 확인되지 않았어도 원본을 그대로 사용할 수 있고, `source_policy=official_or_licensed`, `origin=official`, 원본 URL과 권리 상태 `확인|미확인`을 연결표에 기록한다. `미확인`만을 이유로 생성 자산으로 대체하거나 실패 처리하지 않는다. 크롭·합성·AI 보조 편집은 편집 가능 여부까지 별도로 확인한 경우에만 허용 범위를 기록한다. 네이버 화면에는 이미지 바로 아래 `출처: 기관명`만 표시하며, 내부 권리 상태·이용 조건·사용 또는 미사용 이유·제작 방식은 캡션·본문·출처 목록·대체텍스트에 넣지 않는다.
 4. 공식 대표 자산을 확보할 수 있는데도 장식용 텍스트 인포그래픽이나 무관한 생성 이미지로 대체하지 않는다. 다만 본문이 인물관계·비교·확실도 구조를 약속하면, 공식 자산과 별도로 근거가 표시된 정보 도식을 제작할 수 있고 도식의 출처·상태·제작 방식을 연결표에 기록한다.
-5. AI 이미지 생성이 허용되는 경우에도 본문에 없는 사실·로고·고유 인물·공식 화면을 새로 만들지 않는다. 공식 자산을 사용할 때는 AI로 재생성하지 말고 원본 또는 허가된 편집본을 사용한다.
+5. AI 이미지 생성이 허용되는 경우에도 본문에 없는 사실·로고·고유 인물·공식 화면을 새로 만들지 않는다. 공식 자산을 편집할 때는 원본을 바탕으로 장식·레이아웃만 추가하고 `origin=official`과 원본 URL을 유지한다. 순수 생성 자산은 `origin=generated`로 표시한다.
 6. 빈 배경, 임시 이미지, 마커 문구만 있는 이미지, 깨진 결과는 성공으로 처리하지 않는다.
 7. 각 이미지는 본문에서 새로 보여주는 정보 또는 이해를 돕는 장면을 하나 이상 가져야 한다. 썸네일·포스터·스틸이 같은 문구와 구도를 반복하면 역할을 분리하거나 해당 이미지를 줄인다.
 
@@ -51,31 +55,33 @@
 - 관계도·갈등 구조·비교표·확실도 지도는 본문 원장에 있는 주장만 시각화한다.
 - 제목·독자 질문이 요구한 `visual_intent`와 `asset_type`을 본문에 실제로 반영한다. 독창성용 정보 도식은 제목 약속의 시각 슬롯을 대체할 수 없다.
 - 각 노드·선·라벨은 `공식 확인`, `보조 출처 확인`, `자료 기반 해석`, `미확인` 중 하나의 상태를 연결표에 기록한다.
-- 생성 얼굴을 사용할 수 있어도 인물의 배역·관계·사건을 새로 창작하지 않으며, 생성 얼굴을 공식 사진이나 공식 화면처럼 보이게 만들지 않는다.
+- 생성 얼굴을 사용할 수 있어도 인물의 배역·관계·사건을 새로 창작하지 않으며, 생성 얼굴을 공식 사진이나 공식 화면처럼 보이게 만든다.
 - 정보 도식은 포스터나 썸네일을 반복하지 않고, 본문에서 독자가 새로 이해해야 하는 구조를 추가해야 한다.
 
 ## 썸네일 필수 규칙
 
 모든 글은 본문 이미지 마커의 유무와 관계없이 반드시 전용 썸네일 이미지 1개를 제작하거나 캡처해 사용한다.
 
-1. 썸네일은 키워드와 글의 핵심 내용을 한눈에 보여줘야 한다.
-2. 실제 공식 화면·앱 화면·제품 화면이 핵심인 글은 해당 공식 자료를 직접 캡처한다.
-3. 공식 화면이 필요하지 않은 글도 주제와 직접 연결된 공식 대표 자산이 있는지 먼저 검토한다. 확보한 경우 원본을 썸네일로 직접 활용하고, 확보하지 못한 경우에만 이미지 생성 도구 또는 코드 기반 방식으로 제작한다.
-4. 빈 배경, 임시 이미지, 단순 텍스트 이미지, 본문과 무관한 이미지는 썸네일로 사용할 수 없다. 공식 대표 자산을 확보했는데 단순 텍스트 인포그래픽만 사용하는 것은 통과시키지 않는다.
-5. 생성·캡처한 썸네일은 실제로 열리는지, 해상도와 비율이 적절한지, 제목·키워드와 일치하는지 검수한다.
-6. 썸네일 파일은 `assets/[키워드]/thumbnail.png` 또는 `thumbnail.jpg`로 저장하고 `image-map.md`에 `[THUMBNAIL]` 항목으로 기록한다. 썸네일은 본문 마커용 이미지와 별도 파일이어야 하며 동일 파일·동일 해시를 재사용하지 않는다.
-7. 썸네일을 제작하거나 캡처하지 못했거나 검수에 실패하면 성공 보고를 하지 말고 원인과 필요한 조치를 보고한다.
+1. 썸네일은 반드시 주제에 맞춘 생성형 이미지 또는 주제와 직접 연결된 공식자료를 기준으로만 제작한다.
+2. 생성형 이미지는 주제의 대상·장면·분위기를 표현해야 하며, 단순 텍스트 카드·범용 인포그래픽·출처 불명 이미지는 생성형 썸네일로 인정하지 않는다.
+3. 썸네일은 키워드와 글의 핵심 내용을 한눈에 보여줘야 한다.
+4. 실제 공식 화면·앱 화면·제품 화면이 핵심인 글은 해당 공식 자료를 직접 캡처한다.
+5. 공식 대표 자산의 원본 URL과 공식 출처를 확인하고 파일을 확보한 경우 재사용 허가 상태와 관계없이 원본 그대로 썸네일로 직접 활용한다. 확보하지 못한 경우에만 주제 맞춤형 생성형 이미지로 대체한다. 이전 실행 자산은 품질 재검수 없이 재사용하지 않는다.
+6. 빈 배경, 임시 이미지, 본문과 무관한 이미지는 썸네일로 사용할 수 없다. 공식 대표 자산을 확보했는데 단순 텍스트 인포그래픽만 사용하는 것은 통과시키지 않는다.
+7. 생성·캡처한 썸네일은 실제로 열리는지, 해상도와 비율이 적절한지, 제목·키워드와 일치하는지 검수한다.
+8. 썸네일 파일은 `assets/[키워드]/thumbnail.png` 또는 `thumbnail.jpg`로 저장하고 `image-map.md`에 `[THUMBNAIL]` 항목으로 기록한다. 썸네일은 본문 마커용 이미지와 별도 파일이어야 하며 동일 파일·동일 해시를 재사용하지 않는다.
+9. 썸네일을 제작하거나 캡처하지 못했거나 검수에 실패하면 성공 보고를 하지 말고 원인과 필요한 조치를 보고한다.
 
 썸네일 검수가 통과된 경우에만 다음 단계로 진행한다.
 
 ## 생성 메타데이터와 품질 원장
 
-생성 자산은 `assets/[키워드]/image-generation.jsonl`에 이미지별 한 줄로 기록한다. `generation_snapshot`은 `gpt-image-2-2026-04-21`로 고정하고, 실제 호출 계층에서 모델·품질·size profile을 전달하지 못하면 `generation_control=unlocked`로 기록한다. `unlocked` 자산은 베타 calibration에는 남길 수 있지만 정식 품질 통과·Gate B 대상이 될 수 없다. seed는 기록하거나 재현성 근거로 만들지 않는다.
+생성 자산은 `assets/[키워드]/image-generation.jsonl`에 이미지별 한 줄로 기록한다. `generation_snapshot`은 `gpt-image-2.5-flare-2026-09-08`로 고정하고, 실제 호출 계층에서 모델·품질·size profile을 전달하지 못하면 `generation_control=unlocked`로 기록한다. `unlocked` 자산은 운영 품질 Gate를 통과할 수 없다. seed는 기록하거나 재현성 근거로 만들지 않는다.
 
 ```yaml
 generation_provider: "openai"
-generation_model: "gpt-image-2"
-generation_snapshot: "gpt-image-2-2026-04-21"
+generation_model: "gpt-image-2.5-flare"
+generation_snapshot: "gpt-image-2.5-flare-2026-09-08"
 generation_control: "locked | unlocked"
 quality: "high"
 size: "WIDTHxHEIGHT"
@@ -88,14 +94,16 @@ generated_at: "KST ISO-8601"
 provenance_status: "generated | official | licensed | captured"
 ```
 
+Pillow로 직접 렌더링한 신규 자산은 위 AI 호출 예시를 복사하지 않는다. `production_method: "local_render"`, `generation_provider: "pillow"`, `generation_model: "not_applicable"`, `generation_snapshot: "pillow-<renderer-version>"`, `renderer_version`, `renderer_sha256`, `input_sha256`를 실제 실행과 함께 기록한다. AI 제작을 주장하는 레코드는 호스트가 확인한 호출 증거가 출력 해시와 연결될 때만 운영 근거로 인정한다. 현재 구현의 local-render·AI 호출 증거 검증 결과와 후속 조치는 `docs/task-7-image-production-result.md`에 남긴다.
+
 검증 명령은 다음과 같다.
 
 ```text
-python3 -m tools.workflow_verifier validate-image-metadata --metadata assets/<키워드>/image-generation.jsonl --mode <beta|formal>
+python3 -m tools.workflow_verifier validate-image-metadata --metadata assets/<키워드>/image-generation.jsonl
 python3 -m tools.workflow_verifier validate-image-quality --quality assets/<키워드>/image-quality.jsonl
 ```
 
-`image-quality.jsonl`에는 자동 검사(`decode_check`, `duplicate_check`, `ocr_check`, `visual_contract_check`, `mobile_render_check`)와 사람 검수의 5개 0~4점, `immediate_failure`, `mobile_rendered`, 고정 viewport `mobile_viewport=390x844`, 실제 캡처의 안전한 상대 경로 `mobile_render_path`, 그 캡처의 `mobile_render_sha256`, `human_verdict`를 기록한다. 자동 점수가 통과해도 사람 점수 총점 16/20 미만, 개별 3점 미만, 모바일 캡처 파일·해시 누락, 즉시 실패가 하나라도 있으면 image-maker는 실패다.
+`assets/<키워드>/image-quality.jsonl`은 image-maker 단계의 산출물·자동 검사 근거다. 이 검증은 Q2 전에 실행되므로 사후 Q3 검수 시각이나 글 평가 digest를 기록하지 않는다. Q2 뒤의 필수 네이버 저장 전 사람 검수는 별도로 `metadata/quality-reviews/<run_id>-images.jsonl`에 기록한다. Q3 파일에는 현재 run의 `run_id`, 통과한 글 평가의 `article_quality_report_digest`, Q2 이후 `reviewed_at`, manifest의 각 본문 이미지와 썸네일을 식별하는 `image_sha256`, 사람 검수의 5개 0~4점, `immediate_failure`, 실제 모바일 캡처의 상대 경로·SHA-256, `human_verdict`를 넣는다. 캡처는 `metadata/quality-reviews/<run_id>-images/` 아래 둔다. 네이버 Gate는 이 사후 파일에서 manifest 이미지마다 정확히 한 건씩 요구한다. 자동 점수가 통과해도 사람 점수 총점 16/20 미만, 개별 3점 미만, Q2 이후 시각·run·글 평가 digest 연결 누락, 캡처 파일·해시 불일치, 즉시 실패가 하나라도 있으면 저장을 차단한다.
 
 ## 검수
 
@@ -112,7 +120,7 @@ python3 -m tools.workflow_verifier validate-image-quality --quality assets/<키�
 ```markdown
 | 순서 | 시각 슬롯 ID | 본문 마커 | 파일 | `visual_intent` | `asset_type` | `required_by` | `source_policy` | `subject_scope` | `section` | `fallback` | 본문에 추가하는 정보 | 출처·제작 방식·권리 | 검수 |
 |---:|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 1 | `VIS-01` | `[IMAGE: ...]` | `image-01.png` | `identify` | `portrait_grid` | `title_promise` | `official_or_licensed` | 공식 확인 출연진 | 출연진 | 텍스트 출연진 표 | 본문에서 새로 설명하는 대상·정보 | 원본 URL·카드별 출처·권리 상태 | 통과 |
+| 1 | `VIS-01` | `[IMAGE: ...]` | `image-01.png` | `identify` | `portrait_grid` | `title_promise` | `official_or_licensed` | 공식 확인 출연진 | 출연진 | 텍스트 출연진 표 | 본문에서 새로 설명하는 대상·정보 | 원본 URL·카드별 공식 출처·권리 상태 `확인|미확인` | 통과 |
 ```
 
 썸네일은 아래 항목을 연결표에 별도로 기록한다.

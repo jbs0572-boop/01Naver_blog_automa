@@ -1,0 +1,22 @@
+{
+  "name": "01_-naver_blog_automate",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "node --test tests/test_dashboard_ui.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jbs0572-boop/01Naver_blog_automa.git"
+  },
+  "keywords": [],
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/jbs0572-boop/01Naver_blog_automa/issues"
+  },
+  "homepage": "https://github.com/jbs0572-boop/01Naver_blog_automa#readme"
+}
