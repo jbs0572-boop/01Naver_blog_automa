@@ -198,6 +198,10 @@ def test_scripts_are_bound_to_semantic_smarteditor_actions(tmp_path: Path) -> No
     assert "se-toolbar-option-list-bullet-button" in prepare
     assert "const waitForNormalizedText" in prepare
     assert "recoverFromRerender = false" in prepare
+    assert "if (stableMatches >= 6) return activeLocator;" in prepare
+    assert "if (await bodyTailIsReady()) return tailParagraph();" in prepare
+    assert "const settledParagraph = await waitForNormalizedText(paragraph, block.text, 'Naver text did not settle', true)" in prepare
+    assert "await pressEnterForBodyTail(settledParagraph" in prepare
     assert "root.locator('.se-component.se-text .se-text-paragraph')" in prepare
     assert "markup: element.innerHTML" in prepare
     assert "await waitForNormalizedText(paragraph, block.text, 'Naver text did not settle', true)" in prepare

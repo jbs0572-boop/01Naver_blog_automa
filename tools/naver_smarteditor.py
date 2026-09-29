@@ -190,7 +190,7 @@ const waitForNormalizedText = async (locator, expected, message, recoverFromRere
     if (normalize(state.text) === wanted) {
       stableMatches = state.markup === previousMarkup ? stableMatches + 1 : 0;
       previousMarkup = state.markup;
-      if (stableMatches >= 6) return;
+      if (stableMatches >= 6) return activeLocator;
     } else {
       previousMarkup = null;
       stableMatches = 0;
@@ -279,6 +279,7 @@ const waitForBodyTail = async (message, attempts = 200) => {
   throw new Error(message);
 };
 const pressEnterForBodyTail = async (paragraph, message) => {
+  if (await bodyTailIsReady()) return tailParagraph();
   for (let enterAttempt = 0; enterAttempt < 3; enterAttempt += 1) {
     await focusAtEnd(paragraph);
     await page.keyboard.press('Enter');
@@ -318,8 +319,8 @@ for (const block of payload.plan.blocks) {
     const paragraph = await ensureTextTail();
     await paragraph.click();
     await paragraph.pressSequentially(block.text);
-    await waitForNormalizedText(paragraph, block.text, 'Naver text did not settle', true);
-    await pressEnterForBodyTail(paragraph, 'Naver text tail was not created');
+    const settledParagraph = await waitForNormalizedText(paragraph, block.text, 'Naver text did not settle', true);
+    await pressEnterForBodyTail(settledParagraph, 'Naver text tail was not created');
     continue;
   }
   if (block.kind === 'heading') {
