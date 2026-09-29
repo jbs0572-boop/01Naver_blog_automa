@@ -828,6 +828,7 @@ def test_startup_recovery_clears_confirm_and_preserves_uncertain_save(
     assert recovered.next_action is None
     assert recovered.active_action is None
     assert recovered.confirmation_preview is None
+    assert recovered.message is not None
     assert "수동 대조" in recovered.message
     assert invalidated == []
     assert recovered_actions == []
@@ -869,9 +870,11 @@ def test_startup_recovery_clears_discarded_confirmation_action(
     )
     store = ManualBatchStore(tmp_path)
     store.save(replace(batch, children=(child,)))
+    def invalidate(_root: Path, _run_id: str) -> None:
+        return
+
     monkeypatch.setattr(
-        "tools.dashboard_manual_run.invalidate_naver_preparation",
-        lambda _root, _run_id: None,
+        "tools.dashboard_manual_run.invalidate_naver_preparation", invalidate
     )
     recovered_actions: list[str] = []
 
