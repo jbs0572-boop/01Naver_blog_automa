@@ -90,13 +90,19 @@ def execute_child_action(
         next_action = ManualActionView("confirm", confirmation_nonce)
     elif result.status is RunStatus.READY_FOR_NAVER:
         next_action = ManualActionView("external", uuid.uuid4().hex)
-    elif result.status is RunStatus.FAILED and not _q1_exhausted(context, child):
-        next_action = ManualActionView("retry", uuid.uuid4().hex)
+    elif result.status is RunStatus.FAILED:
+        if _naver_save_outcome_uncertain(context, child):
+            message = (
+                "네이버 임시저장 결과가 불확실합니다. "
+                "중복 저장 방지를 위해 임시저장 목록을 수동 대조해야 합니다."
+            )
+        elif not _q1_exhausted(context, child):
+            next_action = ManualActionView("retry", uuid.uuid4().hex)
     return replace(
         child,
         status="failed" if result.status is RunStatus.FAILED else "completed",
         result_status=result.status.value,
-        message=result.message,
+        message=message if result.status is RunStatus.FAILED and _naver_save_outcome_uncertain(context, child) else result.message,
         error=None,
         retryable=result.status is RunStatus.FAILED and next_action is not None,
         confirmation_preview=preview,
@@ -159,6 +165,19 @@ def _initial_request(
 
 def _now() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _naver_save_outcome_uncertain(
+    context: ManualRunContext, child: ManualRunView
+) -> bool:
+    if child.run_id is None:
+        return False
+    try:
+        state_path, _, _ = state_paths(context.root, child.run_id)
+        state = read_state(state_path)
+    except ContractError:
+        return True
+    return state.get("naver_save_outcome_uncertain") is True
 
 
 def _q1_exhausted(context: ManualRunContext, child: ManualRunView) -> bool:

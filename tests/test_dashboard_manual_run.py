@@ -15,12 +15,14 @@ from tools.contract_types import ContractError, JSONMap
 from tools.dashboard_manual_batch import new_batch
 from tools.dashboard_manual_models import (
     AUTO_BATCH_SIZE,
+    ConfirmationPreview,
     ManualActionView,
     ManualActiveActionView,
     ManualBatchView,
     ManualRunView,
     ManualSnapshotView,
 )
+from tools.dashboard_manual_actions import execute_child_action
 from tools.dashboard_manual_run import (
     ManualRunContext,
     ManualRunDependencies,
@@ -832,6 +834,66 @@ def test_startup_recovery_clears_confirm_and_preserves_uncertain_save(
     assert "수동 대조" in recovered.message
     assert invalidated == []
     assert recovered_actions == []
+
+
+def test_confirm_failure_with_uncertain_save_does_not_offer_retry(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = parse_manual_run_payload(
+        {"keyword": "저장 결과 불확실", "as_of_date": "2026-09-29"}
+    )
+    batch = new_batch(request, tmp_path)
+    run_id = "RUN-uncertain-save"
+    state_path, log_path, _ = state_paths(tmp_path, run_id)
+    atomic_write_json(
+        state_path,
+        {
+            "run_id": run_id,
+            "naver_save_outcome_uncertain": True,
+        },
+    )
+    preview = ConfirmationPreview(
+        action="naver-draft-save",
+        target_blog_id="blog-fixture",
+        title="확인할 제목",
+        images=("assets/topic/image-01.png",),
+        artifact_digest="sha256:" + "a" * 64,
+    )
+    child = replace(
+        batch.children[0],
+        status="completed",
+        run_id=run_id,
+        result_status=RunStatus.AWAITING_USER_CONFIRMATION.value,
+        confirmation_preview=preview,
+        next_action=ManualActionView("confirm", "nonce"),
+    )
+    failed = RunnerResult(
+        run_id,
+        RunStatus.FAILED,
+        state_path,
+        log_path,
+        (),
+        "save outcome is uncertain",
+    )
+    monkeypatch.setattr("tools.dashboard_manual_actions.confirm_job", lambda _input: failed)
+
+    def runner(_request: RunnerRequest) -> RunnerResult:
+        raise AssertionError("failed confirmation must not launch a new run")
+
+    updated = execute_child_action(
+        ManualRunContext(tmp_path, True),
+        ManualRunDependencies(runner),
+        child,
+        "confirm",
+    )
+
+    assert updated.status == "failed"
+    assert updated.result_status == RunStatus.FAILED.value
+    assert updated.retryable is False
+    assert updated.next_action is None
+    assert updated.message is not None
+    assert "수동 대조" in updated.message
 
 
 def test_startup_recovery_clears_discarded_confirmation_action(
