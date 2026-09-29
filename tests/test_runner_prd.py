@@ -17,7 +17,8 @@ from tools.image_quality import post_q2_image_review_path
 from tools.manifest import verify_manifest
 from tools.model_presets import default_stage_settings, model_config_snapshot
 from tools.notion_resume import NotionQ2Failure
-from tools.runner_cli import _live_naver_adapter, main as runner_main
+from tools.runner_cli import _live_naver_adapter
+from tools.runner_cli import main as runner_main
 from tools.runner_execution import (
     confirm_job,
     invalidate_naver_preparation,
