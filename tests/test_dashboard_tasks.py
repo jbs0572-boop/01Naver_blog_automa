@@ -92,6 +92,11 @@ def test_active_action_status_overrides_preserved_terminal_result() -> None:
         queued, {"status": RunStatus.AWAITING_USER_CONFIRMATION.value}
     ) == "queued"
 
+    running = replace(queued, status="running", active_action=None)
+    assert effective_status(
+        running, {"status": RunStatus.AWAITING_USER_CONFIRMATION.value}
+    ) == "running"
+
 
 def test_snapshot_revision_ignores_elapsed_duration(tmp_path: Path) -> None:
     manager = ManualRunManager(

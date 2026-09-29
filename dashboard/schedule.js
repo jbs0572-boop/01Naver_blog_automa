@@ -36,9 +36,11 @@
       const at = new Date(item.at).toLocaleString('ko-KR', {timeZone:'Asia/Seoul', dateStyle:'medium', timeStyle:'short'});
       label.textContent = `${at} · ${{missed:'미실행',failed:'접수 실패',submitted:'실행 접수',claimed:'접수 중'}[item.status] || item.status}`;
       row.append(label);
-      if (['missed','failed'].includes(item.status) && item.occurrence_id) {
+      if (['missed','failed','accepted'].includes(item.status) && item.occurrence_id) {
         const retry = document.createElement('button'); retry.type = 'button'; retry.className = 'button button-quiet';
-        retry.textContent = `이 예약 다시 실행 (${item.at.slice(0,10)})`;
+        retry.textContent = item.status === 'accepted'
+          ? `예약 상태 다시 확인 (${item.at.slice(0,10)})`
+          : `이 예약 다시 실행 (${item.at.slice(0,10)})`;
         retry.addEventListener('click', () => retryOccurrence(item, retry)); row.append(retry);
       }
       historyPanel.append(row);

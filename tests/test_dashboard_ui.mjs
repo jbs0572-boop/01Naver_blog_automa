@@ -472,7 +472,7 @@ test("job polling skips identical list DOM and redraws when observed tokens chan
 });
 
 
-test("schedule retry rotates nonce after terminal failure and retains it after transport uncertainty", async () => {
+test("schedule retry recovers accepted work after reload, rotates terminal failures, and retains transport-uncertain nonces", async () => {
   const scheduleSource = await readFile(new URL("../dashboard/schedule.js", import.meta.url), "utf8");
   class ScheduleElement {
     constructor(tagName = "div") { this.tagName = tagName.toUpperCase(); this.children = []; this.listeners = {}; this.attributes = {}; this.dataset = {}; this.value = ""; this.checked = true; this.disabled = false; this.hidden = false; this.className = ""; this.textContent = ""; }
@@ -514,17 +514,21 @@ test("schedule retry rotates nonce after terminal failure and retains it after t
   elements.get("#schedule-preset").hidden = true;
   const occurrence = {at:"2026-09-28T08:00:00+09:00", entry_id:"ENTRY-08", status:"missed", occurrence_id:"OCC-08"};
   const schedule = {enabled:true, times:["08:00"], entries:[{entry_id:"ENTRY-08",time:"08:00",enabled:true}], history:[occurrence]};
-  const progress = {history:[occurrence], executions:[]};
+  let visibleStatus = "accepted";
+  const progress = {history:[{...occurrence, status:visibleStatus}], executions:[]};
   const requests = [];
   let retries = 0;
   const fetch = async (url, options = {}) => {
     if (url === "/api/schedule") return {ok:true, json:async () => schedule};
-    if (url === "/api/schedule-status") return {ok:true, json:async () => progress};
+    if (url === "/api/schedule-status") {
+      return {ok:true, json:async () => ({...progress, history:[{...occurrence, status:visibleStatus}]})};
+    }
     if (url === "/api/schedule/retry") {
       const payload = JSON.parse(options.body);
       requests.push(payload);
       retries += 1;
       if (retries === 1) throw new Error("connection lost");
+      visibleStatus = "failed";
       return {ok:true, json:async () => ({status:"failed", as_of_date:"2026-09-28", error:"launch failed"})};
     }
     throw new Error(`unexpected request: ${url}`);
@@ -549,7 +553,9 @@ test("schedule retry rotates nonce after terminal failure and retains it after t
   await retry.listeners.click();
   assert.equal(requests.length, 2);
   assert.equal(requests[0].nonce, requests[1].nonce);
-  await retry.listeners.click();
+  const failedRetry = history.children[0].children.find(child => child.tagName === "BUTTON");
+  assert.ok(failedRetry);
+  await failedRetry.listeners.click();
   assert.equal(requests.length, 3);
   assert.notEqual(requests[1].nonce, requests[2].nonce);
 });
