@@ -9,7 +9,7 @@ from pathlib import Path
 from threading import Lock
 from typing import Literal, final
 
-from tools.contract_types import ContractError
+from tools.contract_types import ContractError, JSONMap
 from tools.dashboard_manual_actions import execute_child_action, recover_child_action
 from tools.dashboard_manual_batch import aggregate_status, new_batch, prepare_child
 from tools.dashboard_manual_models import (
@@ -54,6 +54,22 @@ def _naver_save_outcome_uncertain(root: Path, run_id: str | None) -> bool:
     except ContractError:
         return True
     return state.get("naver_save_outcome_uncertain") is True
+
+
+def _confirmed_naver_save_state(root: Path, run_id: str | None) -> JSONMap | None:
+    if run_id is None:
+        return None
+    try:
+        state_path, _, _ = state_paths(root, run_id)
+        state = read_state(state_path)
+    except ContractError:
+        return None
+    if (
+        state.get("run_id") != run_id
+        or state.get("status") != RunStatus.DRAFT_SAVED.value
+    ):
+        return None
+    return state
 
 
 def is_stale_recovery(updated_at: str, *, now: datetime) -> bool:
@@ -644,6 +660,51 @@ class ManualRunManager:
                 continue
             now_dt = datetime.now(UTC)
             now = now_dt.isoformat()
+            confirmed_messages: dict[str, str] = {}
+            for child in batch.children:
+                if child.result_status != RunStatus.AWAITING_USER_CONFIRMATION.value:
+                    continue
+                state = _confirmed_naver_save_state(self._context.root, child.run_id)
+                if state is not None and child.run_id is not None:
+                    message = state.get("message")
+                    confirmed_messages[child.run_id] = (
+                        message
+                        if isinstance(message, str)
+                        else "네이버 임시저장이 완료됐습니다."
+                    )
+            if confirmed_messages:
+                recovered_children = tuple(
+                    replace(
+                        child,
+                        status="completed",
+                        result_status=RunStatus.DRAFT_SAVED.value,
+                        message=confirmed_messages[child.run_id or ""],
+                        error=None,
+                        retryable=False,
+                        confirmation_preview=None,
+                        next_action=None,
+                        active_action=None,
+                        cancel_action=None,
+                        cancellation=(
+                            replace(child.cancellation, completed_at=now)
+                            if child.cancellation is not None
+                            and child.cancellation.completed_at is None
+                            else child.cancellation
+                        ),
+                        updated_at=now,
+                        ended_at=child.ended_at or now,
+                    )
+                    if child.run_id in confirmed_messages
+                    else child
+                    for child in batch.children
+                )
+                batch = replace(
+                    batch,
+                    children=recovered_children,
+                    status=aggregate_status(replace(batch, children=recovered_children)),
+                    updated_at=now,
+                )
+                self._store.save(batch)
             uncertain_runs = {
                 child.run_id
                 for child in batch.children
@@ -760,6 +821,11 @@ class ManualRunManager:
                         updated_at=_now(),
                     )
                     self._store.save(batch)
+            batch = self._required_batch(batch.batch_id)
+            for child in batch.children:
+                if child.status == "cancelling" and child.slot is not None:
+                    self._settle_cancelled(batch.batch_id, child.slot, "취소됨")
+                    batch = self._required_batch(batch.batch_id)
             action_child = next(
                 (child for child in batch.children if child.active_action is not None),
                 None,

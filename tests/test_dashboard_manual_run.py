@@ -22,6 +22,7 @@ from tools.dashboard_manual_models import (
     ManualActionView,
     ManualActiveActionView,
     ManualBatchView,
+    ManualCancellationView,
     ManualRunView,
     ManualSnapshotView,
 )
@@ -35,6 +36,7 @@ from tools.dashboard_manual_run import (
 from tools.dashboard_manual_store import ManualBatchStore
 from tools.external_adapter import ExternalWriteRequest
 from tools.log_contract import read_events
+from tools.run_cancellation import create_cancellation
 from tools.runner_execution import run_job
 from tools.runner_state import atomic_write_json, read_state, state_paths
 from tools.runner_types import (
@@ -824,6 +826,121 @@ def test_startup_recovery_clears_confirm_and_preserves_uncertain_save(
     assert "수동 대조" in recovered.message
     assert invalidated == []
     assert recovered_actions == []
+
+
+def test_startup_recovery_preserves_confirmed_naver_save_before_invalidation(
+    tmp_path: Path,
+) -> None:
+    request = parse_manual_run_payload(
+        {"keyword": "저장 후 재시작", "as_of_date": "2026-09-29"}
+    )
+    batch = new_batch(request, tmp_path)
+    run_id = "RUN-confirmed-save-recovery"
+    state_path, _, _ = state_paths(tmp_path, run_id)
+    atomic_write_json(
+        state_path,
+        {
+            "run_id": run_id,
+            "status": RunStatus.DRAFT_SAVED.value,
+            "message": "draft saved",
+            "stages": {},
+            "naver_save_outcome_uncertain": False,
+        },
+    )
+    child = replace(
+        batch.children[0],
+        status="completed",
+        result_status=RunStatus.AWAITING_USER_CONFIRMATION.value,
+        run_id=run_id,
+        message="awaiting confirmation",
+        next_action=ManualActionView("confirm", "confirmation-nonce"),
+        active_action=ManualActiveActionView(
+            "confirm",
+            "OPERATION-confirmed-save",
+            "sha256:" + "c" * 64,
+            datetime.now(UTC).isoformat(),
+            "running",
+        ),
+        updated_at=datetime.now(UTC).isoformat(),
+    )
+    ManualBatchStore(tmp_path).save(replace(batch, children=(child,)))
+
+    class ForbiddenNaver:
+        @property
+        def target_blog_id(self) -> str:
+            raise AssertionError("recovery must not inspect the browser adapter")
+
+        def prepare(self, title: str, body: str, artifact_digest: str) -> JSONMap:
+            _ = (title, body, artifact_digest)
+            raise AssertionError("recovery must not prepare again")
+
+        def save(self, title: str, artifact_digest: str) -> JSONMap:
+            _ = (title, artifact_digest)
+            raise AssertionError("recovery must not save again")
+
+    manager = ManualRunManager(
+        ManualRunContext(tmp_path, True),
+        ManualRunDependencies(lambda _request: pytest.fail("must not rerun"), naver_adapter=ForbiddenNaver()),
+    )
+    manager.close()
+    recovered = manager.get(batch.batch_id)
+
+    assert recovered is not None
+    saved = recovered.children[0]
+    assert saved.status == "completed"
+    assert saved.result_status == RunStatus.DRAFT_SAVED.value
+    assert saved.message == "draft saved"
+    assert saved.retryable is False
+    assert saved.next_action is None
+    assert saved.active_action is None
+
+
+def test_startup_recovery_settles_persisted_cancellation_without_active_action(
+    tmp_path: Path,
+) -> None:
+    request = parse_manual_run_payload(
+        {"keyword": "취소 후 재시작", "as_of_date": "2026-09-29"}
+    )
+    batch = new_batch(request, tmp_path)
+    run_id = "RUN-cancel-recovery"
+    cancellation_request = create_cancellation(
+        tmp_path,
+        run_id=run_id,
+        batch_id=batch.batch_id,
+        child_id=batch.children[0].child_id or "",
+        scope="remaining",
+        nonce="cancel-recovery-nonce",
+        requested_at="2026-09-29T00:00:00+00:00",
+    )
+    child = replace(
+        batch.children[0],
+        status="cancelling",
+        run_id=run_id,
+        cancellation=ManualCancellationView(
+            cancellation_request.scope,
+            cancellation_request.requested_at,
+            cancellation_request.nonce_sha256,
+        ),
+        updated_at=datetime.now(UTC).isoformat(),
+    )
+    ManualBatchStore(tmp_path).save(replace(batch, children=(child,)))
+
+    manager = ManualRunManager(
+        ManualRunContext(tmp_path, False),
+        ManualRunDependencies(lambda _request: pytest.fail("must not rerun")),
+    )
+    manager.close()
+    recovered = manager.get(batch.batch_id)
+
+    assert recovered is not None
+    cancelled = recovered.children[0]
+    assert cancelled.status == "cancelled"
+    assert cancelled.result_status == RunStatus.CANCELLED.value
+    assert cancelled.cancellation is not None
+    assert cancelled.cancellation.completed_at is not None
+    assert cancelled.ended_at is not None
+    assert cancelled.next_action is None
+    assert cancelled.active_action is None
 
 
 def test_startup_recovery_settles_recovery_errors(
