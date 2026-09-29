@@ -91,13 +91,31 @@ def _root(tmp_path: Path, keyword: str = "telemetry-topic") -> Path:
         f"![body](../assets/{keyword}/body.png)\n", encoding="utf-8"
     )
     _ = (final_dir / f"{keyword}-naver-layout.md").write_text(
-        "# layout\n", encoding="utf-8"
+        f"[TITLE]{keyword}[/TITLE]\n"
+        + '[IMAGE file="thumbnail.png" alt="대표" representative=true]\n'
+        + "[ALT]대표 이미지[/ALT]\n"
+        + '[IMAGE file="body.png" alt="본문" representative=false]\n'
+        + "[ALT]본문 이미지[/ALT]\n"
+        + "[TEXT]Fixture body[/TEXT]\n",
+        encoding="utf-8",
     )
     _ = (final_dir / f"{keyword}-naver-copy.md").write_text(
-        "# copy\n", encoding="utf-8"
+        f"[TITLE]{keyword}[/TITLE]\n"
+        + '[IMAGE file="thumbnail.png" alt="대표" representative=true]\n'
+        + "[ALT]대표 이미지[/ALT]\n"
+        + '[IMAGE file="body.png" alt="본문" representative=false]\n'
+        + "[ALT]본문 이미지[/ALT]\n"
+        + "[TEXT]Fixture body[/TEXT]\n",
+        encoding="utf-8",
     )
     _ = (final_dir / f"{keyword}-naver-input.md").write_text(
-        "# input\n", encoding="utf-8"
+        f"[TITLE]{keyword}[/TITLE]\n"
+        + '[IMAGE file="thumbnail.png" alt="대표" representative=true]\n'
+        + "[ALT]대표 이미지[/ALT]\n"
+        + '[IMAGE file="body.png" alt="본문" representative=false]\n'
+        + "[ALT]본문 이미지[/ALT]\n"
+        + "[TEXT]Fixture body[/TEXT]\n",
+        encoding="utf-8",
     )
     return tmp_path
 

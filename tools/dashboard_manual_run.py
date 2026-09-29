@@ -491,7 +491,35 @@ class ManualRunManager:
     def _recover_action(self, batch_id: str, child_id: str, kind: ActionKind) -> None:
         batch = self._required_batch(batch_id)
         child = self._required_child(batch, child_id)
-        updated = recover_child_action(self._context, self._dependencies, child, kind)
+        try:
+            updated = recover_child_action(self._context, self._dependencies, child, kind)
+        except (ContractError, OSError, TimeoutError, ValueError) as error:
+            uncertain_save = kind == "confirm" and _naver_save_outcome_uncertain(
+                self._context.root, child.run_id
+            )
+            settled_at = _now()
+            updated = replace(
+                child,
+                status="failed",
+                result_status=RunStatus.FAILED.value,
+                message=(
+                    "네이버 임시저장 결과 확인이 필요합니다. "
+                    + "중복 저장 방지를 위해 수동 대조 후 재개해 주세요."
+                    if uncertain_save
+                    else "대시보드가 중단된 작업을 복구하지 못했습니다. 기록을 확인해 주세요."
+                ),
+                error=type(error).__name__,
+                retryable=not uncertain_save,
+                next_action=(
+                    None
+                    if uncertain_save
+                    else ManualActionView("retry", uuid.uuid4().hex)
+                ),
+                confirmation_preview=None if uncertain_save else child.confirmation_preview,
+                active_action=None,
+                updated_at=settled_at,
+                ended_at=settled_at,
+            )
         self._save_child(batch, replace(updated, active_action=None))
 
     def _save_child(self, batch: ManualBatchView, child: ManualRunView) -> None:
@@ -552,6 +580,41 @@ class ManualRunManager:
                 continue
             now_dt = datetime.now(UTC)
             now = now_dt.isoformat()
+            uncertain_runs = {
+                child.run_id
+                for child in batch.children
+                if child.result_status
+                == RunStatus.AWAITING_USER_CONFIRMATION.value
+                and _naver_save_outcome_uncertain(self._context.root, child.run_id)
+            }
+            if uncertain_runs:
+                recovered_children = tuple(
+                    replace(
+                        child,
+                        status="failed",
+                        result_status=RunStatus.FAILED.value,
+                        message=(
+                            "네이버 임시저장 결과 확인이 필요합니다. "
+                            "중복 저장 방지를 위해 수동 대조 후 재개해 주세요."
+                        ),
+                        error="NaverSaveReconciliationRequired",
+                        retryable=False,
+                        confirmation_preview=None,
+                        next_action=None,
+                        active_action=None,
+                        updated_at=now,
+                    )
+                    if child.run_id in uncertain_runs
+                    else child
+                    for child in batch.children
+                )
+                batch = replace(
+                    batch,
+                    children=recovered_children,
+                    status=aggregate_status(replace(batch, children=recovered_children)),
+                    updated_at=now,
+                )
+                self._store.save(batch)
             recovered_children = tuple(
                 replace(
                     child,
@@ -582,15 +645,6 @@ class ManualRunManager:
                 )
                 self._store.save(batch)
             if self._context.live_writes and self._dependencies.naver_adapter is not None:
-                uncertain_runs = {
-                    child.run_id
-                    for child in batch.children
-                    if child.result_status
-                    == RunStatus.AWAITING_USER_CONFIRMATION.value
-                    and _naver_save_outcome_uncertain(
-                        self._context.root, child.run_id
-                    )
-                }
                 recovered_children = tuple(
                     replace(
                         child,

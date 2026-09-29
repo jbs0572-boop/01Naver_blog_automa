@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 from typing import final, override
 
+from tools.image_contract import AUTOMATED_CHECKS, has_image_signature
 from tools.image_quality import (
     validate_image_map,
     validate_image_metadata,
@@ -309,6 +310,12 @@ class ImageQualityTests(unittest.TestCase):
         result = validate_image_metadata(metadata)
         self.assertEqual(result["production_ready"], True)
 
+    def test_truncated_png_signature_does_not_pass_image_validation(self) -> None:
+        truncated = self.root / "truncated.png"
+        _ = truncated.write_bytes(b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR")
+
+        self.assertFalse(has_image_signature(truncated))
+
     def test_unlocked_metadata_is_blocked_in_production_workflow(self) -> None:
         metadata = self._write_jsonl(
             "unlocked.jsonl",
@@ -510,7 +517,7 @@ class ImageQualityTests(unittest.TestCase):
             encoding="utf-8",
         )
         _ = (asset_dir / "image-map.md").write_text(
-            "| 1 | VIS-01 | [IMAGE: body image] | `body.png` | identify | original_photo | title_promise | generated_allowed | scope | section | fallback | info | `origin=generated; method=local_render` | 통과 |\n"
+            "| 1 | VIS-01 | [IMAGE: body image; fallback: [IMAGE:example]] | `body.png` | identify | original_photo | title_promise | generated_allowed | scope | section | fallback | info | `origin=generated; method=local_render` | 통과 |\n"
             + "| [THUMBNAIL] | `[THUMBNAIL]` | `thumbnail.png` |\n",
             encoding="utf-8",
         )
@@ -519,8 +526,98 @@ class ImageQualityTests(unittest.TestCase):
         self.assertEqual(result["body_markers"], 1)
         self.assertEqual(result["outputs"], 2)
 
+        records = [
+            json.loads(line)
+            for line in (asset_dir / "image-generation.jsonl")
+            .read_text(encoding="utf-8")
+            .splitlines()
+        ]
+        records[0]["generation_control"] = "unavailable"
+        _ = (asset_dir / "image-generation.jsonl").write_text(
+            "".join(json.dumps(record) + "\n" for record in records),
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(ContractError, "not production-ready"):
+            _ = validate_image_stage_assets(asset_dir, draft)
+
+        records[0]["generation_control"] = "locked"
+        _ = (asset_dir / "image-generation.jsonl").write_text(
+            "".join(json.dumps(record) + "\n" for record in records),
+            encoding="utf-8",
+        )
         (asset_dir / "body.png").unlink()
         with self.assertRaises(ContractError):
+            _ = validate_image_stage_assets(asset_dir, draft)
+
+    def test_image_stage_rejects_swapped_or_truncated_markers(self) -> None:
+        asset_dir = self.root / "assets" / "topic"
+        asset_dir.mkdir(parents=True)
+        draft = self.root / "drafts" / "topic.md"
+        draft.parent.mkdir(parents=True)
+        _ = draft.write_text("[IMAGE: first]\n[IMAGE: second]\n", encoding="utf-8")
+        outputs = {"body-01.png": self._image_bytes(), "body-02.png": self._image_bytes() + b"2", "thumbnail.png": self._image_bytes() + b"thumb"}
+        metadata_records: list[JSONMap] = []
+        quality_records: list[JSONMap] = []
+        for name, image in outputs.items():
+            output = asset_dir / name
+            _ = output.write_bytes(image)
+            digest = f"sha256:{hashlib.sha256(image).hexdigest()}"
+            metadata_records.append(
+                {
+                    "generation_provider": "openai",
+                    "generation_model": "gpt-image-2.5-flare",
+                    "generation_snapshot": "gpt-image-2.5-flare-2026-09-08",
+                    "generation_control": "locked",
+                    "quality": "high",
+                    "size": "1600x900",
+                    "prompt_template_version": "image-prompt-v1",
+                    "prompt_sha256": "sha256:" + "1" * 64,
+                    "reference_sha256": [],
+                    "output_sha256": digest,
+                    "output_path": name,
+                    "generated_at": "2026-09-20T10:00:00+09:00",
+                    "provenance_status": "generated",
+                }
+            )
+            mobile_name = f"mobile-{name}"
+            mobile_image = self._image_bytes() + b"mobile-" + name.encode()
+            mobile_path = asset_dir / mobile_name
+            _ = mobile_path.write_bytes(mobile_image)
+            quality_records.append(
+                {
+                    "image_sha256": digest,
+                    "automated_checks": {key: "passed" for key in AUTOMATED_CHECKS},
+                    "scores": {
+                        "subject_relevance": 4,
+                        "composition_legibility": 4,
+                        "rendering_completion": 4,
+                        "information_contribution": 4,
+                        "style_consistency": 4,
+                    },
+                    "immediate_failure": False,
+                    "mobile_rendered": True,
+                    "mobile_viewport": "390x844",
+                    "mobile_render_path": mobile_name,
+                    "mobile_render_sha256": f"sha256:{hashlib.sha256(mobile_image).hexdigest()}",
+                    "human_verdict": "passed",
+                }
+            )
+        _ = (asset_dir / "image-generation.jsonl").write_text(
+            "".join(json.dumps(record) + "\n" for record in metadata_records),
+            encoding="utf-8",
+        )
+        _ = (asset_dir / "image-quality.jsonl").write_text(
+            "".join(json.dumps(record) + "\n" for record in quality_records),
+            encoding="utf-8",
+        )
+        _ = (asset_dir / "image-map.md").write_text(
+            "| 1 | VIS-01 | [IMAGE: second] | `body-01.png` | identify | original_photo | title_promise | generated_allowed | scope | section | fallback | info | `origin=generated; method=local_render` | 통과 |\n"
+            + "| 2 | VIS-02 | [IMAGE: first] | `body-02.png` | identify | original_photo | title_promise | generated_allowed | scope | section | fallback | info | `origin=generated; method=local_render` | 통과 |\n"
+            + "| [THUMBNAIL] | `[THUMBNAIL]` | `thumbnail.png` |\n",
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(ContractError, "marker order"):
             _ = validate_image_stage_assets(asset_dir, draft)
 
 

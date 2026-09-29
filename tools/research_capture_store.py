@@ -62,12 +62,33 @@ def completed_capture(
     ledger: CaptureLedger, binding: JSONMap
 ) -> JSONMap | None:
     for entry in ledger.entries:
-        if entry.get("capture_binding") != binding:
+        entry_binding = entry.get("capture_binding")
+        if entry_binding == binding:
+            continue
+        if (
+            isinstance(entry_binding, dict)
+            and binding.get("capture_format_version") == 2
+            and "capture_format_version" not in entry_binding
+            and {
+                key: value
+                for key, value in entry_binding.items()
+                if key != "capture_format_version"
+            }
+            == {
+                key: value
+                for key, value in binding.items()
+                if key != "capture_format_version"
+            }
+        ):
+            continue
+        if entry_binding != binding:
             raise ContractError(
                 "research capture ledger binding mismatch; existing evidence preserved"
             )
     for entry in reversed(ledger.entries):
-        if entry.get("capture_state") == "completed" or "observations" in entry:
+        if entry.get("capture_binding") == binding and (
+            entry.get("capture_state") == "completed" or "observations" in entry
+        ):
             return entry
     return None
 

@@ -76,7 +76,22 @@ def load_source_profiles(path: Path | None = None) -> tuple[SourceProfile, ...]:
 
 
 def profile_for_url(url: str, profiles: tuple[SourceProfile, ...]) -> SourceProfile:
-    host = urlparse(url).netloc.lower()
+    try:
+        parsed = urlparse(url)
+        host = parsed.hostname
+        port = parsed.port
+    except ValueError as error:
+        raise ContractError("research source URL is malformed") from error
+    if (
+        parsed.scheme != "https"
+        or host is None
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.fragment
+        or port not in {None, 443}
+    ):
+        raise ContractError("research source URL must use HTTPS without credentials or a custom port")
+    host = host.lower()
     for profile in profiles:
         if host == profile.host:
             return profile

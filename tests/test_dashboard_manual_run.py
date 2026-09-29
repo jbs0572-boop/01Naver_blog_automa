@@ -780,13 +780,13 @@ def test_startup_recovery_clears_confirm_and_preserves_uncertain_save(
     )
     child = replace(
         batch.children[0],
-        status="completed",
+        status="running",
         result_status=RunStatus.AWAITING_USER_CONFIRMATION.value,
         run_id=run_id,
         message="awaiting confirmation",
         next_action=ManualActionView("confirm", "confirmation-nonce"),
         active_action=active,
-        updated_at=datetime.now(UTC).isoformat(),
+        updated_at=datetime.min.replace(tzinfo=UTC).isoformat(),
     )
     store = ManualBatchStore(tmp_path)
     store.save(replace(batch, children=(child,)))
@@ -803,24 +803,11 @@ def test_startup_recovery_clears_confirm_and_preserves_uncertain_save(
     def runner(_request: RunnerRequest) -> RunnerResult:
         raise AssertionError("startup recovery must not run a new workflow")
 
-    class ForbiddenNaver:
-        @property
-        def target_blog_id(self) -> str:
-            raise AssertionError("uncertain save must not start a new Naver action")
-
-        def prepare(self, title: str, body: str, artifact_digest: str) -> JSONMap:
-            _ = (title, body, artifact_digest)
-            raise AssertionError("uncertain save must not be prepared again")
-
-        def save(self, title: str, artifact_digest: str) -> JSONMap:
-            _ = (title, artifact_digest)
-            raise AssertionError("uncertain save must not be replayed")
-
     monkeypatch.setattr("tools.dashboard_manual_run.invalidate_naver_preparation", invalidate)
     monkeypatch.setattr("tools.dashboard_manual_run.recover_child_action", recover)
     manager = ManualRunManager(
         ManualRunContext(tmp_path, True),
-        ManualRunDependencies(runner, naver_adapter=ForbiddenNaver()),
+        ManualRunDependencies(runner),
     )
     manager.close()
     settled = manager.get(batch.batch_id)
@@ -837,6 +824,51 @@ def test_startup_recovery_clears_confirm_and_preserves_uncertain_save(
     assert "수동 대조" in recovered.message
     assert invalidated == []
     assert recovered_actions == []
+
+
+def test_startup_recovery_settles_recovery_errors(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = parse_manual_run_payload(
+        {"keyword": "복구 예외", "as_of_date": "2026-09-29"}
+    )
+    batch = new_batch(request, tmp_path)
+    child = replace(
+        batch.children[0],
+        status="queued",
+        active_action=ManualActiveActionView(
+            "external",
+            "OPERATION-recovery-error",
+            "sha256:" + "b" * 64,
+            datetime.now(UTC).isoformat(),
+            "running",
+        ),
+    )
+    ManualBatchStore(tmp_path).save(replace(batch, children=(child,)))
+
+    def fail_recovery(*_args: object) -> ManualRunView:
+        raise ContractError("fixture recovery failure")
+
+    def unused_runner(_request: RunnerRequest) -> RunnerResult:
+        raise AssertionError("recovery errors must not launch a new workflow")
+
+    monkeypatch.setattr("tools.dashboard_manual_run.recover_child_action", fail_recovery)
+    manager = ManualRunManager(
+        ManualRunContext(tmp_path, False), ManualRunDependencies(unused_runner)
+    )
+    manager.close()
+    settled = manager.get(batch.batch_id)
+
+    assert settled is not None
+    recovered = settled.children[0]
+    assert recovered.status == "failed"
+    assert recovered.result_status == RunStatus.FAILED.value
+    assert recovered.error == "ContractError"
+    assert recovered.active_action is None
+    assert recovered.retryable is True
+    assert recovered.next_action is not None
+    assert recovered.next_action.kind == "retry"
 
 
 def test_external_action_without_adapter_settles_child_and_refreshes_end_time(
@@ -1333,4 +1365,3 @@ def test_queued_child_action_does_not_run_after_queued_only_cancel(
     assert final_batch.children[0].status == "cancelled"
     assert final_batch.children[0].result_status == "cancelled"
     assert executed_task_ids == [first_child.task_id]
-

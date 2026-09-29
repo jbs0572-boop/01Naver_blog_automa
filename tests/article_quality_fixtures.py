@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 from datetime import datetime, timedelta
@@ -15,9 +16,8 @@ from tools.article_quality import (
 from tools.contract_types import JSONMap
 from tools.image_quality import post_q2_image_review_path
 
-_PNG = bytes.fromhex(
-    "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489"
-    + "0000000b49444154789c636000020000050001a5f645400000000049454e44ae426082"
+_PNG = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
 )
 
 

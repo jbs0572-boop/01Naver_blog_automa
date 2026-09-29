@@ -315,7 +315,10 @@ def validate_image_quality(path: Path) -> JSONMap:
 
 
 def validate_image_map(
-    image_map: Path, body_paths: list[str], thumbnail: str
+    image_map: Path,
+    body_paths: list[str],
+    thumbnail: str,
+    body_markers: list[str] | None = None,
 ) -> JSONMap:
     body_entries: list[str] = []
     thumbnail_entries: list[str] = []
@@ -346,6 +349,8 @@ def validate_image_map(
             if values[3] != body_paths[len(body_entries)]:
                 raise ContractError("image map body image order does not match")
             marker = values[2]
+            if body_markers is not None and marker != body_markers[len(body_entries)]:
+                raise ContractError("image map marker order does not match the draft")
             provenance = _parse_asset_provenance(
                 values[12] if len(values) > 12 else ""
             )
@@ -403,6 +408,28 @@ def validate_image_map(
     if body_entries != body_paths or thumbnail_entries != [thumbnail]:
         raise ContractError("image map does not exactly cover ordered assets")
     return {"body_images": len(body_entries), "thumbnail": thumbnail, "passed": True}
+
+
+def _draft_image_markers(draft_text: str) -> list[str]:
+    markers: list[str] = []
+    for line in draft_text.splitlines():
+        candidate = line.strip()
+        if not candidate.startswith("[IMAGE:"):
+            continue
+        depth = 0
+        end: int | None = None
+        for index, character in enumerate(candidate):
+            if character == "[":
+                depth += 1
+            elif character == "]":
+                depth -= 1
+                if depth == 0:
+                    end = index
+                    break
+        if end is None:
+            raise ContractError("draft contains an unterminated image marker")
+        markers.append(candidate[: end + 1])
+    return markers
 
 
 def _parse_asset_provenance(value: str) -> dict[str, str]:
@@ -495,7 +522,9 @@ def validate_image_stage_assets(asset_dir: Path, draft_path: Path) -> JSONMap:
     if len(thumbnails) != 1:
         raise ContractError("image-maker must produce exactly one canonical thumbnail")
 
-    _ = validate_image_metadata(metadata_path)
+    metadata_validation = validate_image_metadata(metadata_path)
+    if metadata_validation.get("production_ready") is not True:
+        raise ContractError("image-maker generation metadata is not production-ready")
     _ = validate_image_quality(quality_path)
     metadata = _records(metadata_path)
     quality = _records(quality_path)
@@ -513,7 +542,8 @@ def validate_image_stage_assets(asset_dir: Path, draft_path: Path) -> JSONMap:
         raise ContractError("image metadata outputs must be direct topic assets")
     thumbnail = thumbnails[0].name
     draft_text = draft_path.read_text(encoding="utf-8")
-    image_marker_count = len(re.findall(r"(?m)^\[IMAGE:", draft_text))
+    body_markers = _draft_image_markers(draft_text)
+    image_marker_count = len(body_markers)
     if paths.count(thumbnail) != 1 or len(paths) - 1 != image_marker_count:
         raise ContractError("image outputs do not match draft markers and thumbnail")
 
@@ -542,6 +572,7 @@ def validate_image_stage_assets(asset_dir: Path, draft_path: Path) -> JSONMap:
         image_map,
         [path for path in paths if path != thumbnail],
         thumbnail,
+        body_markers,
     )
     return {
         "body_markers": len(paths) - 1,

@@ -15,6 +15,7 @@ from zoneinfo import ZoneInfo
 
 from tools.aside_browser import AsideCliConfig, AsideReplSession, resolve_aside_cli
 from tools.contract_types import ContractError, JSONMap, JSONValue
+from tools.image_contract import has_image_signature
 from tools.research_capture_policy import load_policy
 from tools.research_capture_store import (
     append_capture,
@@ -198,6 +199,63 @@ def _capture_media_candidates(
         candidate["fetch_status"] = "cached_verified"
         candidates.append(candidate)
     return candidates
+
+
+def _validate_cached_media_capture(
+    capture: JSONMap, root: Path, run_id: str
+) -> None:
+    observations = capture.get("observations")
+    if not isinstance(observations, list):
+        raise ContractError("completed research capture has no observations")
+    expected_prefix = (".automation", "work", run_id, "research-media")
+    for observation in observations:
+        if not isinstance(observation, dict):
+            raise ContractError("completed research capture observation is malformed")
+        if observation.get("source_kind") not in {
+            "official_document",
+            "supporting_document",
+        }:
+            continue
+        candidates = observation.get("media_candidates")
+        if not isinstance(candidates, list):
+            raise ContractError("completed research capture media records are missing")
+        for candidate in candidates:
+            if not isinstance(candidate, dict):
+                raise ContractError("completed research media candidate is malformed")
+            if candidate.get("fetch_status") != "cached_verified":
+                continue
+            local_path = candidate.get("local_path")
+            expected_digest = candidate.get("sha256")
+            if (
+                not isinstance(local_path, str)
+                or not isinstance(expected_digest, str)
+                or re.fullmatch(r"sha256:[0-9a-f]{64}", expected_digest) is None
+            ):
+                raise ContractError("completed research media cache binding is malformed")
+            relative_path = Path(local_path)
+            if (
+                relative_path.is_absolute()
+                or relative_path.parts[:4] != expected_prefix
+                or len(relative_path.parts) != 5
+                or relative_path.name != f"{expected_digest.removeprefix('sha256:')}{relative_path.suffix}"
+                or relative_path.suffix not in {".jpg", ".png", ".webp"}
+            ):
+                raise ContractError("completed research media cache path is unsafe")
+            destination = root / relative_path
+            parent = root
+            for part in relative_path.parts[:-1]:
+                parent = parent / part
+                if parent.is_symlink():
+                    raise ContractError("completed research media cache contains a symlink")
+            if destination.is_symlink() or not destination.is_file():
+                raise ContractError("completed research media cache file is missing")
+            if not destination.resolve().is_relative_to(root.resolve()):
+                raise ContractError("completed research media cache escaped the project root")
+            if destination.stat().st_size > _MAX_MEDIA_BYTES:
+                raise ContractError("completed research media cache exceeds its size limit")
+            digest = f"sha256:{hashlib.sha256(destination.read_bytes()).hexdigest()}"
+            if digest != expected_digest or not has_image_signature(destination):
+                raise ContractError("completed research media cache failed integrity checks")
 
 
 def capture_research_browser(keyword: str) -> JSONMap:
@@ -451,6 +509,7 @@ def capture_research_sources(
     binding: JSONMap = {
         "keyword": keyword,
         "as_of_date": as_of_date or "unspecified",
+        "capture_format_version": 2,
         "selection_input_digest": (
             file_digest(selection_path) if selection_path is not None else "unspecified"
         ),
@@ -464,6 +523,7 @@ def capture_research_sources(
         prior = load_ledger(root, run_id)
         completed = completed_capture(prior, binding)
         if completed is not None:
+            _validate_cached_media_capture(completed, root, run_id)
             return completed
         reservation = reserve_capture_attempt(
             root, run_id, binding, policy.max_searches

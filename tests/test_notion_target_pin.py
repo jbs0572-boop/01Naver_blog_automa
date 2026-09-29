@@ -85,7 +85,13 @@ class PinFixtureExecutor:
             )
             for suffix in ("-naver-layout.md", "-naver-copy.md", "-naver-input.md"):
                 _ = (final_dir / f"{keyword}{suffix}").write_text(
-                    f"# {keyword}\n", encoding="utf-8"
+                    f"[TITLE]{keyword}[/TITLE]\n"
+                    + '[IMAGE file="thumbnail.png" alt="대표" representative=true]\n'
+                    + "[ALT]대표 이미지[/ALT]\n"
+                    + '[IMAGE file="body.png" alt="본문" representative=false]\n'
+                    + "[ALT]본문 이미지[/ALT]\n"
+                    + "[TEXT]Fixture body[/TEXT]\n",
+                    encoding="utf-8",
                 )
             if self.mutate_config:
                 _ = (root / "notion-config.md").write_text(

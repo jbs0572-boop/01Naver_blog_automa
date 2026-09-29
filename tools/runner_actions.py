@@ -92,10 +92,7 @@ def stage_action(context: StageRunContext) -> StageResult:
                     copy_path = (
                         request.root / "final" / f"{request.keyword}{suffix}"
                     )
-                    if copy_path.read_text(encoding="utf-8").lstrip().startswith(
-                        "[TITLE]"
-                    ):
-                        _ = parse_naver_copy(copy_path)
+                    _ = parse_naver_copy(copy_path)
                 manifest = verify_manifest(
                     request.root,
                     _manifest_for(

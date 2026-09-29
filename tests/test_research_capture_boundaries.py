@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 from pathlib import Path
 
@@ -10,7 +11,7 @@ from tools.research_browser_capture import (
     capture_research_sources,
     compact_research_evidence,
 )
-from tools.research_capture_store import load_ledger
+from tools.research_capture_store import append_capture, file_digest, load_ledger
 from tools.research_crawler_bridge import (
     SourceProfile,
     instagram_capture_status,
@@ -57,6 +58,20 @@ def test_profiles_allow_only_configured_aside_hosts() -> None:
         == "visitkorea-festival"
     )
     assert instagram_capture_status(False, True) == "public_only"
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://www.buan.go.kr/tour/",
+        "https://user@www.buan.go.kr/tour/",
+        "https://www.buan.go.kr:8443/tour/",
+        "https://www.buan.go.kr:invalid/tour/",
+    ],
+)
+def test_profiles_reject_insecure_or_ambiguous_urls(url: str) -> None:
+    with pytest.raises(ContractError):
+        _ = profile_for_url(url, load_source_profiles())
 
 
 def test_profiles_allow_explicit_official_image_cdn_hosts(tmp_path: Path) -> None:
@@ -139,6 +154,95 @@ def test_capture_keeps_explicit_document_observation_separate_from_search(
     assert isinstance(second, dict)
     assert first["source_kind"] == "search_results"
     assert second["source_kind"] == "official_document"
+
+
+def test_completed_capture_revalidates_cached_media_and_refreshes_legacy_capture(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _copy_capture_config(tmp_path)
+    keyword = "축제"
+    run_id = "RUN-cache-check"
+    search_url = "https://search.naver.com/search.naver?query=%EC%B6%95%EC%A0%9C"
+    image_bytes = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+    )
+    observed: JSONMap = {
+        "requested_keyword": keyword,
+        "requested_url": search_url,
+        "source_url": search_url,
+        "tree": "검색 결과",
+        "document_observations": [
+            {
+                "source_kind": "official_document",
+                "requested_url": "https://www.buan.go.kr/tour/",
+                "source_url": "https://www.buan.go.kr/tour/",
+                "tree": "부안군 공식 관광 페이지",
+                "media_candidates": [
+                    {
+                        "image_url": "https://www.buan.go.kr/images/festival.png",
+                        "final_image_url": "https://www.buan.go.kr/images/festival.png",
+                        "content_type": "image/png",
+                        "width": 1,
+                        "height": 1,
+                        "fetch_status": "downloaded",
+                        "content_base64": base64.b64encode(image_bytes).decode("ascii"),
+                    }
+                ],
+            }
+        ],
+    }
+    old_binding: JSONMap = {
+        "keyword": keyword,
+        "as_of_date": "2026-09-20",
+        "selection_input_digest": "unspecified",
+        "policy_digest": file_digest(tmp_path / "config/research-capture-policy.json"),
+        "profile_digest": file_digest(tmp_path / "config/research-source-profiles.json"),
+    }
+    _ = append_capture(
+        tmp_path,
+        run_id,
+        {
+            "capture_id": "RAW-legacy",
+            "capture_state": "completed",
+            "capture_binding": old_binding,
+            "observations": [{"source_kind": "official_document", "tree": "legacy"}],
+        },
+    )
+    capture_calls = 0
+
+    def fake_capture(_keyword: str) -> JSONMap:
+        nonlocal capture_calls
+        capture_calls += 1
+        return observed
+
+    monkeypatch.setattr("tools.research_browser_capture._capture", fake_capture)
+    first = capture_research_sources(
+        keyword, tmp_path, run_id, "2026-09-20"
+    )
+    assert first["capture_id"] != "RAW-legacy"
+    capture_binding = first.get("capture_binding")
+    assert isinstance(capture_binding, dict)
+    assert capture_binding.get("capture_format_version") == 2
+    observations = first["observations"]
+    assert isinstance(observations, list)
+    official = observations[1]
+    assert isinstance(official, dict)
+    media = official["media_candidates"]
+    assert isinstance(media, list)
+    candidate = media[0]
+    assert isinstance(candidate, dict)
+    local_path = candidate["local_path"]
+    assert isinstance(local_path, str)
+
+    second = capture_research_sources(keyword, tmp_path, run_id, "2026-09-20")
+    assert second["capture_id"] == first["capture_id"]
+    assert capture_calls == 1
+
+    _ = (tmp_path / local_path).write_bytes(b"tampered media")
+    with pytest.raises(ContractError, match="cache failed integrity checks"):
+        _ = capture_research_sources(keyword, tmp_path, run_id, "2026-09-20")
+    assert capture_calls == 1
 
 
 @pytest.mark.parametrize(
