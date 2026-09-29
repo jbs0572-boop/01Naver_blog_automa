@@ -94,9 +94,12 @@ def execute_child_action(
         next_action = ManualActionView("confirm", confirmation_nonce)
     elif result.status is RunStatus.READY_FOR_NAVER:
         next_action = ManualActionView("external", uuid.uuid4().hex)
-    elif result.status is RunStatus.FAILED and not uncertain_save:
-        if not _q1_exhausted(context, child):
-            next_action = ManualActionView("retry", uuid.uuid4().hex)
+    elif (
+        result.status is RunStatus.FAILED
+        and not uncertain_save
+        and not _q1_exhausted(context, child)
+    ):
+        next_action = ManualActionView("retry", uuid.uuid4().hex)
     return replace(
         child,
         status="failed" if result.status is RunStatus.FAILED else "completed",
