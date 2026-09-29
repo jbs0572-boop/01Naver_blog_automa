@@ -490,6 +490,7 @@ def capture_research_sources(
     if (
         requested_keyword != keyword
         or not isinstance(requested_url, str)
+        or not isinstance(source_url, str)
         or not _is_expected_naver_search_url(requested_url, keyword)
         or not _is_expected_naver_search_url(source_url, keyword)
     ):

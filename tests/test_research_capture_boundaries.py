@@ -163,9 +163,12 @@ def test_capture_rejects_non_naver_search_origin(
         "source_url": source_url,
         "tree": "attacker-controlled search result",
     }
+    def fake_capture(_keyword: str) -> JSONMap:
+        return observed
+
     monkeypatch.setattr(
         "tools.research_browser_capture._capture",
-        lambda _keyword: observed,
+        fake_capture,
     )
 
     with pytest.raises(ContractError, match="네이버 검색 페이지"):
