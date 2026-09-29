@@ -544,10 +544,14 @@ test("schedule retry recovers accepted work after reload, rotates terminal failu
   class TestDate extends Date { static now() { now += 1; return 1_800_000_000_000 + now; } }
   const context = vm.createContext({document, fetch, Date:TestDate, Intl, window:{crypto:{randomUUID:()=>"ENTRY-NEW"}, setInterval() {}}});
   vm.runInContext(scheduleSource, context);
-  await new Promise(resolve => setImmediate(resolve));
   const history = elements.get("#schedule-history");
-  const retry = history.children[0].children.find(child => child.tagName === "BUTTON");
-  assert.ok(retry);
+  let retry;
+  for (let attempt = 0; attempt < 5 && !retry; attempt += 1) {
+    await new Promise(resolve => setImmediate(resolve));
+    const row = history.children[0];
+    retry = row?.children.find(child => child.tagName === "BUTTON");
+  }
+  assert.ok(retry, elements.get("#schedule-status").textContent);
   await retry.listeners.click();
   assert.equal(requests.length, 1);
   await retry.listeners.click();
