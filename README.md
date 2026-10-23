@@ -71,3 +71,7 @@ NCP 공식 문서의 GET /search/v1/blog 명세를 따라, 네이버 블로그 �
     python -m tools.naver_search_v2 --query '블로그 자동화' --as-of 2026-10-22 --limit 3
 
 NAVER API HUB 사용 자격과 과금 조건을 별도 확인한 뒤, 본인이 명시적으로 1회 호출을 승인한 경우에만 환경변수 NAVER_API_HUB_CLIENT_ID / NAVER_API_HUB_CLIENT_SECRET를 주입하고 같은 명령에 --execute --out local-search.json을 붙입니다. 기본값은 **외부 요청 0회**이며 자동 재시도·리다이렉트·발행 기능이 없습니다. 검색 요약은 사실 원문이 아니라 검증 전 자료이므로 sourcepack의 official claim으로 자동 변환하지 않습니다. CI에서는 네트워크 요청을 수행하지 않습니다.
+
+## 오프라인 원고 미리보기
+
+초안 생성 후 `python -m tools.review_site_v2 --folder preview/RUN-<입력해시>`를 실행하면 `preview.html`이 만들어집니다. 파일을 브라우저에서 열어 원고, 근거의 출처·기준일, 검수 체크리스트를 함께 확인할 수 있습니다. 외부 스크립트나 이미지 요청을 허용하지 않고 승인·게시 버튼도 없습니다. 실제 브라우저 시각 검증은 가능한 환경에서 별도 수행해야 합니다.
