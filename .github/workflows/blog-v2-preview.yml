@@ -29,6 +29,21 @@ jobs:
           python -m tools.naver_search_v2 --query "블로그 자동화" --as-of 2026-10-22 --limit 3 > preview/naver-search-plan.json
           python -m tools.review_site_v2 --folder "$(find preview -mindepth 1 -maxdepth 1 -type d | head -n 1)"
           test "$(find preview -name preview.html | wc -l)" -eq 1
+      - name: Render responsive snapshots if Chrome is available
+        run: |
+          set -eu
+          HTML_FILE="$(find preview -name preview.html -print -quit)"
+          test -n "$HTML_FILE"
+          BROWSER="$(command -v google-chrome || command -v chromium || true)"
+          if [ -n "$BROWSER" ]; then
+            mkdir -p preview/screenshots
+            "$BROWSER" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --hide-scrollbars --window-size=390,844 --screenshot="$PWD/preview/screenshots/mobile.png" "file://$PWD/$HTML_FILE"
+            "$BROWSER" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --hide-scrollbars --window-size=1440,900 --screenshot="$PWD/preview/screenshots/desktop.png" "file://$PWD/$HTML_FILE"
+            test -s preview/screenshots/mobile.png
+            test -s preview/screenshots/desktop.png
+          else
+            echo "No Chrome executable; real-browser visual verification pending" > preview/visual-validation.txt
+          fi
       - name: Publish review-only artifact (not Naver)
         uses: actions/upload-artifact@v4
         with:
