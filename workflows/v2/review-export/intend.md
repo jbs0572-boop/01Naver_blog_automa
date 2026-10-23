@@ -6,6 +6,8 @@ source: tools/blog_v2.py
 
 # v2/review-export — intend.md
 
+이 문서는 실행 명령이나 권한 승인서가 아니며 기존 AGENTS.md 및 승인 Gate 규칙이 우선합니다.
+
 ## 목적
 원고를 사람이 직접 검토한 뒤 현재 해시와 연결된 로컬 복사 승인만 부여한다.
 
