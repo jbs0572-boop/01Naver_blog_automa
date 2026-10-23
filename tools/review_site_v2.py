@@ -9,7 +9,7 @@ import html
 import json
 from pathlib import Path
 
-from tools.blog_v2 import ContentError, _read_json, validate_pack, verify_bundle
+from tools.blog_v2 import ContentError, _read_json, canonical, digest, validate_pack, verify_bundle
 
 
 _CSS = """
@@ -96,6 +96,9 @@ def render_preview(pack: dict, run_id: str) -> str:
 def write_preview(bundle: Path) -> Path:
     verified = verify_bundle(bundle)
     source = validate_pack(_read_json(bundle / "evidence.json"))
+    # Verify the precise data to be rendered; a previous read can become stale.
+    if digest(canonical(source)) != verified["input_sha256"]:
+        raise ContentError("preview evidence changed after verification")
     payload = render_preview(source, verified["run_id"]).encode("utf-8")
     path = bundle / "preview.html"
     if path.is_symlink():

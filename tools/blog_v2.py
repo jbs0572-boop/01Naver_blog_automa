@@ -147,7 +147,7 @@ def validate_pack(raw: object) -> dict:
 def render_draft(pack: dict) -> str:
     """Make an auditable baseline, not an invented AI-generated article."""
     def clean(text: str) -> str:
-        return html.escape(text, quote=False).replace("[", "\\[").replace("]", "\\]")
+        return html.escape(text, quote=False).replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]")
 
     sources = {item["id"]: item for item in pack["sources"]}
     lines = [f"# {clean(pack['title'])}", "",

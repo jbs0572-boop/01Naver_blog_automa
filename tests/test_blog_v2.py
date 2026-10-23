@@ -232,3 +232,11 @@ def test_export_rehashes_exact_bytes_after_approval_lookup(tmp_path, monkeypatch
     with pytest.raises(ContentError, match="draft changed during export"):
         export_copy(folder)
     assert not (folder / "naver-copy.md").exists()
+
+
+def test_backslash_preceding_markdown_image_is_escaped():
+    item = pack()
+    item["claims"][0]["text"] = r"!\[tracking\](https://attacker.example/pixel)"
+    text = render_draft(validate_pack(item))
+    assert r"!\\\[" in text
+    assert r"\]" in text

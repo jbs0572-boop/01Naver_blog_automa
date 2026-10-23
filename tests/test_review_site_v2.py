@@ -89,3 +89,21 @@ def test_cli_returns_read_only_path(tmp_path, capsys):
     response = json.loads(capsys.readouterr().out)
     assert response["published"] is False
     assert response["preview"].endswith("/preview.html")
+
+
+def test_preview_rehashes_second_evidence_snapshot(tmp_path, monkeypatch):
+    from tools import review_site_v2 as preview_module
+    folder = prepare(tmp_path)
+    original = preview_module._read_json
+
+    def swapped_after_verify(path):
+        if path.name == "evidence.json":
+            tampered = source_pack()
+            tampered["claims"][0]["text"] = "Changed after verification"
+            return tampered
+        return original(path)
+
+    monkeypatch.setattr(preview_module, "_read_json", swapped_after_verify)
+    with pytest.raises(ContentError, match="preview evidence changed"):
+        preview_module.write_preview(folder)
+    assert not (folder / "preview.html").exists()

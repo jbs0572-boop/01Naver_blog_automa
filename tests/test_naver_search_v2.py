@@ -114,3 +114,13 @@ def test_invalid_search_items_are_skipped_without_creating_facts():
                       {"title": "bad date", "link": "https://naver.com", "postdate": "20269999"}]},
                      "coffee", "2026-10-22", 5)
     assert result["result_count"] == 0
+
+
+def test_execute_without_output_path_still_returns_search_candidates(monkeypatch, capsys):
+    from tools import naver_search_v2
+    expected = normalize_response(api_data(), "커피", "2026-10-22", 5)
+    monkeypatch.setattr(naver_search_v2, "fetch_search", lambda *args, **kwargs: expected)
+    assert naver_search_v2.main(["--query", "커피", "--as-of", "2026-10-22", "--execute"]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["items"][0]["url"] == "https://blog.naver.com/writer/123"
+    assert result["items"][0]["suitable_for_claims"] is False
