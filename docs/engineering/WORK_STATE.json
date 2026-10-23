@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "base_branch": "main",
+  "work_branch": "test/coverage-audit-20261024",
+  "iteration_limit": 3,
+  "parallel_worker_limit": 3,
+  "items": [
+    {
+      "id": "QA-001",
+      "role": "manager",
+      "depends_on": [],
+      "status": "passed_local",
+      "retries": 0,
+      "next": "Retain function coverage audit in CI artifacts"
+    },
+    {
+      "id": "QA-002",
+      "role": "test_author",
+      "depends_on": ["QA-001"],
+      "status": "passed_local",
+      "retries": 0,
+      "next": "Verify the new tests against the complete original repository in CI"
+    },
+    {
+      "id": "QA-003",
+      "role": "independent_verification_required",
+      "depends_on": ["QA-002"],
+      "status": "blocked_fixture",
+      "retries": 2,
+      "next": "Restore authentic historic run-log fixtures and make Mac launchd invariants portable"
+    },
+    {
+      "id": "QA-004",
+      "role": "test_author",
+      "depends_on": ["QA-003"],
+      "status": "pending",
+      "retries": 0,
+      "next": "Add behavioral tests for every remaining unexercised function"
+    },
+    {
+      "id": "QA-005",
+      "role": "manager",
+      "depends_on": ["QA-003"],
+      "status": "pending_external_setting",
+      "retries": 0,
+      "next": "Confirm official Codex auto-review is enabled for repository PRs"
+    }
+  ]
+}
