@@ -17,7 +17,11 @@ def test_plist_has_absolute_disabled_dry_run_runner_contract(path: Path) -> None
     assert data["Label"] == path.stem
     assert Path(args[0]).is_absolute()
     assert args[1:3] == ["-m", "tools.automation_runner"]
-    assert data["WorkingDirectory"] == str(ROOT)
+    # launchd runs on the configured Mac, not the GitHub Actions checkout.
+    # Verify the absolute worktree and its Python executable agree instead.
+    install_root = Path(data["WorkingDirectory"])
+    assert install_root.is_absolute()
+    assert Path(args[0]) == install_root / ".venv" / "bin" / "python"
     assert Path(data["StandardOutPath"]).is_absolute()
     assert Path(data["StandardErrorPath"]).is_absolute()
     assert "/.automation/logs/launchd/" in data["StandardOutPath"]
