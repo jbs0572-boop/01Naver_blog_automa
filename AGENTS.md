@@ -194,3 +194,7 @@ Gate B 승인 후에도 임시저장 버튼 직전의 기존 사용자 확인을
 ## 10. 워크플로별 의도 파일
 
 실제 실행 작업 3개, 콘텐츠 단계 7개, GitHub Actions 검증 1개의 목적·입출력·금지 사항·완료 조건은 [workflows/README.md](workflows/README.md)의 각 `intend.md`에 기록한다. 새로운 작업/단계/CI 추가 시 `tests/test_workflow_intend_docs.py` 검사와 해당 문서를 함께 갱신한다. 의도 문서는 승인·계정 연결·배포를 대신하지 않는다.
+
+## 11. v2 근거 기반 초안 엔진 (기존 승인 체계와 분리)
+
+새 엔진은 tools/blog_v2.py이고 계획/조사 기록은 docs/REBUILD_PLAN.md와 docs/RESEARCH_2026-10-22.md에 있다. 근거팩 생성과 로컬 복사 승인은 Gate A/B 승인 또는 네이버 발행이 아니다. 새 워크플로 3개의 의도·시작 조건·완료 조건은 workflows/README.md에서 확인한다. GitHub CI는 외부 비밀키 없이 검수용 아티팩트만 생성한다. 미검증 원문·LLM 사실·실계정 저장을 통과로 보고하지 않는다.
