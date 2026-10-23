@@ -54,3 +54,40 @@ def test_inventory_includes_unmeasured_functions(tmp_path, monkeypatch):
     result = inventory(tools_dir, coverage_json)
     assert result["functions_exercised"] == 0
     assert result["functions_unexercised"][0]["function"] == "idle"
+
+
+def test_same_line_declaration_cannot_be_counted_from_import_only(tmp_path, monkeypatch):
+    tools_dir = tmp_path / "tools"
+    tools_dir.mkdir()
+    (tools_dir / "same.py").write_text("def idle(): return 1\n", encoding="utf-8")
+    report = tmp_path / "coverage.json"
+    report.write_text(json.dumps({"totals": {"percent_covered": 100},
+        "files": {"tools/same.py": {"executed_lines": [1], "missing_lines": []}}}),
+        encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    result = inventory(tools_dir, report)
+    assert result["functions_total"] == 1
+    assert result["functions_exercised"] == 0
+    assert result["functions_unexercised"][0]["status"] == "ambiguous_same_line"
+
+
+def test_lambda_including_nested_lambda_appears_in_inventory(tmp_path, monkeypatch):
+    tools_dir = tmp_path / "tools"
+    tools_dir.mkdir()
+    (tools_dir / "lambda_mod.py").write_text(
+        "f = lambda x: x + 1\n"
+        "def factory():\n    f = lambda z: (lambda q: q * z)\n    return f\n",
+        encoding="utf-8")
+    report = tmp_path / "coverage.json"
+    report.write_text(json.dumps({"totals": {"percent_covered": 75},
+        "files": {"tools/lambda_mod.py": {"executed_lines": [1, 2, 3, 4], "missing_lines": []}}}),
+        encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    result = inventory(tools_dir, report)
+    assert result["functions_total"] == 4
+    assert len(result["functions_ambiguous"]) == 3
+    names = [item["function"] for item in result["function_details"]]
+    assert "factory" in names
+    assert len(set(names)) == 4
+    assert any("<lambda@" in name for name in names)
+    assert result["functions_exercised"] == 1

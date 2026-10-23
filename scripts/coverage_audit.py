@@ -1,7 +1,8 @@
-"""Report executed and unexecuted Python functions from coverage.py JSON.
+"""Conservative AST and coverage.py inventory of Python callable bodies.
 
-A function is counted as exercised only when coverage recorded an executable
-statement within its own body, not merely its import-time declaration.
+Line-level traces cannot prove that a one-line function or same-line lambda
+executed: importing the module can execute its declaration line. Such cases
+are explicitly UNVERIFIED, not counted as called.
 """
 
 from __future__ import annotations
@@ -54,15 +55,37 @@ def inventory(source_dir: Path, coverage_json: Path) -> dict:
                 if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     identifier = f"{prefix}{child.name}"
                     own = own_statements(child) & executable
-                    # Bodies with no executable statements (protocol stubs) remain unverified.
-                    covered = bool(own & executed)
+                    # Import alone marks a one-line declaration as executed;
+                    # ignore its line, which does not prove that body ran.
+                    independent_body = {line for line in own if line > child.lineno}
+                    covered = bool(independent_body & executed)
+                    status = (
+                        "exercised" if covered else
+                        "ambiguous_same_line" if own and not independent_body else
+                        "unexecuted"
+                    )
                     results.append({
                         "file": relative,
                         "function": identifier,
                         "line": child.lineno,
                         "covered": covered,
-                        "executable_lines": len(own),
-                        "executed_lines": len(own & executed),
+                        "status": status,
+                        "executable_lines": len(independent_body),
+                        "executed_lines": len(independent_body & executed),
+                    })
+                    descend(child, f"{identifier}.")
+                elif isinstance(child, ast.Lambda):
+                    # Lambda's expression usually shares its declaration line.
+                    # Treat as unverified rather than misattribute line traces.
+                    identifier = f"{prefix}<lambda@{child.lineno}:{child.col_offset}>"
+                    results.append({
+                        "file": relative,
+                        "function": identifier,
+                        "line": child.lineno,
+                        "covered": False,
+                        "status": "ambiguous_lambda",
+                        "executable_lines": 0,
+                        "executed_lines": 0,
                     })
                     descend(child, f"{identifier}.")
                 elif isinstance(child, ast.ClassDef):
@@ -71,11 +94,13 @@ def inventory(source_dir: Path, coverage_json: Path) -> dict:
                     descend(child, prefix)
         descend(tree)
     untested = [item for item in results if not item["covered"]]
+    ambiguous = [item for item in untested if item["status"].startswith("ambiguous")]
     return {
         "coverage_percent": report["totals"]["percent_covered"],
         "functions_total": len(results),
         "functions_exercised": len(results) - len(untested),
         "functions_unexercised": untested,
+        "functions_ambiguous": ambiguous,
         "function_details": results,
     }
 
@@ -90,9 +115,10 @@ def main() -> int:
     result = inventory(args.source_dir, args.coverage_json)
     args.out.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"Line/branch coverage: {result['coverage_percent']:.2f}%")
-    print(f"Functions exercised: {result['functions_exercised']}/{result['functions_total']}")
+    print(f"Function bodies verifiably exercised: {result['functions_exercised']}/{result['functions_total']}")
+    print(f"Function call-site ambiguity: {len(result['functions_ambiguous'])}")
     for item in result["functions_unexercised"]:
-        print(f"UNTESTED {item['file']}:{item['line']} {item['function']}")
+        print(f"UNVERIFIED {item['file']}:{item['line']} {item['function']} ({item['status']})")
     return int(args.fail_untested and bool(result["functions_unexercised"]))
 
 
