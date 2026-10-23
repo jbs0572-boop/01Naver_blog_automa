@@ -122,16 +122,17 @@ def test_stale_lock_removal_error_is_not_silently_ignored(tmp_path, monkeypatch)
             pytest.fail("could not remove stale lock")
 
 
-def test_lock_release_error_does_not_mask_completed_work(tmp_path, monkeypatch):
+def test_lock_cleanup_error_prevents_false_success(tmp_path, monkeypatch):
     path = tmp_path / "runner.lock"
     original_unlink = Path.unlink
     def deny_unlink(self, *args, **kwargs):
         if self == path:
             raise PermissionError("denied")
         return original_unlink(self, *args, **kwargs)
-    with runner_lock.acquire_lock(path, {"pid": os.getpid()}):
-        monkeypatch.setattr(Path, "unlink", deny_unlink)
-    assert path.exists()  # Record cleanup issue rather than claiming lock disappeared.
+    with pytest.raises(ContractError, match="runner lock cleanup failed"):
+        with runner_lock.acquire_lock(path, {"pid": os.getpid()}):
+            monkeypatch.setattr(Path, "unlink", deny_unlink)
+    assert path.exists()  # Cannot claim the completed job released its lock.
 
 
 def test_disappearing_stale_lock_retries_exclusive_create(tmp_path, monkeypatch):
@@ -169,3 +170,19 @@ def test_cleanup_failure_does_not_mask_original_write_failure(tmp_path, monkeypa
     with pytest.raises(ContractError, match="runner lock cannot be written"):
         with runner_lock.acquire_lock(path, {"pid": 1}):
             pytest.fail("write failure must prevent entry")
+
+
+def test_lock_cleanup_failure_preserves_original_error_with_note(tmp_path, monkeypatch):
+    path = tmp_path / "runner.lock"
+    original_unlink = Path.unlink
+
+    def deny_unlink(self, *args, **kwargs):
+        if self == path:
+            raise PermissionError("cleanup denied")
+        return original_unlink(self, *args, **kwargs)
+
+    with pytest.raises(ValueError, match="original worker error") as raised:
+        with runner_lock.acquire_lock(path, {"pid": os.getpid()}):
+            monkeypatch.setattr(Path, "unlink", deny_unlink)
+            raise ValueError("original worker error")
+    assert any("runner lock cleanup failed" in note for note in raised.value.__notes__)
