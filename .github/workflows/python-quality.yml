@@ -26,12 +26,18 @@ jobs:
           python -m pip install 'jsonschema[format-nongpl]>=4.26,<5' 'pytest>=9,<10' 'hypothesis>=6.165,<7' 'coverage>=7,<8'
           python -m pip freeze > pip-freeze.txt
       - name: Run every test with branch coverage
+        id: full_suite
+        continue-on-error: true
         run: python -m coverage run --branch --source=tools -m pytest -q
       - name: Export whole-repository function coverage
+        if: always()
         run: |
           python -m coverage report -m
           python -m coverage json -o coverage.json
           python scripts/coverage_audit.py --coverage-json coverage.json --out function-coverage.json
+      - name: Enforce full suite result
+        if: steps.full_suite.outcome == 'failure'
+        run: exit 1
       - name: Preserve reproducible coverage evidence
         if: always()
         uses: actions/upload-artifact@v4
