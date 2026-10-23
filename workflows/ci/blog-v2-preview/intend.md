@@ -6,6 +6,8 @@ source: .github/workflows/blog-v2-preview.yml
 
 # ci/blog-v2-preview — intend.md
 
+이 문서는 실행 명령이나 권한 승인서가 아니며 기존 AGENTS.md 및 승인 Gate 규칙이 우선합니다.
+
 ## 목적
 GitHub PR에서 새 v2 초안 엔진의 테스트와 오프라인 예제를 실행하고 검토 가능한 아티팩트를 제공한다.
 
