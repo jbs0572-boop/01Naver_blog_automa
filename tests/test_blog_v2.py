@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from tools.blog_v2 import (
     ContentError, approve_bundle, build_bundle, canonical, digest, export_copy,
-    iso_date, main, render_draft, safe_text, validate_pack, verified_url, verify_bundle,
+    iso_date, main, markdown_url, render_draft, safe_text, validate_pack, verified_url, verify_bundle,
 )
 
 
@@ -203,3 +203,32 @@ def test_cli_requires_explicit_approval_before_manual_export(tmp_path, capsys):
     result = json.loads(capsys.readouterr().out)
     assert result["posted"] is False
     assert Path(result["manual_copy"]).exists()
+
+
+def test_markdown_url_encodes_injection_delimiters():
+    url = "https://example.com/)![tracking](https://attacker.example/pixel)"
+    formatted = markdown_url(url)
+    assert "%29" in formatted and "%5B" in formatted
+    assert ")![" not in formatted
+    item = pack()
+    item["sources"][0]["url"] = url
+    draft = render_draft(validate_pack(item))
+    assert ")![tracking]" not in draft
+    assert "%29%21%5Btracking%5D%28" in draft
+
+
+def test_export_rehashes_exact_bytes_after_approval_lookup(tmp_path, monkeypatch):
+    from tools import blog_v2
+    folder = build_bundle(fixture(tmp_path), tmp_path / "out")
+    approve_bundle(folder, "editor", verify_bundle(folder)["draft_sha256"])
+    original = blog_v2._read_json
+
+    def swap_draft_before_approval_read(path):
+        if path.name == "approval.json":
+            (folder / "draft.md").write_text("unreviewed new content", encoding="utf-8")
+        return original(path)
+
+    monkeypatch.setattr(blog_v2, "_read_json", swap_draft_before_approval_read)
+    with pytest.raises(ContentError, match="draft changed during export"):
+        export_copy(folder)
+    assert not (folder / "naver-copy.md").exists()

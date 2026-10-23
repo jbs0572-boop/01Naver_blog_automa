@@ -14,7 +14,7 @@ import shutil
 import tempfile
 from datetime import date, datetime, timezone
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 VERSION = "2.0.0-preview"
 MAX_SOURCES = 20
@@ -65,6 +65,11 @@ def verified_url(value: object) -> str:
     if "." not in host or not re.fullmatch(r"[a-zA-Z0-9.-]+", host):
         raise ContentError("source URL requires a public DNS name")
     return value
+
+
+def markdown_url(url: str) -> str:
+    """Escape Markdown link delimiters even when the HTTPS URL is otherwise valid."""
+    return quote(url, safe=":/?&=#@+$;,%-._~")
 
 
 def iso_date(value: object, label: str) -> date:
@@ -157,11 +162,11 @@ def render_draft(pack: dict) -> str:
         for claim in items:
             src = sources[claim["source_id"]]
             qualifier = "[자료 기반 해석] " if claim["evidence_level"] == "interpretation" else ""
-            lines.append(f"- {qualifier}{clean(claim['text'])} [근거: {claim['source_id']}]({src['url']})")
+            lines.append(f"- {qualifier}{clean(claim['text'])} [근거: {claim['source_id']}]({markdown_url(src['url'])})")
         lines.append("")
     lines.extend(["## 자료 출처", ""])
     for src in pack["sources"]:
-        lines.append(f"- {src['id']}: [{clean(src['title'])}]({src['url']}) ({src['published_at']})")
+        lines.append(f"- {src['id']}: [{clean(src['title'])}]({markdown_url(src['url'])}) ({src['published_at']})")
     lines.extend(["", "## 편집자 점검", "",
                   "- 원문 직접 확인 / 날짜·저작권·사실 관계 / 독자에게 추가하는 정보 확인",
                   "- 사진 및 공개 글에 대한 최종 동의 확인", ""])
@@ -270,6 +275,9 @@ def export_copy(folder: Path) -> Path:
         raise ContentError("approval record is missing, invalid or stale")
     copy_path = folder / "naver-copy.md"
     content = (folder / "draft.md").read_bytes()
+    # Verify the exact bytes subsequently written, not only an earlier read.
+    if digest(content) != manifest["draft_sha256"]:
+        raise ContentError("draft changed during export; aborting")
     if copy_path.is_symlink():
         raise ContentError("export symlinks are forbidden")
     if copy_path.exists():
