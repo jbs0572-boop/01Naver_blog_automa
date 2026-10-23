@@ -61,3 +61,13 @@ GitHub Actions의 **Blog v2 safe preview**는 PR에서 테스트를 실행하고
 | 자동 발행 | 기본적으로 금지 |
 
 기존 로컬 작업 실행기(tools.automation_runner)는 대부분 생산 단계를 실제 생성하지 않고 상태만 기록할 수 있습니다. v2 생성 명령과 혼동해서 성공을 판단하지 마세요. 과거 추적되지 않은 테스트 로그가 없어 기존 테스트 하나가 실패하는 문제도 [검증 기록](docs/engineering/VALIDATION.md)에서 분리합니다.
+
+## 읽기 전용 NAVER API HUB 조사 모듈
+
+NCP 공식 문서의 GET /search/v1/blog 명세를 따라, 네이버 블로그 검색 결과를 **출처 후보**로만 가져오는 별도 도구를 추가했습니다.
+
+먼저 키 없이 외부 호출 계획만 검사할 수 있습니다.
+
+    python -m tools.naver_search_v2 --query '블로그 자동화' --as-of 2026-10-22 --limit 3
+
+NAVER API HUB 사용 자격과 과금 조건을 별도 확인한 뒤, 본인이 명시적으로 1회 호출을 승인한 경우에만 환경변수 NAVER_API_HUB_CLIENT_ID / NAVER_API_HUB_CLIENT_SECRET를 주입하고 같은 명령에 --execute --out local-search.json을 붙입니다. 기본값은 **외부 요청 0회**이며 자동 재시도·리다이렉트·발행 기능이 없습니다. 검색 요약은 사실 원문이 아니라 검증 전 자료이므로 sourcepack의 official claim으로 자동 변환하지 않습니다. CI에서는 네트워크 요청을 수행하지 않습니다.

@@ -198,3 +198,7 @@ Gate B 승인 후에도 임시저장 버튼 직전의 기존 사용자 확인을
 ## 11. v2 근거 기반 초안 엔진 (기존 승인 체계와 분리)
 
 새 엔진은 tools/blog_v2.py이고 계획/조사 기록은 docs/REBUILD_PLAN.md와 docs/RESEARCH_2026-10-22.md에 있다. 근거팩 생성과 로컬 복사 승인은 Gate A/B 승인 또는 네이버 발행이 아니다. 새 워크플로 3개의 의도·시작 조건·완료 조건은 workflows/README.md에서 확인한다. GitHub CI는 외부 비밀키 없이 검수용 아티팩트만 생성한다. 미검증 원문·LLM 사실·실계정 저장을 통과로 보고하지 않는다.
+
+## 12. v2 NAVER API HUB 읽기 경계
+
+읽기 전용 검색 모듈 tools/naver_search_v2.py는 기본 plan-only다. --execute, 환경 변수 자격 증명, 외부 API 약관·요금 승인이 없으면 실제 요청을 하지 않는다. 가져온 검색 결과는 unverified_snippet으로만 기록하고 근거팩의 공식 주장으로 자동 승인하지 않는다. 워크플로 설명: workflows/v2/naver-search-discovery/intend.md.

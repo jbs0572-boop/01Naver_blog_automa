@@ -19,7 +19,7 @@ from urllib.parse import urlsplit
 VERSION = "2.0.0-preview"
 MAX_SOURCES = 20
 MAX_CLAIMS = 60
-V2_WORKFLOWS = ("evidence-packet", "review-export")
+V2_WORKFLOWS = ("evidence-packet", "review-export", "naver-search-discovery")
 
 
 class ContentError(ValueError):

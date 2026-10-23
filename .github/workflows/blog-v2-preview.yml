@@ -19,13 +19,14 @@ jobs:
       - name: Run v2 behavioral tests and document inventory
         run: |
           python -m pip install 'pytest>=9,<10'
-          python -m pytest -q tests/test_blog_v2.py tests/test_workflow_intend_docs.py
+          python -m pytest -q tests/test_blog_v2.py tests/test_naver_search_v2.py tests/test_workflow_intend_docs.py
       - name: Generate deterministic offline preview
         run: |
           python -m tools.blog_v2 demo --output-root preview
           python -m tools.blog_v2 verify --folder "$(find preview -mindepth 1 -maxdepth 1 -type d | head -n 1)"
           test "$(find preview -name approval.json | wc -l)" -eq 0
           test "$(find preview -name naver-copy.md | wc -l)" -eq 0
+          python -m tools.naver_search_v2 --query "블로그 자동화" --as-of 2026-10-22 --limit 3 > preview/naver-search-plan.json
       - name: Publish review-only artifact (not Naver)
         uses: actions/upload-artifact@v4
         with:

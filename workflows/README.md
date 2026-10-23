@@ -39,3 +39,5 @@
 - [blog-v2-preview](ci/blog-v2-preview/intend.md) — 읽기 전용 PR 테스트와 미리보기 아티팩트
 
 **v2 설계·사용법:** [재설계 계획](../docs/REBUILD_PLAN.md) · [2026-10-22 기준 조사](../docs/RESEARCH_2026-10-22.md). 기존 7단계 워크플로와 v2를 혼동하지 마세요. v2의 승인 파일은 네이버 발행 허가가 아닙니다.
+
+- [naver-search-discovery](v2/naver-search-discovery/intend.md) — 공식 API HUB 읽기 전용 검색 후보 수집(명시적 외부 호출 허가 필요)
