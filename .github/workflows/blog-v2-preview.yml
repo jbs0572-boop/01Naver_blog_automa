@@ -1,0 +1,35 @@
+name: Blog v2 safe preview
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Run v2 behavioral tests and document inventory
+        run: |
+          python -m pip install 'pytest>=9,<10'
+          python -m pytest -q tests/test_blog_v2.py tests/test_workflow_intend_docs.py
+      - name: Generate deterministic offline preview
+        run: |
+          python -m tools.blog_v2 demo --output-root preview
+          python -m tools.blog_v2 verify --folder "$(find preview -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+          test "$(find preview -name approval.json | wc -l)" -eq 0
+          test "$(find preview -name naver-copy.md | wc -l)" -eq 0
+      - name: Publish review-only artifact (not Naver)
+        uses: actions/upload-artifact@v4
+        with:
+          name: blog-v2-offline-preview
+          path: preview/
+          if-no-files-found: error
+          retention-days: 14
