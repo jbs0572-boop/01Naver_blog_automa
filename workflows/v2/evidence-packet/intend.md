@@ -6,6 +6,8 @@ source: tools/blog_v2.py
 
 # v2/evidence-packet — intend.md
 
+이 문서는 실행 명령이나 권한 승인서가 아니며 기존 AGENTS.md 및 승인 Gate 규칙이 우선합니다.
+
 ## 목적
 사람이 선정·확인한 출처와 주장만을 사용하여 블로그 초안과 검증 가능한 증거 묶음을 생성한다. 실제 게시와 구분한다.
 
