@@ -9,41 +9,59 @@
       "id": "QA-001",
       "role": "manager",
       "depends_on": [],
-      "status": "passed_local",
+      "status": "verified_ci",
       "retries": 0,
-      "next": "Retain function coverage audit in CI artifacts"
+      "next": "Preserve coverage.json and function-coverage.json artifacts for each PR"
     },
     {
       "id": "QA-002",
       "role": "test_author",
-      "depends_on": ["QA-001"],
-      "status": "passed_local",
+      "depends_on": [
+        "QA-001"
+      ],
+      "status": "verified_ci",
       "retries": 0,
-      "next": "Verify the new tests against the complete original repository in CI"
+      "next": "Retain newly exercised function tests and investigate uncovered branches separately"
     },
     {
       "id": "QA-003",
       "role": "independent_verification_required",
-      "depends_on": ["QA-002"],
+      "depends_on": [
+        "QA-002"
+      ],
       "status": "blocked_fixture",
       "retries": 2,
-      "next": "Restore authentic historic run-log fixtures and make Mac launchd invariants portable"
+      "next": "Recover original ignored runs/beta-2026-08-26-energy-day.jsonl and runs/beta-gate0-2026-08-26-9topics.jsonl; do not fabricate them. Mac plist assertions made portable; full suite is still red."
     },
     {
       "id": "QA-004",
       "role": "test_author",
-      "depends_on": ["QA-003"],
-      "status": "pending",
+      "depends_on": [
+        "QA-003"
+      ],
+      "status": "verified_ci_runtime_functions",
       "retries": 0,
-      "next": "Add behavioral tests for every remaining unexercised function"
+      "next": "96/97 function bodies exercised; the remaining protocol-only declaration has no executable implementation. Further raise coverage from 84.84% by boundary tests."
     },
     {
       "id": "QA-005",
       "role": "manager",
-      "depends_on": ["QA-003"],
+      "depends_on": [
+        "QA-003"
+      ],
       "status": "pending_external_setting",
       "retries": 0,
-      "next": "Confirm official Codex auto-review is enabled for repository PRs"
+      "next": "Request @codex review on PR; verify official integration actually responds; never claim enabled from repository files."
     }
-  ]
+  ],
+  "latest_ci": {
+    "run_id": 39999816405,
+    "head_sha": "486af4990d56b39a0b84f6fc86448d48cd2fdca3",
+    "passed": 204,
+    "failed": 1,
+    "coverage_percent": 84.84,
+    "function_bodies_exercised": 96,
+    "function_definitions_in_inventory": 97,
+    "legacy_fixture_failure": "test_historical_logs_remain_readable"
+  }
 }
