@@ -22,3 +22,8 @@ manifests/
 agents/
 reports/
 notion-config.md
+
+# v2 local-only review outputs and future Playwright auth state
+preview/
+review-bundles/
+playwright/.auth/

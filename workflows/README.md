@@ -30,3 +30,16 @@
 - 단일 기준: `AGENTS.md`, `BETA-AGENTS.md`, `schemas/workflow-contract.schema.json` 및 실제 실행 코드.
 - 기존 로컬 runner와 에이전트 지침의 **목표 동작을 구분**합니다. 문서가 실제 서비스 연결·발행을 증명하지 않습니다.
 - 각 작업의 신규 커밋은 구현 검사, 코드 리뷰 및 필요한 승인 절차를 바꾸지 않습니다.
+
+## v2 evidence-first 실행 단계 (2개)
+- [evidence-packet](v2/evidence-packet/intend.md) — 근거팩 검증·초안·manifest
+- [review-export](v2/review-export/intend.md) — 사람 승인·수동 복사
+
+## 추가 GitHub Actions
+- [blog-v2-preview](ci/blog-v2-preview/intend.md) — 읽기 전용 PR 테스트와 미리보기 아티팩트
+
+**v2 설계·사용법:** [재설계 계획](../docs/REBUILD_PLAN.md) · [2026-10-22 기준 조사](../docs/RESEARCH_2026-10-22.md). 기존 7단계 워크플로와 v2를 혼동하지 마세요. v2의 승인 파일은 네이버 발행 허가가 아닙니다.
+
+- [naver-search-discovery](v2/naver-search-discovery/intend.md) — 공식 API HUB 읽기 전용 검색 후보 수집(명시적 외부 호출 허가 필요)
+
+- [editorial-preview](v2/editorial-preview/intend.md) — 출처를 함께 확인하는 오프라인 반응형 HTML 미리보기
