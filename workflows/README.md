@@ -43,3 +43,5 @@
 - [naver-search-discovery](v2/naver-search-discovery/intend.md) — 공식 API HUB 읽기 전용 검색 후보 수집(명시적 외부 호출 허가 필요)
 
 - [editorial-preview](v2/editorial-preview/intend.md) — 출처를 함께 확인하는 오프라인 반응형 HTML 미리보기
+
+- [editorial-studio-quality](ci/editorial-studio-quality/intend.md) — 다섯 편집 스타일의 독립 오프라인 5×2 반복 벤치마크, 이미지 품질 테스트와 점수 v1/v2 비교
