@@ -70,8 +70,8 @@ class IndependentStyleTests(unittest.TestCase):
                 "핵심 요약과 공식 출처",
             ]
             draft = Path(temp) / "economy.md"
-            draft.write_text("# 경제 설명\\n\\n" + "\\n\\n".join(
-                f"## {heading}\\n\\n확인한 근거와 조건을 설명합니다." for heading in headings
+            draft.write_text("# 경제 설명\n\n" + "\n\n".join(
+                f"## {heading}\n\n확인한 근거와 조건을 설명합니다." for heading in headings
             ), encoding="utf-8")
             self.assertEqual(studio.check_bundle(bundle, draft)["draft_structure"], "passed")
             draft.write_text(draft.read_text().replace("## 핵심 요약과 공식 출처",
