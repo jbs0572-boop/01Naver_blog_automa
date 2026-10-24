@@ -191,6 +191,18 @@ def verify_bundle(folder: Path) -> dict:
     if not isinstance(manifest, dict) or manifest.get("version") != VERSION:
         raise ContentError("manifest version invalid")
     pack = validate_pack(_read_json(folder / "evidence.json"))
+    # Digest matches alone do not validate mutable status/count metadata.
+    # Never accept a forged claim that this offline packet was published.
+    if (
+        manifest.get("state") != "review_required"
+        or manifest.get("external_writes") is not False
+        or manifest.get("as_of") != pack["as_of"]
+        or type(manifest.get("source_count")) is not int
+        or manifest["source_count"] != len(pack["sources"])
+        or type(manifest.get("claim_count")) is not int
+        or manifest["claim_count"] != len(pack["claims"])
+    ):
+        raise ContentError("manifest review state or evidence metadata invalid")
     if digest(canonical(pack)) != manifest.get("input_sha256"):
         raise ContentError("evidence digest mismatch")
     try:

@@ -88,6 +88,25 @@ def test_modified_evidence_is_blocked(tmp_path):
         verify_bundle(folder)
 
 
+@pytest.mark.parametrize(("field", "value"), [
+    ("state", "published"),
+    ("external_writes", True),
+    ("external_writes", 0),
+    ("as_of", "2026-10-21"),
+    ("source_count", 100),
+    ("source_count", True),
+    ("claim_count", 1),
+])
+def test_manifest_forged_status_and_counts_fail_closed(tmp_path, field, value):
+    folder = build_bundle(fixture(tmp_path), tmp_path / "out")
+    path = folder / "manifest.json"
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    manifest[field] = value
+    path.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
+    with pytest.raises(ContentError, match="manifest review state or evidence metadata invalid"):
+        verify_bundle(folder)
+
+
 def test_fake_or_stale_approval_is_rejected(tmp_path):
     folder = build_bundle(fixture(tmp_path), tmp_path / "out")
     (folder / "approval.json").write_text('{"run_id":"wrong"}', encoding="utf-8")
