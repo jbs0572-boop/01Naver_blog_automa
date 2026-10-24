@@ -1,0 +1,42 @@
+name: Editorial studio offline 5x2 quality
+
+on:
+  pull_request:
+    paths:
+      - "editorial_studio/**"
+      - "tests/test_editorial_*.py"
+      - ".github/workflows/editorial-studio-quality.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install offline image and test dependencies
+        run: python -m pip install 'pytest>=9,<10' 'Pillow>=12,<13'
+      - name: Unit and adapter regression
+        run: python -m pytest -q tests/test_editorial_studio.py tests/test_editorial_engine.py
+      - name: Frozen 5 categories times 2 topics benchmark
+        run: |
+          python -m editorial_studio.benchmark --cases editorial_studio/benchmarks/cases.json --out-dir editorial-ci
+          test "$(find editorial-ci -name draft.md | wc -l)" -eq 10
+          test "$(find editorial-ci -name cover-prompt.txt | wc -l)" -eq 10
+          test "$(find editorial-ci -name preview.html | wc -l)" -eq 10
+          test "$(find editorial-ci -name cover.png | wc -l)" -eq 0
+          test "$(find editorial-ci -name approval.json | wc -l)" -eq 0
+      - name: Upload local review artifacts (never blog publishing)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: editorial-5x2-offline-quality
+          path: editorial-ci/
+          if-no-files-found: ignore
+          retention-days: 14
