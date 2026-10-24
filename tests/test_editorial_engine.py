@@ -28,7 +28,11 @@ def image_bytes(*, width=1536, height=1024, constant=False):
     if constant:
         image = Image.new("RGB", (width, height), (125, 125, 125))
     else:
-        image = Image.effect_noise((width, height), 100).convert("RGB")
+        # Broad shapes + texture: distinguish real visual content from random-noise placeholders.
+        red = Image.linear_gradient("L").resize((width, height))
+        green = Image.radial_gradient("L").resize((width, height))
+        blue = Image.effect_noise((width, height), 80)
+        image = Image.merge("RGB", (red, green, blue))
     handle = io.BytesIO()
     image.save(handle, format="PNG")
     return handle.getvalue()
