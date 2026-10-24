@@ -99,7 +99,7 @@ class FiveStyleEngineTests(unittest.TestCase):
             self.assertEqual(path, "/images/generations")
             self.assertEqual(settings["model"], engine.IMAGE_MODEL)
             self.assertEqual(settings["size"], "1536x1024")
-            self.assertEqual(settings["quality"], "high")
+            self.assertEqual(settings["quality"], "xhigh")
             return {"data": [{"b64_json": base64.b64encode(payload).decode("ascii")}]}
         with patch.object(engine, "_api_post", side_effect=pretend):
             output = engine.generate_cover("a topic-specific, premium image")
