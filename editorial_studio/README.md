@@ -54,3 +54,61 @@
 - [카테고리당 서로 다른 주제 두 개의 문체 샘플](examples/VOICE_TEST_5_CATEGORIES.md)
 - 문체 정체성과 편집 역할은 고정하지만, 주제에 맞는 제목은 바꿀 수 있습니다. 기계 검사는 5개 구획·금지 문구·지침 파일 해시만 확인합니다. 실제 논조·품질은 별도 편집 검수가 필요합니다.
 - 새 조사일은 2026-10-25이며 저장소의 `2026-10-22 기준 역사 조사`를 수정하거나 소급하지 않습니다.
+
+
+## 제작 엔진 연결 — 글+이미지+미리보기
+
+원고와 이미지를 만들 때 **카테고리당 한 프로필 MD만** 로딩합니다.
+실제 OpenAI Responses API 모델, Images API 생성 모델과
+고해상도 픽셀 검증, 로컬 HTML 미리보기를 연결했습니다.
+현재 API 기본값은 비활성입니다. 사용자가 비용 발생을 명시한
+`--execute-paid` 명령과 환경변수 `OPENAI_API_KEY`가 있을 때만
+API 호출을 시도합니다. 실계정 이미지/원고 호출 성공 여부는 별도 확인이 필요합니다.
+
+**데이터 입력**: `benchmarks/cases.json` 내 한 `case` 객체를
+`my-case.json`으로 저장합니다. 실제 작성 전 근거 팩은 사람이 공식 원문과
+대조해야 합니다. 검색 요약만으로 공식 사실을 확정하지 않습니다.
+
+```bash
+# 1) 비용 없는 구조 검증용 예시 생성기 (실제 LLM 호출 아님)
+python -m editorial_studio.engine --case my-case.json --output-root output \
+  --text-backend fixture --image-backend none
+
+# 2) 사람이 준비한 고품질 실이미지로 글·이미지·미리보기 조립
+python -m editorial_studio.engine --case my-case.json --output-root output \
+  --text-backend fixture --image-backend import --image-file cover.png
+
+# 3) 유료 실모델 호출은 사용자가 명시적으로 선택해야 하며 기본 금지
+# export OPENAI_API_KEY=...   # 코드/로그에 키를 저장하지 않음
+python -m editorial_studio.engine --case my-case.json --output-root output \
+  --text-backend openai --image-backend openai --execute-paid
+
+# 4) 다섯 카테고리에서 2주제씩 총 10건 반복 점검
+python -m editorial_studio.benchmark \
+  --cases editorial_studio/benchmarks/cases.json \
+  --out-dir editorial-benchmark
+```
+
+1건 결과에는 `sourcepack.json`, `writer-brief.md`, `image-brief.md`,
+`cover-prompt.txt`, `article-structure.json`, `draft.md`,
+`preview.html`, `result.json`, `style-lock.json`이 생성됩니다.
+이미지를 실제로 만들거나 입력해 검사에 통과한 경우에만 `cover.png`가
+추가되며 상태가 `IMAGE_READY_FOR_REVIEW`로 바뀝니다.
+
+정량 이미지 검사는 Pillow로 실제 PNG 픽셀을 열어서 최소 크기
+1280×720, 종횡비, 컬러 변화량, 단색 이미지를 검사합니다.
+**시각적 아름다움·주제 연관성·텍스트 왜곡·저작권은 육안 검수 필수**입니다.
+이미지가 없는 경우는 `DRAFT_ONLY`이며 게시 가능으로 보고하지 않습니다.
+
+## 채점 기준과 개선 관리
+
+[100점 평가 루브릭 v1/v2](QUALITY_RUBRIC.md): 근거, 카테고리 일치, 검색 의도,
+독자 가치, 이미지, 모바일 가독성을 평가합니다. v2는 이미지·검색 의도 비중을
+높이고 v1 결과를 보존합니다. 근거 원문 대조, 생성된 이미지의 적합성,
+실제 네이버 유입은 자동 점수로 증명할 수 없으므로 따로 기록합니다.
+
+[10개 반복 검증 케이스](benchmarks/cases.json)와
+[`Editorial studio offline 5x2 quality`](../.github/workflows/editorial-studio-quality.yml)
+CI는 읽기 전용·무계정·무과금으로 실행됩니다. 본문 생성 테스트는
+`fixture` 제공자이고 실제 API 모델 검증은 HTTP 응답을 모킹합니다.
+**성공을 실제 LLM 서비스 호출·네이버 게시·트래픽 달성으로 간주하지 않습니다.**
