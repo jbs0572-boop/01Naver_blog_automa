@@ -361,7 +361,7 @@ def render_markdown(case: dict, article: dict, has_cover: bool) -> str:
         evidence = list(dict.fromkeys(facts[k]["source_id"] for k in section["fact_ids"]))
         lines.append("근거: " + ", ".join("[{}]({})".format(k, sources[k]["url"]) for k in evidence))
         lines.append("")
-    lines.extend(["## 자료와 검수 안내", "",
+    lines.extend(["### 자료와 검수 안내", "",
                   "이 글은 공개 자료를 바탕으로 작성된 미검수 초안입니다. "
                   "인용 사실은 반드시 원문과 대조하고 필요 시 최신 상태를 다시 확인하세요.", ""])
     for src in case["sources"]:
