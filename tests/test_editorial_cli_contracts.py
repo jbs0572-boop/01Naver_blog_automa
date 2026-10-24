@@ -7,7 +7,27 @@ from pathlib import Path
 from unittest.mock import patch
 
 from editorial_studio import benchmark, discovery, engine, evolution, studio, traffic
-from tests.test_editorial_evolution import feedback
+from editorial_studio import quality
+
+
+def feedback():
+    categories = list(studio.PROFILE_IDS)
+    weights = quality.policy("v2")["weights"]
+    records = []
+    for i in range(15):
+        bad = i < 6 or i in (10, 11, 12)
+        scores = {name: 1.0 for name in weights}
+        if bad:
+            scores["image_quality"] = 0.25
+        records.append({
+            "case_id": "independent-review-" + str(i),
+            "category": categories[i % 5],
+            "set": "train" if i < 10 else "holdout",
+            "human_review": "fail" if bad else "pass",
+            "failure_reasons": ["image_offtopic"] if bad else [],
+            "dimensions": scores,
+        })
+    return records
 
 
 ROOT = Path(__file__).resolve().parents[1]
