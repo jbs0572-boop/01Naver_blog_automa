@@ -41,7 +41,8 @@
     "지금 당장 사야",
     "무조건 폭등",
     "확실히 돈 번"
-  ]
+  ],
+  "visual_dna": "Art direction: premium financial editorial 3D still life in midnight navy, restrained cyan and brass highlights, crisp geometry, depth and deliberate object hierarchy. No invented axes, price paths, figures, ticks or fake data; real numeric charts must be programmatically plotted from cited data separate from the illustration."
 }
 ```
 
@@ -63,6 +64,7 @@
 - 투자·금리 전망은 가정과 불확실성을 밝혀 단정적으로 권유하지 않는다.
 
 ## 이미지 스타일
+- **시각적 DNA 고정:** Art direction: premium financial editorial 3D still life in midnight navy, restrained cyan and brass highlights, crisp geometry, depth and deliberate object hierarchy. No invented axes, price paths, figures, ticks or fake data; real numeric charts must be programmatically plotted from cited data separate from the illustration.
 - **고정 표현:** 가독성 좋은 정량 그래프와 비교표 중심. 모든 축·기간·단위·출처를 표기한다.
 - **시각 구성:** 대표 이미지는 핵심 질문을 압축하는 고급 데이터 편집 이미지 1개. 본문 그래프는 실제 관측 데이터와 단위·기간·출처가 있을 때만 사용하고, 그렇지 않으면 개념도 1개로 대체. 수치가 없는 가짜 상승·하락 그래프 금지.
 - 사진이나 이미지 생성물은 사실 증거를 대신하지 못합니다. 출처·저작권·생성 여부를 별도로 표시합니다.
