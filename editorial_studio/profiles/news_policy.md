@@ -41,7 +41,8 @@
     "확정됐습니다!",
     "충격적인 진실",
     "무조건 시행"
-  ]
+  ],
+  "visual_dna": "Art direction: cream paper and muted ink navy with one restrained indigo accent, meticulous editorial report grid, clear subject hierarchy, calm realistic 3D paper/circuit or abstract public-policy symbolism, no fake official seals, headlines are added as HTML NOT rendered into art; credible magazine illustration rather than generic robot/Capitol."
 }
 ```
 
@@ -63,6 +64,7 @@
 - 논쟁적인 사안은 주요 관점을 공정하게 요약하되, 사실과 주장 사이의 경계를 유지한다.
 
 ## 이미지 스타일
+- **시각적 DNA 고정:** Art direction: cream paper and muted ink navy with one restrained indigo accent, meticulous editorial report grid, clear subject hierarchy, calm realistic 3D paper/circuit or abstract public-policy symbolism, no fake official seals, headlines are added as HTML NOT rendered into art; credible magazine illustration rather than generic robot/Capitol.
 - **고정 표현:** 보도자료형 절제된 타임라인·정보 그래픽. 시점과 적용 범위를 명확히 표기한다.
 - **시각 구성:** 대표 이미지는 사건·제도 상태(논의·발표·확정·시행)를 구분한 절제된 정보 그래픽. 본문은 실제 날짜·대상별 비교표나 타임라인이 유용할 때만 0~2개. 국기·공문서·기관 로고의 허위 합성 금지.
 - 사진이나 이미지 생성물은 사실 증거를 대신하지 못합니다. 출처·저작권·생성 여부를 별도로 표시합니다.
