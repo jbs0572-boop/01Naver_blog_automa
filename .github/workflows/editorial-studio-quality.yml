@@ -23,7 +23,7 @@ jobs:
       - name: Install offline image and test dependencies
         run: python -m pip install 'pytest>=9,<10' 'Pillow>=12,<13'
       - name: Unit and adapter regression
-        run: python -m pytest -q tests/test_editorial_studio.py tests/test_editorial_engine.py
+        run: python -m pytest -q tests/test_editorial_studio.py tests/test_editorial_engine.py tests/test_editorial_discovery.py
       - name: Frozen 5 categories times 2 topics benchmark
         run: |
           python -m editorial_studio.benchmark --cases editorial_studio/benchmarks/cases.json --out-dir editorial-ci
