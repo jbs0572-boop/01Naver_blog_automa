@@ -112,3 +112,20 @@ python -m editorial_studio.benchmark \
 CI는 읽기 전용·무계정·무과금으로 실행됩니다. 본문 생성 테스트는
 `fixture` 제공자이고 실제 API 모델 검증은 HTTP 응답을 모킹합니다.
 **성공을 실제 LLM 서비스 호출·네이버 게시·트래픽 달성으로 간주하지 않습니다.**
+
+## 실제 검색 수요 신호 (Naver Datalab)
+
+키워드 수요는 추측으로 점수를 매기지 않습니다. [네이버 공식 통합검색어 트렌드 API](https://developers.naver.com/docs/serviceapi/datalab/search/search.md)를 **읽기 전용**으로 연동했습니다.
+
+```bash
+# candidates.json: {"topics":[{"query":"아파트 환기","category":"life_health"},{"query":"실내 습도","category":"life_health"}]}
+python -m editorial_studio.discovery --topics candidates.json \
+  --start 2026-08-01 --end 2026-10-24 --out datalab-plan.json
+
+# 실계정 API 권한 등록과 클라이언트 키가 있을 때만 명시적 읽기 요청
+# NAVER_CLIENT_ID와 NAVER_CLIENT_SECRET는 환경변수로만 주입
+python -m editorial_studio.discovery --topics candidates.json \
+  --start 2026-08-01 --end 2026-10-24 --execute --out datalab-live.json
+```
+
+같은 호출에서 2~5개 주제의 **상대 검색 비율**만 비교합니다. 서로 다른 호출에서 반환된 비율을 합쳐 절대 검색량·예상 조회수로 해석하지 않으며, 실제 글에 쓸 사실·공식 원문은 별도 검증합니다. 키가 없으면 네트워크 호출하지 않고 실행 계획만 기록합니다.
