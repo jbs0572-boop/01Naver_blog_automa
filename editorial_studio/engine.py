@@ -286,9 +286,10 @@ def image_prompt(case: dict, profile: dict, article: dict) -> str:
         "crisp detail, clear silhouette at mobile size. Horizontal 3:2, 1536x1024. "
         "Style strictly: " + profile["image_style"] + ". "
         "Composition rules: " + profile["image_plan"] + ". "
+        "Visual DNA: " + profile.get("visual_dna", profile["image_style"]) + ". "
         "Topic: " + case["topic"] + ". Actual headline: " + article["title"] + ". "
         "Primary verified contextual fact: " + _role_facts(case, 0)[0]["text"] + ". "
-        "Do not depict numeric charts unless source facts contain explicit verifiable figures. "
+        "Never draw numeric charts or labels; real charts must be rendered from cited data outside the image model. "
         "Do not create people or fake official documents, flags, seals, company logos, "
         "real film stills or recognizable actors. No text, captions, letters, "
         "numbers, watermarks or noisy collage; typography will be added in HTML, "
@@ -299,7 +300,7 @@ def image_prompt(case: dict, profile: dict, article: dict) -> str:
 def generate_cover(prompt: str) -> bytes:
     result = _api_post("/images/generations", {
         "model": IMAGE_MODEL, "prompt": prompt,
-        "size": "1536x1024", "quality": "high", "n": 1,
+        "size": "1536x1024", "quality": "xhigh", "n": 1,
         "output_format": "png", "background": "opaque",
     }, timeout=180)
     images = result.get("data")
