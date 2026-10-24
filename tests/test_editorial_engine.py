@@ -164,6 +164,7 @@ class FiveStyleEngineTests(unittest.TestCase):
         for p in prompts:
             self.assertIn(profile["image_style"], p)
             self.assertIn(profile["image_plan"], p)
+            self.assertIn(profile["visual_dna"], p)
             self.assertNotIn(studio.profiles()["life_health"]["image_style"], p)
 
     def test_duplicate_covers_across_two_articles_rejected(self):
