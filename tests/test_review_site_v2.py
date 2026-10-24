@@ -45,6 +45,13 @@ def test_preview_is_deterministic_and_never_approves_or_posts(tmp_path):
     assert verify_bundle(bundle)["state"] == "review_required"
 
 
+def test_preview_prefers_korean_font_without_external_font_download():
+    html = render_preview(source_pack(), "RUN-test")
+    assert "'Noto Sans CJK KR'" in html
+    assert "@import" not in html
+    assert "@font-face" not in html
+
+
 def test_html_attribute_and_text_injection_are_escaped(tmp_path):
     pack = source_pack()
     pack["title"] = "<script>alert(1)</script>"

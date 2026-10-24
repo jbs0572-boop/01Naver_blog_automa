@@ -45,7 +45,7 @@ examples/blog-v2-sourcepack.json을 복사하여 제목, 독자, 관점, 기준�
     python -m pip install 'pytest>=9,<10'
     python -m pytest -q tests/test_blog_v2.py tests/test_workflow_intend_docs.py
 
-GitHub Actions의 **Blog v2 safe preview**는 PR에서 테스트를 실행하고 공개 데이터로 만든 근거팩/초안/manifest만 아티팩트로 올립니다. CI에는 비밀키가 없고 GitHub 저장소 쓰기 권한도 없습니다. 기존 전체 테스트는 별도의 **Python tests and function coverage**에서 진행합니다.
+GitHub Actions의 **Blog v2 safe preview**는 PR에서 테스트를 실행하고 공개 데이터로 만든 근거팩/초안/manifest와 로컬 HTML 미리보기·화면 캡처를 아티팩트로 올립니다. Chrome이 있으면 한국어 글꼴(Noto CJK)을 설치해 한글이 네모로 깨지는 환경 문제를 막고 `korean-font.txt`에 사용된 글꼴을 기록합니다. PNG 존재와 폰트 검사 통과는 실제 육안 검수를 대신하지 않습니다. CI에는 비밀키가 없고 GitHub 저장소 쓰기 권한도 없습니다. 기존 전체 테스트는 별도의 **Python tests and function coverage**에서 진행합니다.
 
 ## 개발 상태
 

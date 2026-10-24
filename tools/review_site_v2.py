@@ -17,7 +17,7 @@ _CSS = """
   --line: #dce6eb; --paper: #fff; --background: #f1f6f8; --accent: #0d6f77 }
 * { box-sizing: border-box }
 body { background: var(--background); color: var(--ink);
-  font: 16px/1.75 system-ui, -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  font: 16px/1.75 'Noto Sans CJK KR', 'Noto Sans KR', system-ui, -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
   margin: 0; padding: 0 }
 header { background: #173743; color: #fff; padding: 38px max(22px, calc((100vw - 980px)/2)); }
 header p { color: #cae1e6; margin: 5px 0 0 }

@@ -29,6 +29,16 @@ jobs:
           python -m tools.naver_search_v2 --query "블로그 자동화" --as-of 2026-10-22 --limit 3 > preview/naver-search-plan.json
           python -m tools.review_site_v2 --folder "$(find preview -mindepth 1 -maxdepth 1 -type d | head -n 1)"
           test "$(find preview -name preview.html | wc -l)" -eq 1
+      - name: Install Korean font coverage for browser screenshots
+        run: |
+          set -eu
+          BROWSER="$(command -v google-chrome || command -v chromium || true)"
+          if [ -n "$BROWSER" ]; then
+            sudo apt-get update -qq
+            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq fonts-noto-cjk
+            fc-cache -f
+            test -n "$(fc-list :lang=ko family | head -n 1)"
+          fi
       - name: Render responsive snapshots if Chrome is available
         run: |
           set -eu
@@ -41,6 +51,8 @@ jobs:
             "$BROWSER" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --hide-scrollbars --window-size=1440,900 --screenshot="$PWD/preview/screenshots/desktop.png" "file://$PWD/$HTML_FILE"
             test -s preview/screenshots/mobile.png
             test -s preview/screenshots/desktop.png
+            fc-match -f '%{family}\n' ':lang=ko' > preview/korean-font.txt
+            test -s preview/korean-font.txt
           else
             echo "No Chrome executable; real-browser visual verification pending" > preview/visual-validation.txt
           fi
