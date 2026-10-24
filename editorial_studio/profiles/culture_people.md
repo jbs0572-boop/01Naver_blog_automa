@@ -39,7 +39,8 @@
     "제가 만나보니",
     "현장에 다녀와서",
     "확실한 숨은 의도"
-  ]
+  ],
+  "visual_dna": "Art direction: cinematic editorial matte painting, intentional composition with one emblematic object/space, rich warm-cool complementary shadows, realistic material detail and atmospheric depth, premium film-journal aesthetic, no copyrighted film still, no lookalike portraits, no fake actor faces or invented on-set photos."
 }
 ```
 
@@ -61,6 +62,7 @@
 - 제작진의 의도를 추정할 때는 '해석'임을 명시하고 출처 없는 인용을 만들지 않는다.
 
 ## 이미지 스타일
+- **시각적 DNA 고정:** Art direction: cinematic editorial matte painting, intentional composition with one emblematic object/space, rich warm-cool complementary shadows, realistic material detail and atmospheric depth, premium film-journal aesthetic, no copyrighted film still, no lookalike portraits, no fake actor faces or invented on-set photos.
 - **고정 표현:** 독창적인 영화적 무드보드·상징 일러스트. 공식 스틸·포스터와 생성 이미지는 엄격히 구분한다.
 - **시각 구성:** 대표 이미지는 주제를 연상시키는 독창적 상징 이미지 1개(실제 스틸이 아님을 표기). 본문은 권리 확인된 공식 자료나 작품·인물 관계도·시간 흐름 도식을 설명이 필요한 때만 0~2개. 배우·인물 사진과 실제 포스터를 만들어 사실자료처럼 제시하지 않음.
 - 사진이나 이미지 생성물은 사실 증거를 대신하지 못합니다. 출처·저작권·생성 여부를 별도로 표시합니다.
