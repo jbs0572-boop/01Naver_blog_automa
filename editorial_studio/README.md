@@ -144,3 +144,14 @@ python -m editorial_studio.discovery --topics candidates.json \
 - CTR=자연 검색 클릭수/자연 검색 노출수로 계산합니다. 자연 검색 세션 수는 별도 측정치로 취급합니다.
 - 동일 기간에 5개 카테고리 모두 발행 글 3편 이상이 없으면 **어느 스타일이 유입을 더 늘렸다고 추천하지 않습니다**. 이는 최소 집계 조건이며 인과증명을 보장하지 않습니다.
 - 자동으로 네이버/Notion에 로그인하거나 분석 데이터를 가져오지 않습니다.
+
+### 설치 및 코드 검증
+
+```bash
+python -m pip install -r editorial_studio/requirements.txt
+python -m pip install pytest coverage
+python -m coverage run --branch --source=editorial_studio -m pytest -q tests/test_editorial_*.py
+python -m coverage report -m
+```
+
+전용 GitHub Actions에서는 실제 실행된 편집 엔진의 줄·분기 커버리지 JSON도 아티팩트로 남깁니다. 모델 과금 API는 테스트에서 모킹합니다.
