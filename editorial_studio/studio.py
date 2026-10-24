@@ -128,6 +128,7 @@ def build_bundle(topic: str, output_root: Path, explicit: str | None = None) -> 
         f"카테고리 고정: {profile['title']} ({profile['id']})\n"
         f"스타일 잠금 SHA-256: {style_hash}\n\n"
         f"표현 스타일: {profile['image_style']}\n"
+        f"시각적 DNA: {profile.get('visual_dna', profile['image_style'])}\n"
         f"추천 배치: {profile['image_plan']}\n\n"
         "이미지를 실제 생성하기 전에는 생성 완료라고 표시하지 마세요.\n"
         "저해상도 자리표시자, 깨진 한글, 출처 없는 수치·로고·인물 사진을 금지합니다.\n"
