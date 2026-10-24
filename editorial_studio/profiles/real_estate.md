@@ -39,7 +39,8 @@
     "무조건 안전",
     "반드시 수익",
     "100% 보장"
-  ]
+  ],
+  "visual_dna": "Art direction: high-end architectural macro tabletop, slate/sage and off-white palette, precise 3D building model, subtle real paper texture, confident geometry and diffused natural light, spare visual hierarchy; no fabricated address, fake property record, fake registry or misleading guarantee."
 }
 ```
 
@@ -61,6 +62,7 @@
 - 판단에 필요한 서류 명칭과 공식 조회 경로를 적고 투자 수익을 약속하지 않는다.
 
 ## 이미지 스타일
+- **시각적 DNA 고정:** Art direction: high-end architectural macro tabletop, slate/sage and off-white palette, precise 3D building model, subtle real paper texture, confident geometry and diffused natural light, spare visual hierarchy; no fabricated address, fake property record, fake registry or misleading guarantee.
 - **고정 표현:** 문서·권리관계·계약 순서의 정밀한 체크리스트와 절차 도식. 보기 좋음보다 정확성을 우선한다.
 - **시각 구성:** 대표 이미지는 판단 기준을 보여주는 정확한 서류·현황 도식. 계약·대출 주제는 순서표, 가격 동향 주제는 지역·기간을 표시한 실제 통계 그래프를 필요 시 0~2개. 근거 없는 절대 안전선, 가짜 등기부·주소·실거래 기록 금지.
 - 사진이나 이미지 생성물은 사실 증거를 대신하지 못합니다. 출처·저작권·생성 여부를 별도로 표시합니다.
