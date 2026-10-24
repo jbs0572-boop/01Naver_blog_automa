@@ -124,3 +124,33 @@ def test_execute_without_output_path_still_returns_search_candidates(monkeypatch
     result = json.loads(capsys.readouterr().out)
     assert result["items"][0]["url"] == "https://blog.naver.com/writer/123"
     assert result["items"][0]["suitable_for_claims"] is False
+
+
+@pytest.mark.parametrize("blocked_path", ["existing_file", "existing_dir", "dangling_symlink", "missing_parent"])
+def test_unusable_output_is_rejected_before_authorized_api_request(tmp_path, monkeypatch, blocked_path):
+    """An existing or unwritable-by-path destination must not consume a paid request."""
+    from tools import naver_search_v2
+
+    output = tmp_path / "results.json"
+    if blocked_path == "existing_file":
+        output.write_text("must not overwrite", encoding="utf-8")
+    elif blocked_path == "existing_dir":
+        output.mkdir()
+    elif blocked_path == "dangling_symlink":
+        output.symlink_to(tmp_path / "not-created.json")
+    else:
+        output = tmp_path / "missing-parent" / "results.json"
+
+    called = []
+    def unexpected_fetch(*args, **kwargs):
+        called.append((args, kwargs))
+        raise AssertionError("network request attempted before output preflight")
+
+    monkeypatch.setattr(naver_search_v2, "fetch_search", unexpected_fetch)
+    with pytest.raises(SystemExit) as error:
+        naver_search_v2.main(["--query", "coffee", "--as-of", "2026-10-22",
+                              "--execute", "--out", str(output)])
+    assert error.value.code == 2
+    assert called == []
+    if blocked_path == "existing_file":
+        assert output.read_text(encoding="utf-8") == "must not overwrite"

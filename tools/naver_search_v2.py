@@ -109,6 +109,13 @@ def main(argv: list[str] | None = None) -> int:
                               "external_calls": 0, "credential_source": "environment only",
                               "results_are_unverified": True}, ensure_ascii=False))
             return 0
+        # Reject known unusable destinations before an authorized (potentially billable) API call.
+        # Exclusive open below still protects against concurrent file creation.
+        if args.out:
+            if args.out.exists() or args.out.is_symlink():
+                raise ContentError("output path already exists; refusing API call")
+            if not args.out.parent.is_dir():
+                raise ContentError("output directory does not exist; refusing API call")
         result = fetch_search(args.query, args.limit, args.as_of, network_authorized=True)
         if args.out:
             with args.out.open("x", encoding="utf-8") as handle:

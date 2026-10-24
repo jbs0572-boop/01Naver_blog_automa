@@ -54,7 +54,8 @@ GitHub Actions의 **Blog v2 safe preview**는 PR에서 테스트를 실행하고
 | 공개 근거팩 검증 → 초안 → SHA-256 검증 | 구현·테스트 |
 | 사람 승인 → 로컬 수동 복사용 원고 | 구현·테스트 |
 | 독립 PR CI 미리보기 | 브랜치/PR 실행 결과에서 판정 |
-| 네이버 검색 API HUB 연동·원문 합법 수집 | 차기 |
+| 네이버 검색 API HUB 단건 조회 | 코드 구현·오프라인 모의 테스트 완료, 실계정 호출 미검증 |
+| 원문 합법 수집 및 출처 내용 대조 | 차기 |
 | 자동 LLM 글쓰기/그림과 환각 검사 | 차기 |
 | Notion 실계정 저장·재조회 | 미연결, Gate A 필요 |
 | Playwright 네이버 임시저장 | 미연결, Gate B 및 사용자 재확인 필요 |
@@ -70,7 +71,7 @@ NCP 공식 문서의 GET /search/v1/blog 명세를 따라, 네이버 블로그 �
 
     python -m tools.naver_search_v2 --query '블로그 자동화' --as-of 2026-10-22 --limit 3
 
-NAVER API HUB 사용 자격과 과금 조건을 별도 확인한 뒤, 본인이 명시적으로 1회 호출을 승인한 경우에만 환경변수 NAVER_API_HUB_CLIENT_ID / NAVER_API_HUB_CLIENT_SECRET를 주입하고 같은 명령에 --execute --out local-search.json을 붙입니다. 기본값은 **외부 요청 0회**이며 자동 재시도·리다이렉트·발행 기능이 없습니다. 검색 요약은 사실 원문이 아니라 검증 전 자료이므로 sourcepack의 official claim으로 자동 변환하지 않습니다. CI에서는 네트워크 요청을 수행하지 않습니다.
+NAVER API HUB 사용 자격과 과금 조건을 별도 확인한 뒤, 본인이 명시적으로 1회 호출을 승인한 경우에만 환경변수 NAVER_API_HUB_CLIENT_ID / NAVER_API_HUB_CLIENT_SECRET를 주입하고 같은 명령에 --execute --out local-search.json을 붙입니다. 기본값은 **외부 요청 0회**이며 자동 재시도·리다이렉트·발행 기능이 없습니다. 검색 요약은 사실 원문이 아니라 검증 전 자료이므로 sourcepack의 official claim으로 자동 변환하지 않습니다. \`--out\` 파일이 이미 있거나 상위 폴더가 없으면 유료 호출 가능성이 있는 API 요청 전에 중단합니다. CI에서는 네트워크 요청을 수행하지 않습니다.
 
 ## 오프라인 원고 미리보기
 
