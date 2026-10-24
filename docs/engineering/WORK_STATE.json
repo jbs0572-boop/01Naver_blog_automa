@@ -41,7 +41,7 @@
       ],
       "status": "verified_ci_runtime_functions",
       "retries": 0,
-      "next": "96/97 function bodies exercised; the remaining protocol-only declaration has no executable implementation. Further raise coverage from 84.84% by boundary tests."
+      "next": "96/100 verifiably exercised; three lambda bodies conservatively ambiguous and one Protocol declaration is not executable. Latest line/branch coverage 84.89%; the missing historical fixture still blocks green full-suite CI."
     },
     {
       "id": "QA-005",
@@ -49,12 +49,25 @@
       "depends_on": [
         "QA-003"
       ],
-      "status": "pending_external_setting",
+      "status": "verified_codex_review_current_head",
       "retries": 0,
-      "next": "Request @codex review on PR; verify official integration actually responds; never claim enabled from repository files."
+      "next": "PR #2 37fe0a6 Codex review completed with zero current findings; historical P2 threads resolved after fixes. Require review of subsequent commits and authentic logs before merging."
     }
   ],
   "latest_ci": {
+    "run_id": 40084432799,
+    "head_sha": "37fe0a685c9938b994f34b124dd19f050fc64502",
+    "passed": 210,
+    "failed": 1,
+    "coverage_percent": 84.89,
+    "function_bodies_exercised": 96,
+    "function_definitions_in_inventory": 100,
+    "function_callsite_ambiguous": 3,
+    "legacy_fixture_failure": "test_historical_logs_remain_readable",
+    "artifact_id": 12556582066,
+    "verified_at": "2026-10-24T10:04:41Z"
+  },
+  "previous_ci": {
     "run_id": 39999816405,
     "head_sha": "486af4990d56b39a0b84f6fc86448d48cd2fdca3",
     "passed": 204,
@@ -62,6 +75,23 @@
     "coverage_percent": 84.84,
     "function_bodies_exercised": 96,
     "function_definitions_in_inventory": 97,
+    "legacy_fixture_failure": "test_historical_logs_remain_readable"
+  },
+  "v2_latest_ci": {
+    "validated_head_sha": "00b679bdb51b21e24fe6333c74ce1c472a6b4b1b",
+    "full_suite_run_id": 40084912963,
+    "passed": 288,
+    "failed": 1,
+    "coverage_percent": 86.21,
+    "function_bodies_exercised": 120,
+    "function_definitions_in_inventory": 124,
+    "function_callsite_ambiguous": 3,
+    "preview_run_id": 40084912987,
+    "preview_tests_passed": 81,
+    "quality_artifact_id": 12556941509,
+    "preview_artifact_id": 12556222886,
+    "preview_korean_font": "Noto Sans CJK KR",
+    "production_deployed": false,
     "legacy_fixture_failure": "test_historical_logs_remain_readable"
   }
 }

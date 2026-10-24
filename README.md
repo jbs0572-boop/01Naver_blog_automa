@@ -75,3 +75,10 @@ NAVER API HUB 사용 자격과 과금 조건을 별도 확인한 뒤, 본인이 
 ## 오프라인 원고 미리보기
 
 초안 생성 후 `python -m tools.review_site_v2 --folder preview/RUN-<입력해시>`를 실행하면 `preview.html`이 만들어집니다. 파일을 브라우저에서 열어 원고, 근거의 출처·기준일, 검수 체크리스트를 함께 확인할 수 있습니다. 외부 스크립트나 이미지 요청을 허용하지 않고 승인·게시 버튼도 없습니다. 실제 브라우저 시각 검증은 가능한 환경에서 별도 수행해야 합니다.
+
+## 검증 결과와 운영 제한 (2026-10-24)
+
+- [PR #2](https://github.com/jbs0572-boop/01Naver_blog_automa/pull/2): 실행 경계 테스트 보강과 과장 없는 함수 커버리지 측정. [run 40084432799](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/40084432799): 210개 통과, 1개 실패(과거 원본 로그 누락), 줄·분기 84.89%, 검증된 함수 본문 96/100.
+- [PR #3](https://github.com/jbs0572-boop/01Naver_blog_automa/pull/3) (PR #2 기준): 근거 기반 v2, 읽기 전용 검색 계획, 로컬 HTML 미리보기. [전체 CI run 40084912963](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/40084912963): 288개 통과, 동일 1개 실패, 줄·분기 86.21%, 함수 본문 120/124. [오프라인 미리보기 run 40084912987](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/40084912987): 81개 통과, Noto CJK 설치 후 모바일·데스크톱 화면 검사 완료.
+- **두 PR 모두 병합·운영 배포 보류**: `runs/` 아래 2026-08-26의 실제 기록 2개가 없으며 해당 필수 테스트는 유지합니다. 실 네이버 게시, Notion 기록, 계정 변경, 유료 자원 생성은 수행하지 않았습니다.
+- 이 수치는 위 **테스트된 커밋**에 대한 증거입니다. 이후 문서-only merge/CI의 통과 여부와 구별해 확인하세요.

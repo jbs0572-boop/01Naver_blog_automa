@@ -8,14 +8,16 @@
 - CLI: `python -m coverage run --branch --source=tools -m pytest -q` then `coverage report -m`, `coverage json`, `python scripts/coverage_audit.py`.
 - All newly committed test files matched locally inspected and tested Git blob SHAs. Some local target-focused tests used exact or deliberately reduced module mirrors for isolated tests; only GitHub Actions runs used the full actual repository.
 
-## Measured full-repo progress
+## Measured full-repo progress (history retained)
 
 | Evidence | Passed | Failed | Statement/branch coverage | Functions with executed body |
 | --- | ---: | ---: | ---: | ---: |
 | [CI baseline run 39998129150](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/39998129150) | 147 | 4 | 70.43% | 79/97 |
-| [Latest fully completed run 39999816405](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/39999816405) | 204 | 1 | **84.84%** | **96/97** |
+| [CI run 39999816405](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/39999816405) | 204 | 1 | 84.84% | 96/97 (lambdas omitted) |
+| [CI run 40001988568](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/40001988568) | 207 | 1 | 84.84% | 96/97 (lambdas omitted) |
+| [PR #2 latest audited run 40084432799](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/40084432799) | **210** | **1** | **84.89%** | **96/100** (3 lambda bodies ambiguous) |
 
-- The sole unexercised declaration is `tools/schema_validation.py:_ValidatorProtocol.iter_errors`: a `Protocol` signature with an ellipsis body, **not a concrete implementation to execute**. Do not rewrite its presence as behavioral-test proof.
+- The latest inventory is deliberately conservative. Three real lambda bodies at `tools/gate.py:66`, `tools/manifest.py:112` and `tools/runner_execution.py:83` cannot be proven to have run by line-level traces, and one Protocol declaration (`_ValidatorProtocol.iter_errors`) has no executable implementation. The earlier **96/97** inventory omitted lambdas; the corrected number is **96/100**. Do not count import-time one-line declarations as function calls.
 - Full branch/line coverage remains below 100%; the function-body measurement does not imply all branches have meaningful assertions.
 - Focused local unit tests of the runner lock, manifest parsing, tool policy, runner types: **87 passed**; each target module measured **100%** statement/branch coverage.
 - Additional focused local tests: `runner_cli` **19 passed**, **100%** target coverage; `workflow_verifier` **21 passed**, **97%** target coverage; public serializers/error classifiers **14 passed**. These were also included in GitHub's complete run.
@@ -33,11 +35,25 @@ Neither file appears in repository history. The missing files were **not synthes
 
 - Added CI measures/test inventory/artifacts: **implemented and executed**.
 - Existing tests except missing historic fixtures: **passing**.
-- Whole suite: **FAIL — 204 passed, 1 blocked on missing authentic input**.
+- Whole suite: **FAIL — 210 passed, 1 blocked on missing authentic historical input** (PR #2, head `37fe0a685c99`, run `40084432799`).
 - Quality score: **unassigned**, because the mandatory full-suite condition is unmet. No claimed 91/100 pass.
-- Official Codex automatic review: **external integration availability not yet verified**.
+- Official Codex code review: **completed for PR #2 head `37fe0a685c99`, no current findings**; three historical threads were resolved only after code fixes, regression tests, and CI confirmation. This is not a security-review approval.
 - External Notion writes, Naver edits, posting, scheduling and production deployment: **not attempted**.
 
 ## Next action
 
 Restore authentic historical run logs into CI-provisioned test fixtures via a reviewed, non-secret mechanism, rerun full suite, review coverage JSON and Codex findings, then consider approval/merge. Do not fabricate history or disable assertions for a green badge.
+
+## Audit correction and CI artifact (2026-10-24)
+
+PR #2 commit [37fe0a685c99](https://github.com/jbs0572-boop/01Naver_blog_automa/commit/37fe0a685c9938b994f34b124dd19f050fc64502) makes cleanup failures observable instead of leaving a live-PID lock silently orphaned, adds tests for same-line function declarations, and enumerates all lambdas conservatively. The latest raw CI evidence is [python-quality-evidence artifact 12556582066](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/40084432799/artifacts/12556582066). The only test failure remains the original missing logs; no history was fabricated or tests skipped.
+
+## Stacked PR #3 v2 implementation evidence (2026-10-24 KST)
+
+- PR #3 target: `rebuild/v2-evidence-pipeline-20261024` **based on PR #2**, not `main`. Reviewed implementation at `00b679bdb51b21e24fe6333c74ce1c472a6b4b1b`.
+- [Full-repo CI run 40084912963](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/40084912963): **288 passed / 1 failed**, aggregate line/branch coverage **86.21%**, **120/124** verifiably exercised function bodies; three lambdas are ambiguous in line-only measurement and one Protocol declaration is not executable. Artifact [12556941509](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/40084912963/artifacts/12556941509).
+- [Isolated v2 preview CI run 40084912987](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/40084912987): **81 passed**, offline HTML, mobile 390×844 and desktop 1440×900 screenshots, [build artifact 12556222886](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/40084912987/artifacts/12556222886). Artifact was inspected offline: evidence/draft SHA-256 and run ID match manifest, approval/export files are absent, and fontconfig reports `Noto Sans CJK KR`.
+- A previous preview screenshot [12524962605](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/40008212448/artifacts/12524962605) visibly rendered Korean as square glyphs. Installed Noto CJK and inspected updated desktop/mobile screenshots: Korean text is now legible. This verifies the shown viewport screenshots, **not** every responsive breakpoint or full end-to-end publishing workflow.
+- Regression added: reject falsified `manifest.state`, `external_writes`, `as_of`, and source/claim counts even when draft/input SHA-256 remain valid. Added 7 tests; no evidence or log edits.
+- Latest Codex **code** review at `00b679b` completed with no current findings; six historical comments were marked resolved after code/test fixes. Security-review approval is **not** inferred.
+- **Hard stop remains:** original `runs/beta-2026-08-26-energy-day.jsonl` (8 events) and `runs/beta-gate0-2026-08-26-9topics.jsonl` (66 events) are absent; whole CI stays red and PR #2/#3 are not eligible for merging. No production deployment, paid provider calls, real Notion/Naver writes or account changes were performed.

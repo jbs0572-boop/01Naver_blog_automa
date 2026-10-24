@@ -27,6 +27,7 @@ source: tools/blog_v2.py
 
 ## 검증·완료 조건
 - 해당 파일을 모두 재조회해 내용과 digest가 같아야 한다.
+- manifest의 `state=review_required`, `external_writes=false`, 기준일, 출처/주장 개수가 증거팩의 실제 내용과 일치해야 한다.
 - 반복 호출이 동일한 실행 폴더를 반환해야 한다.
 - CLI는 review_required 상태이며 승인 파일이 없어야 한다.
 

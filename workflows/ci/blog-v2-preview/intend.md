@@ -36,7 +36,7 @@ GitHub PR에서 새 v2 초안 엔진의 테스트와 오프라인 예제를 실�
 - 기존 전체 CI가 실패한 상황을 녹색 성공으로 덮어쓰지 않는다.
 
 ## 현재 구현 상태
-새 preview Actions 워크플로를 PR 브랜치에 작성했다. 실제 GitHub job 성공은 실행 기록으로 별도 판정한다.
+2026-10-24 PR #3의 [Actions run 40084912987](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/40084912987)에서 미리보기 테스트 81개가 통과했다. 아티팩트 12556222886의 모바일/데스크톱 PNG를 육안 검사했고 한국어 글꼴 깨짐은 수정됐다. 전체 Python CI는 기존 역사 로그 누락으로 실패한다.
 
 ## 관련 원본
 - [.github/workflows/blog-v2-preview.yml](../../../.github/workflows/blog-v2-preview.yml)
