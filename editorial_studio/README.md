@@ -135,3 +135,12 @@ python -m editorial_studio.discovery --topics candidates.json \
 [평가표 진화 방식](QUALITY_RUBRIC.md#v3-이후-점수표의-자동-제안-프로세스)을 구현했습니다. 사람이 채점한 15개 이상의 독립 데이터와 손대지 않은 홀드아웃이 있어야 v3 변경 **후보**를 제안합니다. 실사용자 승인 없이 과거 점수나 운영 채점 기준을 자동으로 덮어쓰지 않으며, 트래픽 상승도 허위로 기록하지 않습니다.
 
 대표 이미지 생성 모델은 2026-10-25 공식 문서에 있는 `gpt-image-2.5-flare`의 `1536x1024` / `xhigh` 품질로 설정했습니다. 실제 이미지당 과금이 발생할 수 있으므로 기본 API 호출은 꺼져 있습니다. 
+
+## 실제 자연 검색 유입 수치 관리
+
+`python -m editorial_studio.traffic --analytics analytics.json --out traffic-report.json`으로 사람이 별도로 내보낸 **자신의 발행 후 분석 데이터**만 집계합니다. 데이터에는 `post_id`, `category`, `start_date`, `end_date`, `analytics_source`, `organic_impressions`, `organic_clicks`, `organic_sessions`을 기록합니다.
+
+- 글 작성·품질 점수와 자연 검색 유입 수치는 별도 필드입니다. **글을 게시하지 않은 경우 유입은 0이 아니라 미측정(null)**입니다.
+- CTR=자연 검색 클릭수/자연 검색 노출수로 계산합니다. 자연 검색 세션 수는 별도 측정치로 취급합니다.
+- 동일 기간에 5개 카테고리 모두 발행 글 3편 이상이 없으면 **어느 스타일이 유입을 더 늘렸다고 추천하지 않습니다**. 이는 최소 집계 조건이며 인과증명을 보장하지 않습니다.
+- 자동으로 네이버/Notion에 로그인하거나 분석 데이터를 가져오지 않습니다.
