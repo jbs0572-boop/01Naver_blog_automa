@@ -36,7 +36,7 @@ GitHub PR에서 새 v2 초안 엔진의 테스트와 오프라인 예제를 실�
 - 기존 전체 CI가 실패한 상황을 녹색 성공으로 덮어쓰지 않는다.
 
 ## 현재 구현 상태
-2026-10-24 PR #3의 [Actions run 40084912987](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/40084912987)에서 미리보기 테스트 81개가 통과했다. 아티팩트 12556222886의 모바일/데스크톱 PNG를 육안 검사했고 한국어 글꼴 깨짐은 수정됐다. 전체 Python CI는 기존 역사 로그 누락으로 실패한다.
+2026-10-24 PR #3 코드 `441c0c2`의 [Actions run 40086464190](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/40086464190)에서 미리보기 테스트 85개가 통과했다. [아티팩트 12556974025](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/40086464190/artifacts/12556974025)의 실제 모바일/데스크톱 PNG를 육안 검사해 한글이 정상 표시됨을 확인했다. evidence/draft SHA-256도 manifest와 일치하고 승인 파일은 생성되지 않았다. 전체 Python CI는 기존 역사 로그 누락으로 실패한다. 문서 전용 후속 커밋의 CI 통과 여부와 분리해 기록한다.
 
 ## 관련 원본
 - [.github/workflows/blog-v2-preview.yml](../../../.github/workflows/blog-v2-preview.yml)

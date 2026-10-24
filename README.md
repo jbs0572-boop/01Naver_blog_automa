@@ -71,7 +71,7 @@ NCP 공식 문서의 GET /search/v1/blog 명세를 따라, 네이버 블로그 �
 
     python -m tools.naver_search_v2 --query '블로그 자동화' --as-of 2026-10-22 --limit 3
 
-NAVER API HUB 사용 자격과 과금 조건을 별도 확인한 뒤, 본인이 명시적으로 1회 호출을 승인한 경우에만 환경변수 NAVER_API_HUB_CLIENT_ID / NAVER_API_HUB_CLIENT_SECRET를 주입하고 같은 명령에 --execute --out local-search.json을 붙입니다. 기본값은 **외부 요청 0회**이며 자동 재시도·리다이렉트·발행 기능이 없습니다. 검색 요약은 사실 원문이 아니라 검증 전 자료이므로 sourcepack의 official claim으로 자동 변환하지 않습니다. \`--out\` 파일이 이미 있거나 상위 폴더가 없으면 유료 호출 가능성이 있는 API 요청 전에 중단합니다. CI에서는 네트워크 요청을 수행하지 않습니다.
+NAVER API HUB 사용 자격과 과금 조건을 별도 확인한 뒤, 본인이 명시적으로 1회 호출을 승인한 경우에만 환경변수 NAVER_API_HUB_CLIENT_ID / NAVER_API_HUB_CLIENT_SECRET를 주입하고 같은 명령에 --execute --out local-search.json을 붙입니다. 기본값은 **외부 요청 0회**이며 자동 재시도·리다이렉트·발행 기능이 없습니다. 검색 요약은 사실 원문이 아니라 검증 전 자료이므로 sourcepack의 official claim으로 자동 변환하지 않습니다. `--out` 파일이 이미 있거나 상위 폴더가 없으면 유료 호출 가능성이 있는 API 요청 전에 중단합니다. CI에서는 네트워크 요청을 수행하지 않습니다.
 
 ## 오프라인 원고 미리보기
 
@@ -79,7 +79,7 @@ NAVER API HUB 사용 자격과 과금 조건을 별도 확인한 뒤, 본인이 
 
 ## 검증 결과와 운영 제한 (2026-10-24)
 
-- [PR #2](https://github.com/jbs0572-boop/01Naver_blog_automa/pull/2): 실행 경계 테스트 보강과 과장 없는 함수 커버리지 측정. [run 40084432799](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/40084432799): 210개 통과, 1개 실패(과거 원본 로그 누락), 줄·분기 84.89%, 검증된 함수 본문 96/100.
-- [PR #3](https://github.com/jbs0572-boop/01Naver_blog_automa/pull/3) (PR #2 기준): 근거 기반 v2, 읽기 전용 검색 계획, 로컬 HTML 미리보기. [전체 CI run 40084912963](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/40084912963): 288개 통과, 동일 1개 실패, 줄·분기 86.21%, 함수 본문 120/124. [오프라인 미리보기 run 40084912987](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/40084912987): 81개 통과, Noto CJK 설치 후 모바일·데스크톱 화면 검사 완료.
+- [PR #2](https://github.com/jbs0572-boop/01Naver_blog_automa/pull/2): 실행 경계 테스트와 함수 커버리지 측정. 코드 `9b227c0`의 [CI run 40085306133](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/40085306133): 210개 통과, 1개 실패(과거 원본 로그 누락), 줄·분기 84.89%, 검증된 함수 본문 96/100. [품질 아티팩트](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/40085306133/artifacts/12556892449).
+- [PR #3](https://github.com/jbs0572-boop/01Naver_blog_automa/pull/3) (PR #2 기준): 근거 기반 v2, 승인형 단건 읽기 전용 검색, 로컬 HTML 미리보기. 코드 `441c0c2`의 [전체 CI run 40086464082](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/40086464082): 292개 통과, 동일 1개 실패, 줄·분기 86.32%, 함수 본문 120/124. [품질 아티팩트](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/40086464082/artifacts/12557565834). [오프라인 미리보기 run 40086464190](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/40086464190): 85개 통과, [미리보기 아티팩트](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/40086464190/artifacts/12556974025)의 모바일·데스크톱 화면과 한글 폰트 및 해시 검증 완료.
 - **두 PR 모두 병합·운영 배포 보류**: `runs/` 아래 2026-08-26의 실제 기록 2개가 없으며 해당 필수 테스트는 유지합니다. 실 네이버 게시, Notion 기록, 계정 변경, 유료 자원 생성은 수행하지 않았습니다.
-- 이 수치는 위 **테스트된 커밋**에 대한 증거입니다. 이후 문서-only merge/CI의 통과 여부와 구별해 확인하세요.
+- 위 수치는 2026-10-24에 실제 테스트한 **코드 커밋**에 대한 증거입니다. 이후 문서-only 커밋의 CI는 별도로 확인해야 하며 2026-10-22 공개 자료 기준 조사와 2026-10-24 구현을 혼동하지 않습니다.

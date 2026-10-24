@@ -55,8 +55,8 @@
     }
   ],
   "latest_ci": {
-    "run_id": 40084432799,
-    "head_sha": "37fe0a685c9938b994f34b124dd19f050fc64502",
+    "run_id": 40085306133,
+    "head_sha": "9b227c0b99cc63d1b7972740308cfcb1d8c5c6a1",
     "passed": 210,
     "failed": 1,
     "coverage_percent": 84.89,
@@ -64,8 +64,8 @@
     "function_definitions_in_inventory": 100,
     "function_callsite_ambiguous": 3,
     "legacy_fixture_failure": "test_historical_logs_remain_readable",
-    "artifact_id": 12556582066,
-    "verified_at": "2026-10-24T10:04:41Z"
+    "artifact_id": 12556892449,
+    "verified_at": "2026-10-24T10:18:00Z"
   },
   "previous_ci": {
     "run_id": 39999816405,
@@ -78,20 +78,23 @@
     "legacy_fixture_failure": "test_historical_logs_remain_readable"
   },
   "v2_latest_ci": {
-    "validated_head_sha": "00b679bdb51b21e24fe6333c74ce1c472a6b4b1b",
-    "full_suite_run_id": 40084912963,
-    "passed": 288,
+    "validated_head_sha": "441c0c23955d860e7fc896b5bee3f627ef535962",
+    "full_suite_run_id": 40086464082,
+    "passed": 292,
     "failed": 1,
-    "coverage_percent": 86.21,
+    "coverage_percent": 86.32,
     "function_bodies_exercised": 120,
     "function_definitions_in_inventory": 124,
     "function_callsite_ambiguous": 3,
-    "preview_run_id": 40084912987,
-    "preview_tests_passed": 81,
-    "quality_artifact_id": 12556941509,
-    "preview_artifact_id": 12556222886,
+    "preview_run_id": 40086464190,
+    "preview_tests_passed": 85,
+    "quality_artifact_id": 12557565834,
+    "preview_artifact_id": 12556974025,
     "preview_korean_font": "Noto Sans CJK KR",
     "production_deployed": false,
-    "legacy_fixture_failure": "test_historical_logs_remain_readable"
+    "legacy_fixture_failure": "test_historical_logs_remain_readable",
+    "review_code_status": "completed_no_findings_on_441c0c2",
+    "security_review_approved": false,
+    "verified_at": "2026-10-24T10:36:08Z"
   }
 }
