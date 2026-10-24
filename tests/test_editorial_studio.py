@@ -59,6 +59,32 @@ class IndependentStyleTests(unittest.TestCase):
             with self.assertRaisesRegex(studio.StyleError, "already exists"):
                 studio.build_bundle("아파트 환기 원리", Path(temp))
 
+    def test_topic_specific_headings_are_not_literal_template(self):
+        with tempfile.TemporaryDirectory() as temp:
+            bundle = studio.build_bundle("한국은행 기준금리와 물가", Path(temp))
+            headings = [
+                "기준금리와 물가가 함께 움직일까?",
+                "먼저 금리와 물가의 뜻",
+                "변화를 만드는 세 가지 조건",
+                "가계에 미치는 영향과 반례",
+                "핵심 요약과 공식 출처",
+            ]
+            draft = Path(temp) / "economy.md"
+            draft.write_text("# 경제 설명\\n\\n" + "\\n\\n".join(
+                f"## {heading}\\n\\n확인한 근거와 조건을 설명합니다." for heading in headings
+            ), encoding="utf-8")
+            self.assertEqual(studio.check_bundle(bundle, draft)["draft_structure"], "passed")
+            draft.write_text(draft.read_text().replace("## 핵심 요약과 공식 출처",
+                                  "## 가계에 미치는 영향과 반례"), encoding="utf-8")
+            with self.assertRaisesRegex(studio.StyleError, "outline mismatch"):
+                studio.check_bundle(bundle, draft)
+
+    def test_repeated_topics_reuse_same_profile(self):
+        a, _ = studio.choose("아파트 환기 방법")
+        b, _ = studio.choose("겨울 실내 습도 관리")
+        self.assertEqual(a["id"], b["id"])
+        self.assertEqual(a["sha256"], b["sha256"])
+
     def test_tamper_fails_closed(self):
         with tempfile.TemporaryDirectory() as temp:
             bundle = studio.build_bundle("등기부 확인", Path(temp))

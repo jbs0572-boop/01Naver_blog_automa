@@ -108,7 +108,9 @@ def build_bundle(topic: str, output_root: Path, explicit: str | None = None) -> 
     except FileExistsError as exc:
         raise StyleError(f"bundle already exists; no overwrite: {bundle}") from exc
     style_hash = profile["sha256"]
-    ordered_headings = "\n".join(f"## {heading}" for heading in profile["sections"])
+    ordered_headings = "\n".join(
+        f"{index}. {role}" for index, role in enumerate(profile["sections"], start=1)
+    )
     writer = (
         f"# 글쓰기 작업 지시서: {topic.strip()}\n\n"
         f"선택 카테고리: {profile['title']} ({profile['id']})\n"
@@ -116,7 +118,7 @@ def build_bundle(topic: str, output_root: Path, explicit: str | None = None) -> 
         "다른 카테고리 스타일은 적용하지 않습니다. 아래 스타일 문서만 사용합니다.\n"
         "원문 자료를 실제로 확인한 뒤 사실마다 원문 URL·날짜를 연결하세요.\n"
         "자료의 사실과 해석을 분리하고 실제로 겪지 않은 개인 경험은 쓰지 마세요.\n"
-        "정확히 아래 5개 2단계 제목을 지정된 순서로 사용하세요.\n\n"
+        "아래 5개 편집 역할을 순서대로 수행하세요. 실제 소제목은 주제에 맞게 바꾸되 역할을 생략하지 마세요.\n\n"
         f"{ordered_headings}\n\n"
         "---\n\n"
         f"{profile['raw_md']}"
@@ -139,7 +141,7 @@ def build_bundle(topic: str, output_root: Path, explicit: str | None = None) -> 
         "<!-- 이미지가 없으면 이 파일은 글·그림 조립 완료본이 아닙니다. -->\n\n"
         "<!-- THUMBNAIL_SLOT: 독립 이미지 자산을 검수 후 삽입 -->\n\n"
         + "\n\n".join(
-            f"## {heading}\n\n[검증된 내용 작성]\n\n"
+            f"## [주제에 맞는 제목: {heading}]\n\n[검증된 내용 작성]\n\n"
             + ("<!-- IMAGE_SLOT: 정보가 추가되는 검수된 이미지만 배치 -->" if idx in (1, 3) else "")
             for idx, heading in enumerate(profile["sections"])
         ) + "\n"
@@ -204,9 +206,10 @@ def check_bundle(bundle: Path, draft: Path | None = None) -> dict:
         except OSError as exc:
             raise StyleError("draft file not found") from exc
         found = re.findall(r"^## (.+?)\s*$", source, re.M)
-        if found != profile["sections"]:
-            raise StyleError("category outline mismatch; expected headings: "
-                             + " | ".join(profile["sections"]))
+        # The profile fixes five narrative roles, NOT identical literal H2 titles.
+        # Their semantic fulfillment and the prose tone still require editorial review.
+        if len(found) != 5 or len(set(found)) != 5:
+            raise StyleError("category outline mismatch; require five unique H2 sections")
         prohibited = profile["avoid"] + [
             "제가 직접 사용해", "제가 다녀온", "제가 실제로 계약한",
             "[검증된 내용 작성]", "<!-- IMAGE_SLOT",
