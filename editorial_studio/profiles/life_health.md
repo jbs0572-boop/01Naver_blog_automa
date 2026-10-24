@@ -38,7 +38,8 @@
     "제가 겪어보니",
     "100% 치료",
     "무조건 낫"
-  ]
+  ],
+  "visual_dna": "Art direction: warm ivory base, natural morning daylight, refined axonometric/isometric cutaway or schematic of ordinary Korean home, cyan/teal accents only for actual airflow or relevant pathway, generous white margins, realistically proportioned rooms and objects, crisp fine architecture lines, readable at 390px mobile width; never childish clipart or impossible physics."
 }
 ```
 
@@ -60,6 +61,7 @@
 - 검증되지 않은 건강 효능이나 치료 효과를 단정하지 않는다.
 
 ## 이미지 스타일
+- **시각적 DNA 고정:** Art direction: warm ivory base, natural morning daylight, refined axonometric/isometric cutaway or schematic of ordinary Korean home, cyan/teal accents only for actual airflow or relevant pathway, generous white margins, realistically proportioned rooms and objects, crisp fine architecture lines, readable at 390px mobile width; never childish clipart or impossible physics.
 - **고정 표현:** 밝고 단정한 생활 도식·과정 일러스트. 정확한 방향·단위·표기를 확인한다.
 - **시각 구성:** 대표 이미지는 문제와 원리를 나타내는 정확한 생활 도식 1개. 본문 도식·과정표는 필요한 정보가 생기는 경우에만 0~2개. 동일한 그림 반복 금지. 관찰되지 않은 인체·의학 효과의 시각적 단정 금지.
 - 사진이나 이미지 생성물은 사실 증거를 대신하지 못합니다. 출처·저작권·생성 여부를 별도로 표시합니다.
