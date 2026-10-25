@@ -139,8 +139,18 @@ li{{display:flex;gap:18px;font-size:var(--body);line-height:1.48;word-break:keep
 .num{{font-size:32px;font-weight:900;color:var(--accent)}}
 .stage p{{margin:0;font-size:22px;line-height:1.4;font-weight:650;word-break:keep-all;overflow-wrap:anywhere}}
 footer{{position:absolute;bottom:var(--pad);left:var(--pad);right:var(--pad);font-size:17px;opacity:.7;border-top:1px solid var(--accent);padding-top:14px}}
+.life_health .stage{{border-radius:22px;background:color-mix(in srgb,var(--bg) 65%,var(--panel))}}
+.news_policy .stage{{border-radius:4px;border-left:7px solid var(--accent);background:var(--bg)}}
+.news_policy h1{{letter-spacing:-.035em}}
+.culture_people h1{{font-family:'Noto Serif CJK KR',serif;font-weight:700;letter-spacing:-.045em}}
+.culture_people .media{{border-radius:0}}
+.culture_people .stage{{border:0;border-bottom:1px solid var(--accent);border-radius:0;background:transparent}}
+.real_estate .stage{{border-left:8px solid var(--accent);border-radius:5px}}
+.real_estate .media{{border-radius:8px}}
+.economy .stage{{border-radius:0;border:0;border-bottom:2px solid var(--accent);background:transparent}}
+.economy h1{{font-weight:850}}
 @media(max-width:600px){{#poster{{width:100%;height:auto;min-height:0;overflow:visible;padding:22px}}header{{padding-bottom:11px}}header span:first-child,header span:last-child{{font-size:10px}}main{{display:flex;flex-direction:column;gap:17px;padding-top:23px}}.copy{{gap:13px}}h1{{font-size:30px}}p.deck{{font-size:16px}}ul{{gap:11px}}li{{font-size:15px;gap:10px}}.media{{height:250px}}.diagram{{padding:43px 13px 14px;gap:7px}}.diagram-top{{top:11px;left:13px;font-size:9px}}.stage{{min-height:60px;padding:7px;gap:8px}}.stage p{{font-size:12px}}.num{{font-size:19px}}footer{{position:static;margin-top:22px;font-size:12px}}}}
-</style></head><body><article id="poster">
+</style></head><body><article id="poster" class="{spec["category"]}">
 <header><span data-check>{esc(spec["eyebrow"])}</span><span data-check>EDITORIAL · SOURCE FIRST</span></header>
 <main><div class="copy"><h1 data-check>{esc(spec["headline"])}</h1><p class="deck" data-check>{esc(spec["deck"])}</p><ul>{bullets}</ul></div><div class="media">{media}</div></main>
 <footer data-check>{esc(spec["source_caption"])}</footer></article></body></html>'''
@@ -157,6 +167,16 @@ DOM_INSPECTION = r'''() => {
     if(r.left<outer.left-2||r.top<outer.top-2||r.right>outer.right+2||r.bottom>outer.bottom+2)issues.push("text-"+i+":outside-slide");
     if((style.overflowX==="hidden"&&el.scrollWidth>el.clientWidth+3)||
        (style.overflowY==="hidden"&&el.scrollHeight>el.clientHeight+3))issues.push("text-"+i+":clipped");
+    // A glyph inside a hidden parent can be clipped without leaving the slide.
+    let ancestor=el.parentElement;
+    while(ancestor&&ancestor!==canvas.parentElement){
+      const computed=getComputedStyle(ancestor),ar=ancestor.getBoundingClientRect();
+      if((computed.overflowX==="hidden"||computed.overflowX==="clip")&&r.right>ar.right+2)
+        issues.push("text-"+i+":hidden-parent-x");
+      if((computed.overflowY==="hidden"||computed.overflowY==="clip")&&r.bottom>ar.bottom+2)
+        issues.push("text-"+i+":hidden-parent-y");
+      ancestor=ancestor.parentElement;
+    }
     const walker=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);let text;
     while((text=walker.nextNode())){
       if(!text.textContent.trim())continue;
