@@ -54,6 +54,15 @@ def _extract_source(archive: Path, target: Path) -> None:
     with zipfile.ZipFile(archive) as zin:
         members = zin.infolist()
         if len(members) > 350: raise ValueError('archive too large')
+        # Do not let many individually valid members expand to gigabytes.
+        # Check central-directory sizes before extracting any files.
+        total_expanded = sum(m.file_size for m in members if not m.is_dir())
+        if total_expanded > 512_000_000:
+            raise ValueError('archive total uncompressed size exceeds limit')
+        for m in members:
+            if (not m.is_dir() and m.file_size > 1_000_000
+                    and m.file_size > max(m.compress_size, 1) * 300):
+                raise ValueError('archive suspicious compression ratio')
         for member in members:
             relative = Path(member.filename)
             if relative.is_absolute() or '..' in relative.parts:
@@ -146,6 +155,9 @@ QA_JS = r'''() => {
  const footer=document.querySelector('.source').getBoundingClientRect();
  const title=document.querySelector('h1').getBoundingClientRect();
  if(title.bottom>footer.top-20)issues.push('headline-overlap');
+ if(title.left<canvas.left-2||title.right>canvas.right+2)issues.push('headline-out-of-bounds');
+ if(footer.left<canvas.left-2||footer.right>canvas.right+2||footer.bottom>canvas.bottom+2)
+   issues.push('footer-out-of-bounds');
  for(const [i,el] of [...document.querySelectorAll('[data-card-text]')].entries()){
    const card=el.closest('.card').getBoundingClientRect(),r=el.getBoundingClientRect();
    if(r.top<card.top+4 || r.bottom>card.bottom-5 || r.right>card.right-5)
@@ -159,7 +171,9 @@ QA_JS = r'''() => {
  }
  const cards=[...document.querySelectorAll('.card')].map(x=>x.getBoundingClientRect());
  if(cards.some(r=>r.bottom>footer.top-8))issues.push('card-overlaps-footer');
- if(document.documentElement.scrollWidth>1282)issues.push('horizontal-overflow');
+ if(cards.some(r=>r.left<canvas.left-2||r.right>canvas.right+2))
+   issues.push('card-out-of-canvas');
+ if(document.documentElement.scrollWidth>innerWidth+2)issues.push('horizontal-overflow');
  return {issues:[...new Set(issues)], cards:cards.length};
 }'''
 
@@ -215,6 +229,18 @@ def create_article(category:str,pack:dict,article:dict,src_name:str,
     theme=THEMES[category]
     title=editor['title']
     if not pack['topic'].split()[0] in title:raise ValueError('topic omitted from title')
+    # Evidence links in a reviewed archive are still untrusted URLs.
+    # Every rendered citation must be an actual HTTPS origin, never javascript:.
+    from urllib.parse import urlsplit
+    for source in pack['sources']:
+        candidate = source.get('url', '')
+        if not isinstance(candidate, str):
+            raise ValueError('source URL must be HTTPS')
+        parsed = urlsplit(candidate)
+        if (parsed.scheme != 'https' or not parsed.hostname
+                or parsed.username is not None or parsed.password is not None
+                or parsed.port not in (None, 443)):
+            raise ValueError('source URL must be HTTPS')
     sources={item['id']:item for item in pack['sources']}
     facts={item['id']:item for item in pack['facts']}
     referenced=set()
@@ -295,6 +321,8 @@ def inspect_article(page,category:str)->dict:
       const issues=[];
       if(roles.length<3||new Set(ids).size<3)issues.push('missing-image-roles');
       if(img.some(x=>!x.complete||!x.naturalWidth))issues.push('image-not-loaded');
+      if(img.some(x=>!x.alt.trim()))issues.push('image-alt-missing');
+      if(roles.some(x=>!x.querySelector('figcaption')?.textContent.trim()))issues.push('caption-missing');
       if(document.documentElement.scrollWidth>innerWidth+2)issues.push('horizontal-scroll');
       if(document.querySelectorAll('main section').length!==5)issues.push('section-count');
       if(document.body.dataset.editorial!==category)issues.push('wrong-theme');
