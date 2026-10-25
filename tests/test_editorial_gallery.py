@@ -1,5 +1,6 @@
 """Regression checks for five genuinely distinct category article presentations."""
 import json
+import html as html_std
 from pathlib import Path
 import pytest
 from editorial_studio import engine, studio
@@ -56,5 +57,5 @@ def test_sources_are_not_replaced_with_image_facts():
         original=next(x for x in DATA["cases"] if x["case_id"]==cid)
         article=curated_article(engine.load_case(original),COPY[cid],studio.profiles()[original["category"]])
         html=engine.render_html(engine.load_case(original),article,True)
-        assert all(src["url"] in html for src in original["sources"])
+        assert all(html_std.escape(src["url"], quote=True) in html for src in original["sources"])
         assert "실제 자료 사진이 아님" in html
