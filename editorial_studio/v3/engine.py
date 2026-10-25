@@ -78,6 +78,11 @@ def _source_category(root: Path, category: str) -> tuple[Path, dict, dict, dict]
     spec=matches[0]
     pack=json.loads(spec.read_text(encoding='utf8'))
     article=json.loads((spec.parent/'article-structure.json').read_text(encoding='utf8'))
+    # A frozen article cannot silently switch to a changed or different style.
+    from editorial_studio import studio
+    lock=json.loads((spec.parent/'style-lock.json').read_text(encoding='utf8'))
+    if lock.get('category')!=category or lock.get('profile_sha256')!=studio.profiles()[category]['sha256']:
+        raise ValueError('frozen style profile SHA-256 mismatch')
     meta=list((root/'approved-originals').glob(category+'.*'))
     photos=[p for p in meta if p.suffix.lower() in ('.jpg','.jpeg','.png','.webp')]
     if len(photos)!=1:raise ValueError(f'{category}: actual original missing')
@@ -205,12 +210,17 @@ def paragraphs(article:dict) -> list[str]:
 
 
 def create_article(category:str,pack:dict,article:dict,src_name:str,
-                   facts_png:str,check_png:str,hero_label:str,editor:dict)->str:
+                   facts_png:str,check_png:str,hero_label:str,editor:dict,
+                   provenance:dict|None=None)->str:
     theme=THEMES[category]
     title=editor['title']
     if not pack['topic'].split()[0] in title:raise ValueError('topic omitted from title')
-    src=pack['sources'][0]
-    cited=src['url']
+    sources={item['id']:item for item in pack['sources']}
+    facts={item['id']:item for item in pack['facts']}
+    for section in article['sections']:
+        if any(fid not in facts or facts[fid]['source_id'] not in sources
+               for fid in section['fact_ids']):
+            raise ValueError('article section has unknown source/fact ID')
     paras=paragraphs(article)
     css=f'''
 *{{box-sizing:border-box}}body{{margin:0;background:{theme['bg']};color:{theme['ink']};font-family:'Noto Sans CJK KR','Apple SD Gothic Neo',sans-serif;line-height:1.8}}
@@ -237,16 +247,33 @@ section{{border-top:1px solid {theme['accent']};padding-top:6px;margin-top:35px}
         return (f'<figure data-image-role="{role}"><picture>{source_tag}'
                 f'<img src="images/{esc(src)}" alt="{esc(cap)}"></picture>'
                 f'<figcaption>{esc(cap)}</figcaption></figure>')
-    source_line=f'근거: <a href="{esc(cited)}" target="_blank" rel="noopener noreferrer">{esc(src["title"])}</a>'
+    def section_source_links(section):
+        ids=list(dict.fromkeys(facts[fid]['source_id'] for fid in section['fact_ids']))
+        return ' · '.join(f'<a href="{esc(sources[sid]["url"])}" target="_blank" rel="noopener noreferrer">{esc(sources[sid]["title"])}</a>' for sid in ids)
     output=[f'<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{esc(title)}</title><style>{css}</style></head>',
             f'<body data-editorial="{category}"><main><div class="mast">{esc(editor["masthead"])} · 검수 전 원고</div>',
             f'<h1>{esc(title)}</h1><p class="meta">기준일 {esc(pack["as_of"])} · 원본 사진/그래픽 3개 · 네이버 미게시</p><p class="lead">{esc(editor["intro"])}</p>',
             figure(src_name,hero_label,'context-photo')]
+    if provenance:
+        credit=provenance.get('credit') or '원본 제공자'
+        page_url=provenance.get('page_url') or provenance.get('original_file_url')
+        license_text=provenance.get('license')
+        if page_url:
+            from urllib.parse import urlsplit
+            if urlsplit(page_url).scheme!='https':
+                raise ValueError('photo attribution URL must be HTTPS')
+            line=f'원본 출처: <a href="{esc(page_url)}" target="_blank" rel="noopener noreferrer">{esc(credit)}</a>'
+        else:
+            line=f'원본 출처: {esc(credit)}'
+        if license_text:
+            line+=' · '+esc(license_text)
+        output.append('<p class="meta photo-credit">'+line+'</p>')
     for n,sect in enumerate(article['sections']):
-        output.extend([f'<section><h2>{esc(editor["headings"][n])}</h2><p>{esc(paras[n])}</p><p class="meta">{source_line}</p></section>'])
+        output.extend([f'<section><h2>{esc(editor["headings"][n])}</h2><p>{esc(paras[n])}</p><p class="meta">근거: {section_source_links(sect)}</p></section>'])
         if n==0:output.append(figure(facts_png,'핵심 정보 비교','information-graphic'))
         if n==2:output.append(figure(check_png,'실행 전 점검','action-checklist'))
-    output.extend([f'<blockquote>자료 확인 범위: {esc(src["title"])} · 모든 판단은 기준일과 실제 조건을 다시 확인하세요.</blockquote>',
+    all_source_titles=' · '.join(esc(item['title']) for item in pack['sources'])
+    output.extend([f'<blockquote>자료 확인 범위: {all_source_titles} · 모든 판단은 기준일과 실제 조건을 다시 확인하세요.</blockquote>',
                    '<p class="meta">사용된 원본 사진은 별도 파일로 보존되어 있습니다. 출처 확인 및 발행 검수는 아직 완료되지 않았습니다.</p>',
                    '</main></body></html>'])
     return '\n'.join(output)
@@ -330,9 +357,16 @@ def generate(source_archive:Path, out:Path)->dict:
                 fact_entries=[x['text'] for x in pack['facts'][:3]]
                 check_entries=spec['checklist']
                 page=browser.new_page(viewport={'width':1280,'height':720})
-                facts_png,qa1=create_visual(page,imagefolder,cat,'facts',spec['fact_title'],fact_entries,pack['sources'][0]['title'])
-                check_png,qa2=create_visual(page,imagefolder,cat,'check',spec['check_title'],check_entries,pack['sources'][0]['title'])
-                html_content=create_article(cat,pack,article,dest.name,facts_png.name,check_png.name,spec['photo_caption'],spec)
+                source_map={item['id']:item for item in pack['sources']}
+                facts_ids=list(dict.fromkeys(item['source_id'] for item in pack['facts'][:3]))
+                all_ids=list(dict.fromkeys(item['source_id'] for item in pack['facts']))
+                if any(sid not in source_map for sid in all_ids):
+                    raise ValueError('infographic source references missing')
+                facts_source=' · '.join(source_map[sid]['title'] for sid in facts_ids)
+                check_source='점검 항목 · '+' · '.join(source_map[sid]['title'] for sid in all_ids)
+                facts_png,qa1=create_visual(page,imagefolder,cat,'facts',spec['fact_title'],fact_entries,facts_source)
+                check_png,qa2=create_visual(page,imagefolder,cat,'check',spec['check_title'],check_entries,check_source)
+                html_content=create_article(cat,pack,article,dest.name,facts_png.name,check_png.name,spec['photo_caption'],spec,provenance)
                 (sub/'article.html').write_text(html_content,encoding='utf8')
                 (sub/'draft.md').write_text('# '+spec['title']+'\n\n'+spec['intro']+'\n\n'+'\n\n'.join('## '+spec['headings'][i]+'\n'+s['body'] for i,s in enumerate(article['sections']))+'\n',encoding='utf8')
                 # Browser sandbox blocks file://. Embed identical local image
