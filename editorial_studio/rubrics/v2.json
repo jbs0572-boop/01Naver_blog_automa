@@ -1,0 +1,14 @@
+{
+  "version": "v2",
+  "status": "candidate_upgrade",
+  "review_candidate_score": 85,
+  "weights": {
+    "source_integrity": 25,
+    "category_consistency": 15,
+    "search_intent": 20,
+    "reader_value": 15,
+    "image_quality": 20,
+    "mobile_layout": 5
+  },
+  "rationale": "Raised image quality from 15 to 20 and intent from 15 to 20 after weak image problem, holding evidence safety floor >=25. Freeze benchmark before adoption; no retroactive score comparison without backtesting."
+}

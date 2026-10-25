@@ -1,0 +1,14 @@
+{
+  "version": "v1",
+  "status": "frozen_baseline",
+  "review_candidate_score": 80,
+  "weights": {
+    "source_integrity": 25,
+    "category_consistency": 20,
+    "search_intent": 15,
+    "reader_value": 15,
+    "image_quality": 15,
+    "mobile_layout": 10
+  },
+  "rationale": "2026-10-25 baseline offline proxy. Prevent style scores from claiming actual organic clicks."
+}
