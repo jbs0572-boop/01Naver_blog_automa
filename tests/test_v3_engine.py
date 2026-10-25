@@ -41,6 +41,10 @@ def build_fixture_archive(tmp_path: Path) -> Path:
         (folder / "article-structure.json").write_text(
             json.dumps(article, ensure_ascii=False), encoding="utf-8"
         )
+        (folder / "style-lock.json").write_text(
+            json.dumps({"category": category, "profile_sha256": profile["sha256"]}),
+            encoding="utf-8"
+        )
         picture = Image.new("RGB", (850, 590), (95 + 19 * index, 120, 170))
         draw = ImageDraw.Draw(picture)
         draw.rectangle((65, 85, 570, 450), fill=(185, 95 + 21 * index, 62))
@@ -151,3 +155,66 @@ def test_missing_visual_role_or_unknown_category_never_passes():
         engine.card_html("news_policy", "facts", "제목", ["두 항목", "뿐"], "출처", 0)
     with pytest.raises(KeyError):
         engine.card_html("not_a_style", "facts", "제목", ["1", "2", "3"], "출처", 0)
+
+
+
+def test_refuse_changed_frozen_profile_hash(tmp_path):
+    archive = build_fixture_archive(tmp_path)
+    folder = tmp_path / "read"
+    folder.mkdir()
+    engine._extract_source(archive, folder)
+    path = next((folder / "articles").glob("news_policy-*/style-lock.json"))
+    record = json.loads(path.read_text(encoding="utf-8"))
+    record["profile_sha256"] = "0" * 64
+    path.write_text(json.dumps(record), encoding="utf-8")
+    with pytest.raises(ValueError, match="frozen style profile SHA-256 mismatch"):
+        engine._source_category(folder, "news_policy")
+
+
+def test_section_cites_only_its_own_fact_sources_and_preserves_photo_credit():
+    editor = json.loads((ROOT / "editorial_studio/v3/cases.json").read_text(encoding="utf-8"))["articles"][0]
+    pack = {
+        "topic": "실내 습도", "as_of": "2026-10-22",
+        "sources": [
+            {"id": "S1", "title": "첫 번째 기관", "url": "https://example.com/first"},
+            {"id": "S2", "title": "두 번째 기관", "url": "https://example.org/second"},
+        ],
+        "facts": [
+            {"id": f"F{i}", "role": i, "source_id": ("S2" if i == 0 else "S1"),
+             "text": f"검증된 사실 {i}"} for i in range(5)
+        ],
+    }
+    article = {
+        "sections": [
+            {"role": i, "heading": f"내용 {i}", "body": f"검증된 본문 {i}",
+             "fact_ids": [f"F{i}"]} for i in range(5)
+        ]
+    }
+    rendered = engine.create_article(
+        "life_health", pack, article, "original.jpg", "facts.png", "check.png",
+        "맥락 사진", editor,
+        {"credit": "권리 확인한 사진작가",
+         "page_url": "https://example.net/attribution",
+         "license": "CC BY 2.0"}
+    )
+    sections = rendered.split("<section>")
+    assert len(sections) == 6
+    assert "https://example.org/second" in sections[1]
+    assert "https://example.com/first" not in sections[1]
+    assert "https://example.com/first" in sections[2]
+    assert "https://example.org/second" not in sections[2]
+    assert "권리 확인한 사진작가" in rendered
+    assert "https://example.net/attribution" in rendered
+    assert "CC BY 2.0" in rendered
+
+
+def test_missing_reference_fails_closed_before_publishing():
+    editor = json.loads((ROOT / "editorial_studio/v3/cases.json").read_text(encoding="utf-8"))["articles"][0]
+    pack = {"topic": "실내", "as_of": "2026-10-22",
+            "sources": [{"id": "S1", "title": "공식", "url": "https://example.com"}],
+            "facts": [{"id": "F1", "source_id": "S2", "role": 0, "text": "내용"}]}
+    article = {"sections": [{"role": i, "body": "근거 있는 내용", "fact_ids": ["F1"]}
+                            for i in range(5)]}
+    with pytest.raises(ValueError, match="unknown source/fact ID"):
+        engine.create_article("life_health", pack, article, "original.jpg",
+                              "facts.png", "check.png", "사진", editor)
