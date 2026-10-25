@@ -38,7 +38,7 @@ PR 및 main 변경 시 Python 전체 테스트와 함수 실행 범위를 측정
 - CI만으로 Codex 리뷰 완료·운영 배포를 주장하지 않는다.
 
 ## 현재 구현 상태
-PR #2 기준 CI 워크플로가 브랜치에 있다. 최근 검증은 204 통과·기존 과거 로그 누락 테스트 1 실패였으며 전체 통과 상태가 아니다.
+PR #2에 기존 CI가 있다. 2026-10-26에 클린 체크아웃에서 `runs/`가 `.gitignore`로 제외되어 원본 로그 2개가 불가함을 확인했다. 원본이 있는 환경에서는 기존 8/66건 읽기 검증을 유지하며, 둘 다 없는 CI에서는 **미검증 skip**으로 명확히 표시하고 별도의 필수 합성 JSONL 형식 호환성 테스트를 실행한다. 수정 후 CI 통과 여부는 실제 GitHub Actions 결과로만 보고한다. 상세: `tests/fixtures/LEGACY_LOG_POLICY.md`.
 
 ## 관련 원본
 - [.github/workflows/python-quality.yml](../../../.github/workflows/python-quality.yml)
