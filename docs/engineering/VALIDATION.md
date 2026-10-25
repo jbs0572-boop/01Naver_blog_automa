@@ -47,3 +47,24 @@ Restore authentic historical run logs into CI-provisioned test fixtures via a re
 ## Audit correction and CI artifact (2026-10-24)
 
 PR #2 commit [37fe0a685c99](https://github.com/jbs0572-boop/01Naver_blog_automa/commit/37fe0a685c9938b994f34b124dd19f050fc64502) makes cleanup failures observable instead of leaving a live-PID lock silently orphaned, adds tests for same-line function declarations, and enumerates all lambdas conservatively. The latest raw CI evidence is [python-quality-evidence artifact 12556582066](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/40084432799/artifacts/12556582066). The only test failure remains the original missing logs; no history was fabricated or tests skipped.
+
+## Stacked PR #3 v2 implementation evidence (2026-10-24 KST)
+
+- PR #3 target: `rebuild/v2-evidence-pipeline-20261024` **based on PR #2**, not `main`. Reviewed implementation at `00b679bdb51b21e24fe6333c74ce1c472a6b4b1b`.
+- [Full-repo CI run 40084912963](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/40084912963): **288 passed / 1 failed**, aggregate line/branch coverage **86.21%**, **120/124** verifiably exercised function bodies; three lambdas are ambiguous in line-only measurement and one Protocol declaration is not executable. Artifact [12556941509](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/40084912963/artifacts/12556941509).
+- [Isolated v2 preview CI run 40084912987](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/40084912987): **81 passed**, offline HTML, mobile 390×844 and desktop 1440×900 screenshots, [build artifact 12556222886](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/40084912987/artifacts/12556222886). Artifact was inspected offline: evidence/draft SHA-256 and run ID match manifest, approval/export files are absent, and fontconfig reports `Noto Sans CJK KR`.
+- A previous preview screenshot [12524962605](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/40008212448/artifacts/12524962605) visibly rendered Korean as square glyphs. Installed Noto CJK and inspected updated desktop/mobile screenshots: Korean text is now legible. This verifies the shown viewport screenshots, **not** every responsive breakpoint or full end-to-end publishing workflow.
+- Regression added: reject falsified `manifest.state`, `external_writes`, `as_of`, and source/claim counts even when draft/input SHA-256 remain valid. Added 7 tests; no evidence or log edits.
+- Latest Codex **code** review at `00b679b` completed with no current findings; six historical comments were marked resolved after code/test fixes. Security-review approval is **not** inferred.
+- **Hard stop remains:** original `runs/beta-2026-08-26-energy-day.jsonl` (8 events) and `runs/beta-gate0-2026-08-26-9topics.jsonl` (66 events) are absent; whole CI stays red and PR #2/#3 are not eligible for merging. No production deployment, paid provider calls, real Notion/Naver writes or account changes were performed.
+
+
+## 2026-10-24 코드 수정 및 최신 원본 CI 재검증 (추가 기록)
+
+- 기준일을 2026-10-22로 제한한 조사 원문은 `docs/RESEARCH_2026-10-22.md`에 유지하며, 이 항목은 **2026-10-24에 실행한 실제 테스트**를 기록한다.
+- PR #2 head `9b227c0b99cc63d1b7972740308cfcb1d8c5c6a1`: [Actions 40085306133](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/40085306133), 210 passed / 1 failed, 84.89% 줄·분기 합산, 실행 입증 96/100. [품질 아티팩트 12556892449](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/40085306133/artifacts/12556892449).
+- PR #3 코드 head `441c0c23955d860e7fc896b5bee3f627ef535962`: [전체 Actions 40086464082](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/40086464082), **292 passed / 1 failed**, 합산 86.32%(coverage.json 정밀값 86.324%), 입증 120/124. [품질 아티팩트 12557565834](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/40086464082/artifacts/12557565834)에서 coverage.json, function-coverage.json, pip-freeze.txt가 존재함을 확인했다. lambda 3개는 여전히 측정 불명확, Protocol 메서드 하나는 실행 대상이 아니다.
+- [미리보기 Actions 40086464190](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/40086464190): **85 passed**, [아티팩트 12556974025](https://github.com/jbs0572-boop/01Naver_blog_automa/actions/runs/40086464190/artifacts/12556974025)에 8개 파일. 입력·초안 SHA-256이 manifest와 일치하고 승인/게시 산출물은 없으며 API 계획의 외부 요청은 0건. 실제 PNG 390×844/1440×900을 직접 열어 한글이 정상 표시되는 것을 확인했다(`Noto Sans CJK KR`). 미리보기 성공은 운영 배포가 아니다.
+- 추가 회귀 버그: `--execute --out`에서 출력 파일이 이미 존재하거나 부모 디렉터리가 없어도 API 요청을 **먼저** 하던 순서로 인해 유효한 저장처 없이 호출을 낭비할 수 있었다. 출력 경로 사전검사 후에만 API를 요청하도록 수정하고 4개 오프라인 경계 테스트를 추가했다. 별도 실 API 호출은 없었다.
+- PR #3 head `441c0c2`의 Codex **코드 리뷰**는 새 지적 0개로 완료됐다(2026-10-24 19:36 KST 확인). PR #2 head `9b227c0`의 최신 Codex 코드는 당시 리뷰 진행 중이었다. 두 PR 모두 원본 과거 로그가 없으므로 전체 CI는 실패이며 병합 금지. 보안 리뷰 승인·운영 승인으로 해석하지 않는다.
+- 이 단락을 추가하는 후속 문서 커밋의 CI 결과는 코드 head `441c0c2`의 결과와 구분해 확인해야 한다.

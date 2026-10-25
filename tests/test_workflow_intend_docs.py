@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from tools.runner_types import JobName, STAGE_ORDER
+from tools.blog_v2 import V2_WORKFLOWS
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,6 +26,7 @@ def test_each_declared_workflow_has_exactly_one_intend_doc():
         {Path("workflows/jobs") / job.value / "intend.md" for job in JobName}
         | {Path("workflows/stages") / stage / "intend.md" for stage in STAGE_ORDER}
         | {Path("workflows/ci") / name / "intend.md" for name in ci}
+        | {Path("workflows/v2") / name / "intend.md" for name in V2_WORKFLOWS}
     )
     actual = {path.relative_to(ROOT) for path in (ROOT / "workflows").rglob("intend.md")}
     assert actual == expected, f"missing={sorted(expected - actual)} unexpected={sorted(actual - expected)}"
