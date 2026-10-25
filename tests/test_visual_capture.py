@@ -141,3 +141,28 @@ def test_hidden_parent_clipping_is_detected_in_browser():
         result = page.evaluate(DOM_INSPECTION)
         browser.close()
     assert any("hidden-parent-y" in issue for issue in result["issues"]), result
+
+
+def test_original_photo_is_not_labeled_as_fake_in_article():
+    from editorial_studio import engine, studio
+    case = json.loads((Path(__file__).resolve().parents[1] /
+                       "editorial_studio/benchmarks/cases.json").read_text())["cases"][0]
+    parsed = engine.load_case(case)
+    profile = studio.profiles()[parsed["category"]]
+    article = engine.fixture_article(parsed, profile)
+    markdown = engine.render_markdown(parsed, article, True, original_photo=True)
+    page = engine.render_html(parsed, article, True, original_photo=True)
+    assert "사용자가 승인한 원본 사진" in markdown
+    assert "원본 사진 사용" in page
+    assert "실제 자료 사진이 아님" not in page
+    assert "개념을 설명하는 보조 자료" not in markdown
+    concept = engine.render_html(parsed, article, True, original_photo=False)
+    assert "실제 자료 사진이 아님" in concept
+
+
+def test_category_specific_css_layout_contract():
+    code = html_slide(prepare_spec(spec("life_health")), None, 1)
+    assert ".culture_people .stage" in code
+    assert ".real_estate .stage" in code
+    assert ".economy .stage" in code
+    assert "KEY POINTS" in code
