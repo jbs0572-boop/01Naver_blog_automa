@@ -1,12 +1,6 @@
 name: Original-first visual QA (Chromium)
 
 on:
-  pull_request:
-    paths:
-      - 'editorial_studio/visual_capture.py'
-      - 'editorial_studio/engine.py'
-      - 'tests/test_visual_capture.py'
-      - '.github/workflows/visual-qa.yml'
   workflow_dispatch:
 
 permissions:
