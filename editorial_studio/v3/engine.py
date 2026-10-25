@@ -98,6 +98,18 @@ def _source_category(root: Path, category: str) -> tuple[Path, dict, dict, dict]
     provenance=json.loads((root/'approved-originals'/f'{category}.source.json').read_text(encoding='utf8'))
     if sha(photos[0])!=provenance['downloaded_sha256']:
         raise ValueError('original source hash changed')
+    # A matching filename and SHA-256 alone do not establish that the bytes
+    # are an actual usable photo. Reject forged, tiny or giant images early.
+    try:
+        with Image.open(photos[0]) as img:
+            width, height = img.size
+            if (img.format not in ('JPEG', 'PNG', 'WEBP')
+                    or width < 640 or height < 400
+                    or width * height > 26_000_000):
+                raise ValueError('original image dimensions/format invalid')
+            img.verify()
+    except (OSError, Image.DecompressionBombError) as exc:
+        raise ValueError('original image is not a decodable photo') from exc
     if pack['category']!=category or len(pack['facts'])<5 or len(article['sections'])!=5:
         raise ValueError('category/source structure invalid')
     return photos[0],pack,article,provenance
