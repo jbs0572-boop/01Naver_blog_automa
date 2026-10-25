@@ -416,7 +416,8 @@ def render_html(case: dict, article: dict, image: bool, original_photo: bool = F
     for item in case["sources"]:
         header += ("<li><a rel='noopener noreferrer' href='" + esc(item["url"], quote=True) +
                    "'>" + esc(item["title"]) + "</a></li>")
-    return header + "</ul><p>출처의 실제 본문, 표시 기준, 이미지 권리를 사람이 확인해야 합니다.</p></div></main></body></html>"
+    from .visual_page import themed_html
+    return themed_html(header + "</ul><p>출처의 실제 본문, 표시 기준, 이미지 권리를 사람이 확인해야 합니다.</p></div></main></body></html>", case["category"])
 
 
 def run(case_path: Path, output_root: Path, *, text_backend: str,
