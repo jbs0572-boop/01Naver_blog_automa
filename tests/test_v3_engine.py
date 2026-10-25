@@ -218,3 +218,30 @@ def test_missing_reference_fails_closed_before_publishing():
     with pytest.raises(ValueError, match="unknown source/fact ID"):
         engine.create_article("life_health", pack, article, "original.jpg",
                               "facts.png", "check.png", "사진", editor)
+
+
+
+def test_missing_section_evidence_is_never_accepted():
+    editor = json.loads((ROOT / "editorial_studio/v3/cases.json").read_text(encoding="utf-8"))["articles"][0]
+    pack = {
+        "topic": "실내 습도", "as_of": "2026-10-22",
+        "sources": [{"id": "S1", "title": "공식 원문", "url": "https://example.org"}],
+        "facts": [
+            {"id": f"F{i}", "role": i, "source_id": "S1", "text": f"검증 근거 {i}"}
+            for i in range(5)
+        ],
+    }
+    article = {
+        "sections": [
+            {"role": i, "heading": f"제목 {i}", "body": f"구체적인 설명 {i}",
+             "fact_ids": ([] if i == 2 else [f"F{i}"])}
+            for i in range(5)
+        ]
+    }
+    with pytest.raises(ValueError, match="at least one source-backed fact"):
+        engine.create_article("life_health", pack, article, "original.jpg",
+                              "facts.png", "check.png", "사진", editor)
+    article["sections"][2]["fact_ids"] = ["F1"]
+    with pytest.raises(ValueError, match="fact role"):
+        engine.create_article("life_health", pack, article, "original.jpg",
+                              "facts.png", "check.png", "사진", editor)
