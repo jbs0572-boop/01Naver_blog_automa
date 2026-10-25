@@ -461,7 +461,7 @@ def run(case_path: Path, output_root: Path, *, text_backend: str,
         visual_spec = {
             "category": case["category"],
             "headline": article["title"],
-            "deck": article["intro"][:240],
+            "deck": re.sub(r"\s+", " ", article["intro"]).strip()[:240],
             "eyebrow": profile["title"],
             "bullets": [section["heading"] for section in article["sections"][:3]],
             "source_caption": (
