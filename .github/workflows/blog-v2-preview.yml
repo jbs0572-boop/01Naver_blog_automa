@@ -30,13 +30,18 @@ jobs:
           python -m tools.review_site_v2 --folder "$(find preview -mindepth 1 -maxdepth 1 -type d | head -n 1)"
           test "$(find preview -name preview.html | wc -l)" -eq 1
       - name: Install Korean font coverage for browser screenshots
+        timeout-minutes: 4
         run: |
           set -eu
           BROWSER="$(command -v google-chrome || command -v chromium || true)"
           if [ -n "$BROWSER" ]; then
-            sudo apt-get update -qq
-            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq fonts-noto-cjk
-            fc-cache -f
+            # Avoid an unbounded apt/network stall. Existing Korean fonts are
+            # valid; otherwise install Noto CJK, then VERIFY before capture.
+            if [ -z "$(fc-list :lang=ko family | head -n 1)" ]; then
+              sudo timeout 90s apt-get update -qq
+              sudo env DEBIAN_FRONTEND=noninteractive timeout 120s apt-get install -y -qq --no-install-recommends fonts-noto-cjk
+              fc-cache -f
+            fi
             test -n "$(fc-list :lang=ko family | head -n 1)"
           fi
       - name: Render responsive snapshots if Chrome is available
