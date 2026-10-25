@@ -9,6 +9,8 @@ import argparse
 import base64
 import hashlib
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
@@ -115,8 +117,19 @@ def generate(outdir: Path) -> dict:
                 infile = outdir / f"{cid}-input.json"
                 infile.write_text(json.dumps(raw, ensure_ascii=False, indent=2)+"\n", encoding="utf-8")
                 # Real production engine creates the cover through HTML/CSS/Chromium.
-                bundle = engine.run(infile, artroot, text_backend="fixture",
-                                    image_backend="html", rubric="v2")
+                # The cover renderer uses sync Playwright. Invoke the real engine
+                # in a distinct process so its browser is not nested inside this
+                # gallery screenshot browser's async event loop.
+                process = subprocess.run(
+                    [sys.executable, "-m", "editorial_studio.engine",
+                     "--case", str(infile), "--output-root", str(artroot),
+                     "--text-backend", "fixture", "--image-backend", "html",
+                     "--rubric", "v2"],
+                    capture_output=True, text=True, timeout=180, check=False,
+                )
+                if process.returncode:
+                    raise RuntimeError("article engine failed: " + process.stderr.strip())
+                bundle = Path(json.loads(process.stdout)["path"])
                 normalized = engine.load_case(raw)
                 profile, _ = engine.studio.choose(raw["topic"], explicit=raw["category"])
                 written = curated_article(normalized, editorial[cid], profile)
