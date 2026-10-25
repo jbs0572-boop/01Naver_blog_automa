@@ -36,12 +36,12 @@
     {
       "category": "real_estate",
       "kind": "original_photograph",
-      "asset_url": "https://upload.wikimedia.org/wikipedia/commons/d/d3/Seoul_Apartment_Buildings_%281509272335%29.jpg",
+      "asset_url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d3/Seoul_Apartment_Buildings_%281509272335%29.jpg/1280px-Seoul_Apartment_Buildings_%281509272335%29.jpg",
       "original_file_url": "https://upload.wikimedia.org/wikipedia/commons/d/d3/Seoul_Apartment_Buildings_%281509272335%29.jpg",
       "page_url": "https://commons.wikimedia.org/wiki/File:Seoul_Apartment_Buildings_(1509272335).jpg",
       "credit": "Francisco Anzola / Wikimedia Commons",
       "license": "CC BY 2.0 (photographer); building-rights note remains source-specific",
-      "note": "Real Seoul apartment photograph for illustration, not a photograph of a particular property transaction."
+      "note": "Real Seoul apartments, original photographed source retained; published 1280px derivative used to avoid original-host rate limiting. Not a photograph of a particular transaction."
     },
     {
       "category": "economy",
