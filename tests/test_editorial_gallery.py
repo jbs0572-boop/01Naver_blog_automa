@@ -94,3 +94,60 @@ def test_original_first_rejects_nonimage_or_unapproved_domain(tmp_path):
       "kind":"original_photograph","original_file_url":"https://evil.example/a.jpg"}
     with pytest.raises(ValueError,match="not approved"):
         import_approved_original(record,tmp_path,urlopen=lambda req,timeout:None)
+
+
+def test_full_gallery_captures_five_original_assets_without_network(tmp_path, monkeypatch):
+    """Run real engine subprocesses and Chromium screenshots with fake HTTP only.
+
+    The fixtures are deliberately synthetic test data, never claimed as photos
+    used by the real published gallery workflow.
+    """
+    from io import BytesIO
+    from PIL import Image
+    from editorial_studio import gallery
+    renderer = gallery.import_approved_original
+
+    # Varied pixels simulate an already-authorized JPEG returned by a real
+    # original-image CDN, while no network or credentials are used in pytest.
+    band1 = Image.linear_gradient("L").resize((1000, 660))
+    band2 = Image.radial_gradient("L").resize((1000, 660))
+    band3 = Image.new("L", (1000, 660), 175)
+    photo = Image.merge("RGB", (band1, band2, band3))
+    buffer = BytesIO()
+    photo.save(buffer, format="JPEG", quality=89)
+    source_bytes = buffer.getvalue()
+
+    class FakeResponse:
+        def __init__(self, source_url):
+            self.source_url = source_url
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+        def geturl(self):
+            return self.source_url
+        def read(self, maximum):
+            return source_bytes[:maximum]
+
+    def offline_import(record, root):
+        def fake_urlopen(request, timeout):
+            return FakeResponse(record["asset_url"])
+        return renderer(record, root, urlopen=fake_urlopen)
+
+    monkeypatch.setattr(gallery, "import_approved_original", offline_import)
+    output = tmp_path / "actual-output"
+    proof = gallery.generate(output)
+    assert proof["status"] == "PASS"
+    assert len(proof["items"]) == 5 and proof["original_assets_included"] == 5
+    assert (output / "five_articles_contact_sheet.png").is_file()
+    for row in proof["items"]:
+        bundle = output / row["article_folder"]
+        assert row["original_photo_included"]
+        assert row["original_source_sha256"] == hashlib.sha256(source_bytes).hexdigest()
+        assert row["visual_qa"] == "PASS"
+        assert row["browser_qa"]["loadedOriginal"]
+        assert not row["browser_qa"]["issues"]
+        assert (output / row["mobile_png"]).is_file()
+        assert (output / row["desktop_png"]).is_file()
+        assert "source-photo" in (bundle / "preview.html").read_text()
+        assert not row["published"]
