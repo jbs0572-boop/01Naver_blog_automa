@@ -198,3 +198,27 @@ def test_multiline_fixture_intro_is_valid_for_html_visual(tmp_path):
     assert report["visual_qa"]["status"] == "PASS"
     assert (bundle / "cover.png").exists()
     assert not report["images_created_by_this_run"]
+
+
+def test_multiline_headings_and_title_are_normalized_for_image_only(tmp_path):
+    from unittest.mock import patch
+    from editorial_studio import engine
+    source = json.loads((Path(__file__).resolve().parents[1] /
+                         "editorial_studio/benchmarks/cases.json").read_text())["cases"][0]
+    case_file = tmp_path / "case.json"
+    case_file.write_text(json.dumps(source, ensure_ascii=False), encoding="utf-8")
+    original = engine.fixture_article
+
+    def validated_multiline_article(case, profile):
+        article = original(case, profile)
+        article["title"] = article["title"].replace(" ", "\n", 1)
+        article["sections"][0]["heading"] = "먼저 확인할\n답"
+        return article
+
+    with patch.object(engine, "fixture_article", side_effect=validated_multiline_article):
+        bundle = engine.run(case_file, tmp_path / "runs", text_backend="fixture",
+                            image_backend="html")
+    metadata = json.loads((bundle / "result.json").read_text())
+    assert metadata["visual_qa"]["status"] == "PASS"
+    assert "먼저 확인할\n답" in (bundle / "draft.md").read_text()
+    assert (bundle / "cover.png").is_file()
