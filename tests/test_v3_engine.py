@@ -311,3 +311,30 @@ def test_zip_archive_aggregate_expansion_limit_is_checked_before_writing(tmp_pat
     with pytest.raises(ValueError, match="total uncompressed size"):
         engine._extract_source(tmp_path / "not-a-real-zip.zip", tmp_path / "output")
     assert not (tmp_path / "output" / "articles").exists()
+
+
+
+def test_v3_rejects_wrong_film_or_reference_date_even_with_matching_category():
+    """Exact source-to-editorial identity is required, not just '영화...'."""
+    editor_cases = json.loads(
+        (ROOT / "editorial_studio/v3/cases.json").read_text(encoding="utf-8")
+    )["articles"]
+    archived = json.loads(
+        (ROOT / "editorial_studio/benchmarks/cases.json").read_text(encoding="utf-8")
+    )["cases"]
+    expected = {case["category"]: case for case in archived
+                if case["case_id"].endswith("-2")}
+    for editorial in editor_cases:
+        category = editorial["category"]
+        pack = expected[category]
+        engine.verify_source_case(category, pack, editorial)
+        different = dict(pack, topic=pack["topic"] + " 다른 작품")
+        with pytest.raises(ValueError, match="source topic mismatch"):
+            engine.verify_source_case(category, different, editorial)
+        expired = dict(pack, as_of="2020-01-01")
+        with pytest.raises(ValueError, match="reference date mismatch"):
+            engine.verify_source_case(category, expired, editorial)
+    cinema = next(x for x in editor_cases if x["category"] == "culture_people")
+    parasite = dict(expected["culture_people"], topic="영화 기생충")
+    with pytest.raises(ValueError, match="source topic mismatch"):
+        engine.verify_source_case("culture_people", parasite, cinema)
