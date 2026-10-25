@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
@@ -73,10 +74,15 @@ def acquire_lock(path: Path, metadata: JSONMap) -> Generator[None, None, None]:
     try:
         yield
     finally:
+        # Record a protected-body error before entering the unlink handler.
+        body_error = sys.exception()
         try:
             path.unlink(missing_ok=True)
-        except OSError:
-            pass
+        except OSError as cleanup_error:
+            if body_error is not None:
+                body_error.add_note(f"runner lock cleanup failed: {path}: {cleanup_error}")
+            else:
+                raise ContractError(f"runner lock cleanup failed: {path}") from cleanup_error
 
 
 __all__ = ["acquire_lock"]

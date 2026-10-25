@@ -1,0 +1,80 @@
+{
+  "version": 1,
+  "base_branch": "main",
+  "work_branch": "test/coverage-audit-20261024",
+  "iteration_limit": 3,
+  "parallel_worker_limit": 3,
+  "items": [
+    {
+      "id": "QA-001",
+      "role": "manager",
+      "depends_on": [],
+      "status": "verified_ci",
+      "retries": 0,
+      "next": "Preserve coverage.json and function-coverage.json artifacts for each PR"
+    },
+    {
+      "id": "QA-002",
+      "role": "test_author",
+      "depends_on": [
+        "QA-001"
+      ],
+      "status": "verified_ci",
+      "retries": 0,
+      "next": "Retain newly exercised function tests and investigate uncovered branches separately"
+    },
+    {
+      "id": "QA-003",
+      "role": "independent_verification_required",
+      "depends_on": [
+        "QA-002"
+      ],
+      "status": "blocked_fixture",
+      "retries": 2,
+      "next": "Recover original ignored runs/beta-2026-08-26-energy-day.jsonl and runs/beta-gate0-2026-08-26-9topics.jsonl; do not fabricate them. Mac plist assertions made portable; full suite is still red."
+    },
+    {
+      "id": "QA-004",
+      "role": "test_author",
+      "depends_on": [
+        "QA-003"
+      ],
+      "status": "verified_ci_runtime_functions",
+      "retries": 0,
+      "next": "96/100 verifiably exercised; three lambda bodies conservatively ambiguous and one Protocol declaration is not executable. Latest line/branch coverage 84.89%; the missing historical fixture still blocks green full-suite CI."
+    },
+    {
+      "id": "QA-005",
+      "role": "manager",
+      "depends_on": [
+        "QA-003"
+      ],
+      "status": "verified_codex_review_current_head",
+      "retries": 0,
+      "next": "PR #2 37fe0a6 Codex review completed with zero current findings; historical P2 threads resolved after fixes. Require review of subsequent commits and authentic logs before merging."
+    }
+  ],
+  "latest_ci": {
+    "run_id": 40084432799,
+    "head_sha": "37fe0a685c9938b994f34b124dd19f050fc64502",
+    "passed": 210,
+    "failed": 1,
+    "coverage_percent": 84.89,
+    "function_bodies_exercised": 96,
+    "function_definitions_in_inventory": 100,
+    "function_callsite_ambiguous": 3,
+    "legacy_fixture_failure": "test_historical_logs_remain_readable",
+    "artifact_id": 12556582066,
+    "verified_at": "2026-10-24T10:04:41Z"
+  },
+  "previous_ci": {
+    "run_id": 39999816405,
+    "head_sha": "486af4990d56b39a0b84f6fc86448d48cd2fdca3",
+    "passed": 204,
+    "failed": 1,
+    "coverage_percent": 84.84,
+    "function_bodies_exercised": 96,
+    "function_definitions_in_inventory": 97,
+    "legacy_fixture_failure": "test_historical_logs_remain_readable"
+  }
+}
