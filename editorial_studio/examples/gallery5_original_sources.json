@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "policy": "USER_CONFIRMED_RIGHTS_ORIGINAL_FIRST",
+  "description": "Real preexisting photographic/screenshot assets chosen for five dated second-topic articles; never AI-generated. Preserve downloaded bytes and original source metadata.",
+  "sources": [
+    {
+      "category": "life_health",
+      "kind": "original_photograph",
+      "asset_url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/35/Smart_indoor_climate_monitor_showing_humidity.jpg/1280px-Smart_indoor_climate_monitor_showing_humidity.jpg",
+      "original_file_url": "https://upload.wikimedia.org/wikipedia/commons/3/35/Smart_indoor_climate_monitor_showing_humidity.jpg",
+      "page_url": "https://commons.wikimedia.org/wiki/File:Smart_indoor_climate_monitor_showing_humidity.jpg",
+      "credit": "Shixart1985 / Wikimedia Commons",
+      "license": "CC BY 2.0",
+      "note": "A photographic original; using a published 1280-pixel derivative, not a generated scene."
+    },
+    {
+      "category": "news_policy",
+      "kind": "original_site_screenshot",
+      "asset_url": "https://cdn.imweb.me/upload/S201805285b0bcf88a13a0/cf7ddbc0f4f97.jpg",
+      "original_file_url": "https://cdn.imweb.me/upload/S201805285b0bcf88a13a0/cf7ddbc0f4f97.jpg",
+      "page_url": "https://maked.kr/tipnguide/?bmode=view&idx=1127903",
+      "credit": "네이버 서치어드바이저 실제 과거 UI 화면 / 자료 제공 페이지 maked.kr",
+      "license": "사용자 제공 사용권 확인 전제",
+      "note": "Historical genuine screenshot of a Search Advisor page, not a current 2026 interface and not photographic news evidence."
+    },
+    {
+      "category": "culture_people",
+      "kind": "original_film_still",
+      "asset_url": "https://img.festival-cannes.com/eyJidWNrZXQiOiJtZWRpYSIsImtleSI6InVwbG9hZHNcLzIwMjJcLzA1XC9ERUNJU0lPTi1UTy1MRUFWRS5wbmciLCJlZGl0cyI6eyJyZXNpemUiOnsid2lkdGgiOjEwMjgsImZpdCI6ImNvdmVyIn19fQ%3D%3D",
+      "original_file_url": "https://www.festival-cannes.com/2022/decision-to-leave-quand-lamour-simmisce-dans-lenquete/",
+      "page_url": "https://www.festival-cannes.com/2022/decision-to-leave-quand-lamour-simmisce-dans-lenquete/",
+      "credit": "© 2022 CJ ENM Co., Ltd., MOHO FILM / Festival de Cannes",
+      "license": "사용자 제공 사용권 확인 전제",
+      "note": "Real authorized film still, not an AI lookalike."
+    },
+    {
+      "category": "real_estate",
+      "kind": "original_photograph",
+      "asset_url": "https://upload.wikimedia.org/wikipedia/commons/d/d3/Seoul_Apartment_Buildings_%281509272335%29.jpg",
+      "original_file_url": "https://upload.wikimedia.org/wikipedia/commons/d/d3/Seoul_Apartment_Buildings_%281509272335%29.jpg",
+      "page_url": "https://commons.wikimedia.org/wiki/File:Seoul_Apartment_Buildings_(1509272335).jpg",
+      "credit": "Francisco Anzola / Wikimedia Commons",
+      "license": "CC BY 2.0 (photographer); building-rights note remains source-specific",
+      "note": "Real Seoul apartment photograph for illustration, not a photograph of a particular property transaction."
+    },
+    {
+      "category": "economy",
+      "kind": "original_news_photograph",
+      "asset_url": "https://newsimg.koreatimes.co.kr/2025/07/08/c716ce6c-dd00-4a07-9f14-761c5c761e22.jpg?w=728",
+      "original_file_url": "https://newsimg.koreatimes.co.kr/2025/07/08/c716ce6c-dd00-4a07-9f14-761c5c761e22.jpg",
+      "page_url": "https://www.koreatimes.co.kr/economy/20250708/inflation-feared-to-surge-over-heat-wave-driven-price-hikes-in-fresh-foods",
+      "credit": "The Korea Times / actual photographed produce market",
+      "license": "사용자 제공 사용권 확인 전제",
+      "note": "Actual price-tag supermarket photograph. Shown only as illustrative context; does not prove a specific current CPI reading."
+    }
+  ]
+}
