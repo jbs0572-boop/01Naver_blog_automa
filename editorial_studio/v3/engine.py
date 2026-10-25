@@ -212,6 +212,22 @@ def create_visual(page, folder: Path, category: str, role: str, title: str, item
     raise ValueError(f'{category}/{role}: unacceptable card layout {diagnostics}')
 
 
+def verify_source_case(category: str, pack: dict, editorial: dict) -> None:
+    """Do not join fixed headlines/checklists with a different reviewed topic.
+
+    The archived source snapshot and the five human-edited V3 topics are a
+    matched set, not interchangeable inputs just because the category matches.
+    """
+    def compact(value: object) -> str:
+        return ' '.join(value.split()) if isinstance(value, str) else ''
+
+    if (compact(pack.get('topic')) != compact(editorial.get('source_topic'))
+            or not compact(editorial.get('source_topic'))):
+        raise ValueError(f'{category}: source topic mismatch in reviewed archive')
+    if pack.get('as_of') != editorial.get('source_as_of'):
+        raise ValueError(f'{category}: source reference date mismatch in reviewed archive')
+
+
 def paragraphs(article:dict) -> list[str]:
     output=[]
     for section in article['sections']:
@@ -383,6 +399,7 @@ def generate(source_archive:Path, out:Path)->dict:
             for cat in CATEGORIES:
                 original,pack,article,provenance=_source_category(extract,cat)
                 spec=by_id[cat]
+                verify_source_case(cat, pack, spec)
                 sub=out/cat
                 sub.mkdir()
                 imagefolder=sub/'images';imagefolder.mkdir()
