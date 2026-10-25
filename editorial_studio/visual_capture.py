@@ -133,7 +133,7 @@ li{{display:flex;gap:18px;font-size:var(--body);line-height:1.48;word-break:keep
 .media{{height:520px;background:var(--panel);border-radius:20px;overflow:hidden}}
 .photo{{height:100%;display:flex;align-items:center;justify-content:center;padding:14px}}
 .photo img{{width:100%;height:100%;object-fit:contain;display:block}}
-.diagram{{height:100%;display:flex;flex-direction:column;justify-content:center;gap:16px;padding:70px 24px 26px;position:relative}}
+.diagram{{background:conic-gradient(from 15deg,var(--ink),var(--accent),var(--bg),var(--panel),var(--ink));height:100%;display:flex;flex-direction:column;justify-content:center;gap:16px;padding:70px 24px 26px;position:relative}}
 .diagram-top{{position:absolute;top:27px;left:24px;color:var(--accent);font-weight:800;letter-spacing:.12em;font-size:15px}}
 .stage{{min-height:100px;display:flex;align-items:center;gap:14px;padding:12px 16px;border:1px solid var(--accent);border-radius:12px;background:var(--bg)}}
 .num{{font-size:32px;font-weight:900;color:var(--accent)}}
