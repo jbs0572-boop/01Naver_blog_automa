@@ -38,6 +38,7 @@ jobs:
           from editorial_studio.v3.engine import generate
           generator = runpy.run_path('tests/test_v3_engine.py')['build_fixture_archive']
           root = Path('v3-ci')
+          root.mkdir(exist_ok=False)
           fixture = generator(root)
           result = generate(fixture, root/'preview')
           assert result['status'] == 'PASS'
