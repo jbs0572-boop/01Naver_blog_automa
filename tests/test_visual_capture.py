@@ -166,3 +166,35 @@ def test_category_specific_css_layout_contract():
     assert ".real_estate .stage" in code
     assert ".economy .stage" in code
     assert "KEY POINTS" in code
+
+
+def test_four_short_diagram_steps_fit_mobile(tmp_path):
+    data = spec("real_estate")
+    data["bullets"] = ["대상 확인", "서류 확인", "조건 비교", "최종 점검"]
+    result = render(data, tmp_path / "four")
+    assert result.status == "PASS", result.issues
+    first = json.loads((tmp_path / "four" / "attempt-1-qa.json").read_text())
+    assert not first["mobile"]["issues"]
+
+
+def test_multiline_fixture_intro_is_valid_for_html_visual(tmp_path):
+    from unittest.mock import patch
+    from editorial_studio import engine
+    source = json.loads((Path(__file__).resolve().parents[1] /
+                         "editorial_studio/benchmarks/cases.json").read_text())["cases"][0]
+    spec_file = tmp_path / "case.json"
+    spec_file.write_text(json.dumps(source, ensure_ascii=False), encoding="utf-8")
+    base_writer = engine.fixture_article
+
+    def multiline_writer(case, profile):
+        article = base_writer(case, profile)
+        article["intro"] = "첫 번째 설명입니다.\n두 번째 설명입니다.\t세 번째 설명입니다."
+        return article
+
+    with patch.object(engine, "fixture_article", side_effect=multiline_writer):
+        bundle = engine.run(spec_file, tmp_path / "results",
+                            text_backend="fixture", image_backend="html")
+    report = json.loads((bundle / "result.json").read_text(encoding="utf-8"))
+    assert report["visual_qa"]["status"] == "PASS"
+    assert (bundle / "cover.png").exists()
+    assert not report["images_created_by_this_run"]
