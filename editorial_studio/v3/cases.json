@@ -20,7 +20,9 @@
         "창가와 욕실의 물기·누수를 확인합니다",
         "실외 공기 상태를 보고 환기 방법을 정합니다"
       ],
-      "photo_caption": "실제 실내 습도계 사진"
+      "photo_caption": "실제 실내 습도계 사진",
+      "source_topic": "실내 습도",
+      "source_as_of": "2026-10-25"
     },
     {
       "category": "news_policy",
@@ -41,7 +43,9 @@
         "원본 출처와 유사 문장의 반복을 대조합니다",
         "독자에게 추가하는 정보가 있는지 확인합니다"
       ],
-      "photo_caption": "네이버 서치어드바이저 과거 실제 화면"
+      "photo_caption": "네이버 서치어드바이저 과거 실제 화면",
+      "source_topic": "네이버 검색 스팸",
+      "source_as_of": "2026-10-25"
     },
     {
       "category": "culture_people",
@@ -62,7 +66,9 @@
         "공개 줄거리와 실제 장면을 구분해 봅니다",
         "해석은 인물의 대사와 장면을 근거로 제시합니다"
       ],
-      "photo_caption": "〈헤어질 결심〉 공식 원본 스틸"
+      "photo_caption": "〈헤어질 결심〉 공식 원본 스틸",
+      "source_topic": "영화 헤어질 결심",
+      "source_as_of": "2026-10-25"
     },
     {
       "category": "real_estate",
@@ -83,7 +89,9 @@
         "면적·층·위치가 같은 사례를 비교합니다",
         "최신 신고 자료의 시차를 고려합니다"
       ],
-      "photo_caption": "실제 서울 아파트 전경"
+      "photo_caption": "실제 서울 아파트 전경",
+      "source_topic": "아파트 실거래가",
+      "source_as_of": "2026-10-25"
     },
     {
       "category": "economy",
@@ -104,7 +112,9 @@
         "전월 대비인지 전년 동월 대비인지 확인합니다",
         "발표기관과 기준연도·발표시점을 적습니다"
       ],
-      "photo_caption": "실제 마트 농산물 판매 사진"
+      "photo_caption": "실제 마트 농산물 판매 사진",
+      "source_topic": "소비자물가지수",
+      "source_as_of": "2026-10-25"
     }
   ]
 }
