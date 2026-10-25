@@ -29,8 +29,8 @@ main{max-width:780px!important;background:var(--paper)!important;padding:clamp(2
 .masthead span{font-size:.71rem;opacity:.75;white-space:nowrap}
 .styletag{font-size:.74rem;letter-spacing:.04em;color:var(--accent);font-weight:700;margin:0 0 7px}
 .subtitle{background:var(--soft);border-left:3px solid var(--accent);padding:13px 15px;line-height:1.65;font-size:.89rem;margin:23px 0 22px}
-h1{color:var(--ink)!important;font-size:clamp(1.8rem,4.5vw,2.35rem)!important;line-height:1.42!important;margin:11px 0 15px!important;word-break:keep-all}
-h2{color:var(--ink);line-height:1.48!important;word-break:keep-all}
+h1{color:var(--ink)!important;font-size:clamp(1.8rem,4.5vw,2.35rem)!important;line-height:1.42!important;margin:11px 0 15px!important;word-break:keep-all;overflow-wrap:anywhere}
+h2{color:var(--ink);line-height:1.48!important;word-break:keep-all;overflow-wrap:anywhere}
 section>p{margin:12px 0;line-height:1.85;word-break:keep-all}
 section p.meta{color:var(--accent);opacity:.8;font-size:.77rem}
 a{color:var(--accent);overflow-wrap:anywhere}
