@@ -47,11 +47,11 @@ jobs:
           assert (root/"five_articles_contact_sheet.png").is_file()
           print("FIVE ARTICLES + 10 SCREENSHOTS + 5 ORIGINAL ENGINE CSS COVERS: PASS")
           PY
-      - name: Deliver original article HTML, screenshots and QA evidence
-        if: success()
+      - name: Preserve screenshots or failed image attempts for diagnosis
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: five-articles-actual-browser-screenshots
           path: five-article-gallery/
-          if-no-files-found: error
+          if-no-files-found: ignore
           retention-days: 14
