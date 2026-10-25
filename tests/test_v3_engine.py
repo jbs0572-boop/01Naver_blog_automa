@@ -338,3 +338,36 @@ def test_v3_rejects_wrong_film_or_reference_date_even_with_matching_category():
     parasite = dict(expected["culture_people"], topic="영화 기생충")
     with pytest.raises(ValueError, match="source topic mismatch"):
         engine.verify_source_case("culture_people", parasite, cinema)
+
+
+
+def test_matching_hash_does_not_make_a_fake_jpeg_an_original_photo(tmp_path):
+    """A forged JPEG with a matching hash must fail before render and scoring."""
+    archive = build_fixture_archive(tmp_path)
+    extracted = tmp_path / "photo-check"
+    extracted.mkdir()
+    engine._extract_source(archive, extracted)
+    original = extracted / "approved-originals" / "economy.jpg"
+    original.write_bytes(b"THIS IS NOT A REAL IMAGE")
+    provenance = extracted / "approved-originals" / "economy.source.json"
+    info = json.loads(provenance.read_text(encoding="utf-8"))
+    info["downloaded_sha256"] = hashlib.sha256(original.read_bytes()).hexdigest()
+    provenance.write_text(json.dumps(info), encoding="utf-8")
+    with pytest.raises(ValueError, match="not a decodable photo"):
+        engine._source_category(extracted, "economy")
+
+
+def test_matching_hash_does_not_allow_tiny_original_photo(tmp_path):
+    from PIL import Image
+    archive = build_fixture_archive(tmp_path)
+    extracted = tmp_path / "small-photo-check"
+    extracted.mkdir()
+    engine._extract_source(archive, extracted)
+    original = extracted / "approved-originals" / "economy.jpg"
+    Image.new("RGB", (64, 64), "#717e8d").save(original, format="JPEG")
+    provenance = extracted / "approved-originals" / "economy.source.json"
+    info = json.loads(provenance.read_text(encoding="utf-8"))
+    info["downloaded_sha256"] = hashlib.sha256(original.read_bytes()).hexdigest()
+    provenance.write_text(json.dumps(info), encoding="utf-8")
+    with pytest.raises(ValueError, match="dimensions/format invalid"):
+        engine._source_category(extracted, "economy")
