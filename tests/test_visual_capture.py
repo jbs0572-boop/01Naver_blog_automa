@@ -123,3 +123,21 @@ def test_engine_original_mode_integrates_into_article_pipeline(tmp_path):
     assert not meta["images_created_by_this_run"]
     assert not meta["score"]["ready_for_publication"]
     assert (folder / "visual-assets" / "original.jpg").read_bytes() == source.read_bytes()
+
+
+def test_hidden_parent_clipping_is_detected_in_browser():
+    from playwright.sync_api import sync_playwright
+    from editorial_studio.visual_capture import DOM_INSPECTION
+    page_html = html_slide(prepare_spec(spec()), None, 1)
+    # Force only the visual panel to clip its inner text without moving the slide.
+    page_html = page_html.replace("height:520px;background:", "height:70px;background:")
+    with sync_playwright() as pw:
+        import os
+        import shutil
+        exe = os.environ.get("CHROMIUM_PATH") or shutil.which("chromium") or shutil.which("google-chrome")
+        browser = pw.chromium.launch(headless=True, executable_path=exe, args=["--no-sandbox"] if exe else [])
+        page = browser.new_page(viewport={"width":1536, "height":1024})
+        page.set_content(page_html, wait_until="load")
+        result = page.evaluate(DOM_INSPECTION)
+        browser.close()
+    assert any("hidden-parent-y" in issue for issue in result["issues"]), result
