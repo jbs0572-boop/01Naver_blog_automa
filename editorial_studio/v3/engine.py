@@ -217,10 +217,19 @@ def create_article(category:str,pack:dict,article:dict,src_name:str,
     if not pack['topic'].split()[0] in title:raise ValueError('topic omitted from title')
     sources={item['id']:item for item in pack['sources']}
     facts={item['id']:item for item in pack['facts']}
-    for section in article['sections']:
+    referenced=set()
+    for index, section in enumerate(article['sections']):
+        ids=section.get('fact_ids')
+        if not isinstance(ids,list) or not ids:
+            raise ValueError('each section must have at least one source-backed fact ID')
         if any(fid not in facts or facts[fid]['source_id'] not in sources
-               for fid in section['fact_ids']):
+               for fid in ids):
             raise ValueError('article section has unknown source/fact ID')
+        if section.get('role')!=index or any(facts[fid]['role']!=index for fid in ids):
+            raise ValueError('source fact role must match the article section')
+        referenced.update(ids)
+    if referenced!=set(facts):
+        raise ValueError('not every curated fact was used by the article')
     paras=paragraphs(article)
     css=f'''
 *{{box-sizing:border-box}}body{{margin:0;background:{theme['bg']};color:{theme['ink']};font-family:'Noto Sans CJK KR','Apple SD Gothic Neo',sans-serif;line-height:1.8}}
