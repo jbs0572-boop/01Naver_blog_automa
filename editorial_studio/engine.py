@@ -347,14 +347,16 @@ def inspect_cover(image_bytes: bytes) -> dict:
             "visual_review": "REQUIRED", "topic_fidelity": "UNVERIFIED"}
 
 
-def render_markdown(case: dict, article: dict, has_cover: bool) -> str:
+def render_markdown(case: dict, article: dict, has_cover: bool, original_photo: bool = False) -> str:
     lines = ["# " + article["title"], "",
              "*기준일: " + case["as_of"] + " | 검수 전 원고*", "",
              article["intro"], ""]
     if has_cover:
-        lines.extend(["![주제를 나타내는 독창적 생성 또는 제공 이미지: "
+        lines.extend(["![주제를 나타내는 실제 또는 정보 이미지: "
                       + case["topic"] + "](cover.png)", "",
-                      "*이미지는 개념을 설명하는 보조 자료로, 사실의 증거가 아닙니다.*", ""])
+                      ("*사용자가 승인한 원본 사진을 보존해 편집한 카드입니다. 원본 파일은 visual-assets에 별도로 보관합니다.*"
+                       if original_photo else
+                       "*이미지는 개념을 설명하는 보조 자료로, 사실의 증거가 아닙니다.*"), ""])
     sources = {s["id"]: s for s in case["sources"]}
     facts = {f["id"]: f for f in case["facts"]}
     for section in article["sections"]:
@@ -370,7 +372,7 @@ def render_markdown(case: dict, article: dict, has_cover: bool) -> str:
     return "\n".join(lines) + "\n"
 
 
-def render_html(case: dict, article: dict, image: bool) -> str:
+def render_html(case: dict, article: dict, image: bool, original_photo: bool = False) -> str:
     esc = html.escape
     header = (
         "<!doctype html><html lang='ko'><head><meta charset='utf-8'>"
@@ -391,9 +393,16 @@ def render_html(case: dict, article: dict, image: bool) -> str:
         "<p>" + esc(article["intro"]) + "</p>"
     )
     if image:
-        header += ("<figure><img src='cover.png' alt='" + esc(case["topic"], quote=True) +
-                   "에 관한 오리지널 개념 이미지'><figcaption class='meta'>"
-                   "개념 이미지 · 실제 자료 사진이 아님 · 검수 필요</figcaption></figure>")
+        if original_photo:
+            header += ("<figure><img src='cover.png' alt='" +
+                       esc(case["topic"], quote=True) +
+                       " 원본 사진을 포함한 편집 카드'><figcaption class='meta'>"
+                       "사용자 승인 원본 사진 사용 · 원본 보존 · 최종 검수 필요</figcaption></figure>")
+        else:
+            header += ("<figure><img src='cover.png' alt='" +
+                       esc(case["topic"], quote=True) +
+                       "에 관한 독창적 개념 이미지'><figcaption class='meta'>"
+                       "개념 이미지 · 실제 자료 사진이 아님 · 검수 필요</figcaption></figure>")
     src = {s["id"]: s for s in case["sources"]}
     facts = {f["id"]: f for f in case["facts"]}
     for section in article["sections"]:
@@ -475,10 +484,10 @@ def run(case_path: Path, output_root: Path, *, text_backend: str,
         cover_info = inspect_cover(cover_bytes)
         (bundle / "cover.png").write_bytes(cover_bytes)
     (bundle / "draft.md").write_text(
-        render_markdown(case, article, cover_bytes is not None), encoding="utf-8"
+        render_markdown(case, article, cover_bytes is not None, original_photo=image_backend == 'original'), encoding="utf-8"
     )
     (bundle / "preview.html").write_text(
-        render_html(case, article, cover_bytes is not None), encoding="utf-8"
+        render_html(case, article, cover_bytes is not None, original_photo=image_backend == 'original'), encoding="utf-8"
     )
     (bundle / "article-structure.json").write_bytes(canonical(article) + b"\n")
     from .quality import assess
