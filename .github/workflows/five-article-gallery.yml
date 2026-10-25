@@ -1,0 +1,60 @@
+name: Five real article screenshots
+
+on:
+  pull_request:
+    paths:
+      - 'editorial_studio/gallery.py'
+      - 'editorial_studio/visual_page.py'
+      - 'editorial_studio/engine.py'
+      - 'editorial_studio/visual_capture.py'
+      - 'editorial_studio/examples/gallery5_copy.json'
+      - 'tests/test_editorial_gallery.py'
+      - '.github/workflows/five-article-gallery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  five-articles:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install browser and image tooling, no API credentials
+        run: |
+          python -m pip install 'pytest>=9,<10' 'Pillow>=12,<13' 'playwright>=1.50,<2'
+          python -m playwright install --with-deps chromium
+      - name: Verify authored facts and independent article themes
+        run: |
+          python -m pytest -q tests/test_editorial_gallery.py tests/test_workflow_intend_docs.py
+      - name: Build five genuinely distinct source-bound articles with real CSS covers
+        run: |
+          python -m editorial_studio.gallery --out-dir five-article-gallery
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path("five-article-gallery")
+          proof=json.loads((root/"proof.json").read_text(encoding="utf-8"))
+          assert proof["status"]=="PASS" and len(proof["items"])==5
+          assert len({x["title"] for x in proof["items"]})==5
+          assert len({x["category"] for x in proof["items"]})==5
+          assert all(x["visual_qa"]=="PASS" and not x["browser_qa"]["issues"] for x in proof["items"])
+          assert all(x["original_photo_included"] for x in proof["items"])
+          assert all(x["original_source_sha256"] for x in proof["items"])
+          assert proof["original_assets_included"] == 5
+          assert all(not x["published"] and x["review"]=="PENDING" for x in proof["items"])
+          assert (root/"five_articles_contact_sheet.png").is_file()
+          print("FIVE ORIGINAL-ASSET ARTICLES + 10 SCREENSHOTS + INTEGRITY PROOF: PASS")
+          PY
+      - name: Preserve screenshots or failed image attempts for diagnosis
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: five-articles-actual-browser-screenshots
+          path: five-article-gallery/
+          if-no-files-found: ignore
+          retention-days: 14

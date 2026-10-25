@@ -455,3 +455,7 @@ output_file: image-style-guide.md
 - 썸네일: 제목 약속을 식별하는 전용 자산, 본문 이미지와 다른 해시·역할
 
 사람 Q3 평가는 `subject_relevance`, `composition_legibility`, `rendering_completion`, `information_contribution`, `style_consistency`를 각각 0~4점으로 기록한다. 총점 16/20 이상이고 개별 점수 3점 미만이 없어야 통과한다. 모바일 렌더링 캡처와 원본 이미지를 함께 본다.
+
+## 원본 사진 우선 정책 업데이트 (2026-10-25)
+
+사용자가 사용권을 확인해 제공한 사진을 적극 사용한다. 원본의 출처·해시와 합성 이미지의 차이를 기록한다. 정보 도식은 HTML/CSS/SVG로 만들고 실제 Chromium/Playwright 캡처에서 글자 잘림, 과도한 여백, 정렬, 이미지 로딩과 모바일 배치를 확인한다. 3회 조정 후에도 문제가 있으면 QA_FAIL로 차단하며 거짓 통과를 기록하지 않는다. 구체적인 구현: editorial_studio/MEDIA_POLICY.md.

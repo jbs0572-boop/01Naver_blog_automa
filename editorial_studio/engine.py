@@ -347,14 +347,16 @@ def inspect_cover(image_bytes: bytes) -> dict:
             "visual_review": "REQUIRED", "topic_fidelity": "UNVERIFIED"}
 
 
-def render_markdown(case: dict, article: dict, has_cover: bool) -> str:
+def render_markdown(case: dict, article: dict, has_cover: bool, original_photo: bool = False) -> str:
     lines = ["# " + article["title"], "",
              "*기준일: " + case["as_of"] + " | 검수 전 원고*", "",
              article["intro"], ""]
     if has_cover:
-        lines.extend(["![주제를 나타내는 독창적 생성 또는 제공 이미지: "
+        lines.extend(["![주제를 나타내는 실제 또는 정보 이미지: "
                       + case["topic"] + "](cover.png)", "",
-                      "*이미지는 개념을 설명하는 보조 자료로, 사실의 증거가 아닙니다.*", ""])
+                      ("*사용자가 승인한 원본 사진을 보존해 편집한 카드입니다. 원본 파일은 visual-assets에 별도로 보관합니다.*"
+                       if original_photo else
+                       "*이미지는 개념을 설명하는 보조 자료로, 사실의 증거가 아닙니다.*"), ""])
     sources = {s["id"]: s for s in case["sources"]}
     facts = {f["id"]: f for f in case["facts"]}
     for section in article["sections"]:
@@ -370,7 +372,7 @@ def render_markdown(case: dict, article: dict, has_cover: bool) -> str:
     return "\n".join(lines) + "\n"
 
 
-def render_html(case: dict, article: dict, image: bool) -> str:
+def render_html(case: dict, article: dict, image: bool, original_photo: bool = False) -> str:
     esc = html.escape
     header = (
         "<!doctype html><html lang='ko'><head><meta charset='utf-8'>"
@@ -391,9 +393,16 @@ def render_html(case: dict, article: dict, image: bool) -> str:
         "<p>" + esc(article["intro"]) + "</p>"
     )
     if image:
-        header += ("<figure><img src='cover.png' alt='" + esc(case["topic"], quote=True) +
-                   "에 관한 오리지널 개념 이미지'><figcaption class='meta'>"
-                   "개념 이미지 · 실제 자료 사진이 아님 · 검수 필요</figcaption></figure>")
+        if original_photo:
+            header += ("<figure><img src='cover.png' alt='" +
+                       esc(case["topic"], quote=True) +
+                       " 원본 사진을 포함한 편집 카드'><figcaption class='meta'>"
+                       "사용자 승인 원본 사진 사용 · 원본 보존 · 최종 검수 필요</figcaption></figure>")
+        else:
+            header += ("<figure><img src='cover.png' alt='" +
+                       esc(case["topic"], quote=True) +
+                       "에 관한 독창적 개념 이미지'><figcaption class='meta'>"
+                       "개념 이미지 · 실제 자료 사진이 아님 · 검수 필요</figcaption></figure>")
     src = {s["id"]: s for s in case["sources"]}
     facts = {f["id"]: f for f in case["facts"]}
     for section in article["sections"]:
@@ -407,7 +416,8 @@ def render_html(case: dict, article: dict, image: bool) -> str:
     for item in case["sources"]:
         header += ("<li><a rel='noopener noreferrer' href='" + esc(item["url"], quote=True) +
                    "'>" + esc(item["title"]) + "</a></li>")
-    return header + "</ul><p>출처의 실제 본문, 표시 기준, 이미지 권리를 사람이 확인해야 합니다.</p></div></main></body></html>"
+    from .visual_page import themed_html
+    return themed_html(header + "</ul><p>출처의 실제 본문, 표시 기준, 이미지 권리를 사람이 확인해야 합니다.</p></div></main></body></html>", case["category"])
 
 
 def run(case_path: Path, output_root: Path, *, text_backend: str,
@@ -420,12 +430,17 @@ def run(case_path: Path, output_root: Path, *, text_backend: str,
             raise EngineError("paid model calls disabled; pass --execute-paid to opt in")
         if not os.environ.get("OPENAI_API_KEY"):
             raise EngineError("OPENAI_API_KEY missing; no external request attempted")
-    if image_backend == "import":
+    # User-approved originals have priority when auto is explicitly requested.
+    if image_backend == "auto":
+        image_backend = "original" if imported_image is not None else "html"
+    if image_backend in {"original", "import"}:
         if imported_image is None:
-            raise EngineError("--image-file required for import")
+            raise EngineError("--image-file required for original/import mode")
     elif imported_image is not None:
-        raise EngineError("--image-file allowed only for import")
-    if text_backend not in {"fixture", "openai"} or image_backend not in {"none", "openai", "import"}:
+        raise EngineError("--image-file requires original/import/auto mode")
+    if text_backend not in {"fixture", "openai"} or image_backend not in {
+        "none", "openai", "import", "original", "html"
+    }:
         raise EngineError("unknown text/image backend")
     bundle = studio.build_bundle(case["topic"], output_root, case["category"])
     (bundle / "sourcepack.json").write_bytes(canonical(case) + b"\n")
@@ -434,20 +449,47 @@ def run(case_path: Path, output_root: Path, *, text_backend: str,
     article = validate_article(article, case, profile)
     cover_bytes: bytes | None = None
     cover_info = None
+    visual_qa: dict | None = None
     prompt = image_prompt(case, profile, article)
     (bundle / "cover-prompt.txt").write_text(prompt + "\n", encoding="utf-8")
     if image_backend == "openai":
         cover_bytes = generate_cover(prompt)
     elif image_backend == "import":
         cover_bytes = imported_image.read_bytes()
+    elif image_backend in {"original", "html"}:
+        from .visual_capture import render as render_verified_visual
+
+        visual_spec = {
+            "category": case["category"],
+            "headline": re.sub(r"\s+", " ", article["title"]).strip(),
+            "deck": re.sub(r"\s+", " ", article["intro"]).strip()[:240],
+            "eyebrow": profile["title"],
+            "bullets": [re.sub(r"\s+", " ", section["heading"]).strip()
+                        for section in article["sections"][:3]],
+            "source_caption": (
+                "사용자가 사용권을 확인한 원본 사진 · 근거 자료 별도 확인"
+                if image_backend == "original" else
+                "HTML/CSS 설명용 그래픽 · 실제 자료 이미지 아님"
+            ),
+        }
+        if image_backend == "original":
+            visual_spec["source_photo"] = str(imported_image)
+        shot = render_verified_visual(visual_spec, bundle / "visual-assets")
+        visual_qa = {
+            "status": shot.status, "attempts": shot.attempts,
+            "issues": shot.issues, "provenance": shot.provenance,
+        }
+        if shot.status != "PASS":
+            raise EngineError("HTML/photo visual QA failed; review visual-assets attempts")
+        cover_bytes = (bundle / "visual-assets" / "cover.png").read_bytes()
     if cover_bytes is not None:
         cover_info = inspect_cover(cover_bytes)
         (bundle / "cover.png").write_bytes(cover_bytes)
     (bundle / "draft.md").write_text(
-        render_markdown(case, article, cover_bytes is not None), encoding="utf-8"
+        render_markdown(case, article, cover_bytes is not None, original_photo=image_backend == 'original'), encoding="utf-8"
     )
     (bundle / "preview.html").write_text(
-        render_html(case, article, cover_bytes is not None), encoding="utf-8"
+        render_html(case, article, cover_bytes is not None, original_photo=image_backend == 'original'), encoding="utf-8"
     )
     (bundle / "article-structure.json").write_bytes(canonical(article) + b"\n")
     from .quality import assess
@@ -457,7 +499,7 @@ def run(case_path: Path, output_root: Path, *, text_backend: str,
         "topic": case["topic"], "profile_sha256": profile["sha256"],
         "text_backend": text_backend, "image_backend": image_backend,
         "images_created_by_this_run": image_backend == "openai" and cover_bytes is not None,
-        "image_inspection": cover_info, "rubric": rubric,
+        "image_inspection": cover_info, "visual_qa": visual_qa, "rubric": rubric,
         "review": "PENDING", "state": ("IMAGE_READY_FOR_REVIEW" if cover_bytes else "DRAFT_ONLY"),
         "seo_outcomes": None, "external_service_writes": False,
         "sourcepack_sha256": hashlib.sha256(canonical(case)).hexdigest(),
@@ -475,7 +517,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--case", required=True, type=Path)
     parser.add_argument("--output-root", required=True, type=Path)
     parser.add_argument("--text-backend", choices=("fixture", "openai"), default="fixture")
-    parser.add_argument("--image-backend", choices=("none", "import", "openai"), default="none")
+    parser.add_argument("--image-backend", choices=("none", "import", "openai", "original", "html", "auto"), default="none")
     parser.add_argument("--image-file", type=Path)
     parser.add_argument("--execute-paid", action="store_true")
     parser.add_argument("--rubric", choices=("v1", "v2"), default="v2")

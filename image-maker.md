@@ -126,3 +126,9 @@ python3 -m tools.workflow_verifier validate-image-quality --quality assets/<키�
 성공 보고: `진행 상황: image-maker 완료`
 
 실패 보고: `오류: image-maker - <원인과 필요한 조치>`
+
+## 원본 사진 우선 및 HTML/CSS 브라우저 렌더 정책 (2026-10-25)
+
+사용자가 원본 사진의 사용권을 확인했다고 밝힌 범위에서는 실제 사진·공식 스틸·제품·인물·장소 원본을 우선 활용한다. 같은 사진의 이용 권한을 계속 다시 묻거나 불필요하게 AI 이미지로 대체하지 않는다. 파일의 byte-for-byte 사본과 SHA-256을 기록한다. 새롭게 발견한 별도 자료까지 자동으로 사용권을 확장하지는 않는다.
+
+그림을 직접 만들어야 한다면 차트·비교표·체크리스트·절차도는 HTML/CSS/SVG → Python/Playwright 렌더 → DOM 잘림/정렬 + 이미지 픽셀 검사 → 최대 3회 레이아웃 조정을 기본값으로 한다. 점검 실패 시 최종 이미지로 전달하지 않는다. 카테고리별 독립 스타일을 유지하고 승인 Gate A/B는 별도로 지킨다. 상세: editorial_studio/MEDIA_POLICY.md.

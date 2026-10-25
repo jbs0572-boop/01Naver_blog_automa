@@ -1,0 +1,32 @@
+name: Original-first visual QA (Chromium)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install image and browser test dependencies
+        run: |
+          python -m pip install 'pytest>=9,<10' 'Pillow>=12,<13' 'playwright>=1.50,<2'
+          python -m playwright install --with-deps chromium
+      - name: Run five-category render, original-byte and clipping regressions
+        run: |
+          python -m pytest -q tests/test_visual_capture.py tests/test_workflow_intend_docs.py
+      - name: Preserve QA evidence on failure only
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-qa-failure-evidence
+          path: |
+            .pytest_cache/
+          retention-days: 7
