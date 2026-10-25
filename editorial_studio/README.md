@@ -169,3 +169,9 @@ python -m coverage report -m
 모든 원본 파일은 byte-for-byte 및 SHA-256으로 기록합니다. Chromium 캡처 결과에는 cover.png, mobile.png, slide.html, 시도별 PNG/검사 JSON이 남습니다. 텍스트·이미지 잘림이 끝내 해결되지 않으면 QA_FAIL로 처리하고 생성 완료를 선언하지 않습니다.
 
 자세한 기준: MEDIA_POLICY.md. 사람의 맥락·저작권·미적 검수는 기술 검사와 별개입니다.
+
+## 실제 원본 사진 우선 — 5편 재캡처
+
+`editorial_studio/examples/gallery5_original_sources.json`에 5개의 실제 자료 이미지 링크를 저장합니다. 기존 gallery의 `--image-backend html` 고정값은 오류였으며, 신규 경로는 실제 원본을 별도 다운로드·SHA-256 보존 후 `--image-backend original --image-file ...`로 편집 엔진을 호출합니다. 본문에는 복합 표지뿐 아니라 **실제 원본 사진 또는 실제 과거 웹 화면을 전체 폭으로** 삽입하고 출처를 연결합니다. 사용자 승인 범위의 실제 자료를 사용하며 허구 이미지로 대체하지 않습니다. 다운로드 실패/자료 식별 실패 시 원본으로 가장하지 않고 작업을 중단합니다.
+
+사진 4종(실내 습도기/실제 영화 스틸/서울 아파트/마트 물가), 네이버 서치어드바이저 **과거 실제 화면** 1종입니다. 과거 화면은 현행 정책 UI라는 증거가 아닙니다. 이용 조건과 출처 크레딧은 manifest 및 출력 `asset-provenance.json`에 기록합니다. `python -m editorial_studio.gallery --out-dir five-gallery` 실행 시 승인 원본 다운로드(네트워크)와 실제 Chromium 검수가 필요합니다. 유료 이미지 API·게시/발행 호출은 없습니다.

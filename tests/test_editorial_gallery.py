@@ -1,5 +1,6 @@
 """Regression checks for five genuinely distinct category article presentations."""
 import json
+import hashlib
 import html as html_std
 from pathlib import Path
 import pytest
@@ -59,3 +60,37 @@ def test_sources_are_not_replaced_with_image_facts():
         html=engine.render_html(engine.load_case(original),article,True)
         assert all(html_std.escape(src["url"], quote=True) in html for src in original["sources"])
         assert "실제 자료 사진이 아님" in html
+
+
+def test_original_first_remote_asset_import_accepts_only_real_bytes(tmp_path):
+    from io import BytesIO
+    from PIL import Image, ImageDraw
+    from editorial_studio.gallery import import_approved_original
+    im=Image.new("RGB",(700,480),"#d7e4ed")
+    ImageDraw.Draw(im).rectangle((80,80,620,420),fill="#123953")
+    output=BytesIO()
+    im.save(output,format="JPEG",quality=89)
+    payload=output.getvalue()
+    class FakeResponse:
+        def __enter__(self):return self
+        def __exit__(self,*a):return False
+        def geturl(self):return "https://upload.wikimedia.org/test.jpg"
+        def read(self,size):return payload[:size]
+    record={
+      "category":"economy","asset_url":"https://upload.wikimedia.org/test.jpg",
+      "page_url":"https://commons.wikimedia.org/wiki/Example","credit":"author",
+      "kind":"original_photograph","original_file_url":"https://upload.wikimedia.org/test.jpg"}
+    path,provenance=import_approved_original(record,tmp_path,urlopen=lambda req,timeout:FakeResponse())
+    assert path.read_bytes()==payload
+    assert provenance["downloaded_sha256"]==hashlib.sha256(payload).hexdigest()
+    assert provenance["user_confirmed_rights"] is True
+
+
+def test_original_first_rejects_nonimage_or_unapproved_domain(tmp_path):
+    from editorial_studio.gallery import import_approved_original
+    record={
+      "category":"economy","asset_url":"https://evil.example/photo.jpg",
+      "page_url":"https://evil.example","credit":"author",
+      "kind":"original_photograph","original_file_url":"https://evil.example/a.jpg"}
+    with pytest.raises(ValueError,match="not approved"):
+        import_approved_original(record,tmp_path,urlopen=lambda req,timeout:None)

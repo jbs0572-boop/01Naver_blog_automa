@@ -43,9 +43,12 @@ jobs:
           assert len({x["title"] for x in proof["items"]})==5
           assert len({x["category"] for x in proof["items"]})==5
           assert all(x["visual_qa"]=="PASS" and not x["browser_qa"]["issues"] for x in proof["items"])
+          assert all(x["original_photo_included"] for x in proof["items"])
+          assert all(x["original_source_sha256"] for x in proof["items"])
+          assert proof["original_assets_included"] == 5
           assert all(not x["published"] and x["review"]=="PENDING" for x in proof["items"])
           assert (root/"five_articles_contact_sheet.png").is_file()
-          print("FIVE ARTICLES + 10 SCREENSHOTS + 5 ORIGINAL ENGINE CSS COVERS: PASS")
+          print("FIVE ORIGINAL-ASSET ARTICLES + 10 SCREENSHOTS + INTEGRITY PROOF: PASS")
           PY
       - name: Preserve screenshots or failed image attempts for diagnosis
         if: always()
