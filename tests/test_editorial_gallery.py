@@ -151,3 +151,35 @@ def test_full_gallery_captures_five_original_assets_without_network(tmp_path, mo
         assert (output / row["desktop_png"]).is_file()
         assert "source-photo" in (bundle / "preview.html").read_text()
         assert not row["published"]
+
+
+
+def test_mobile_unspaced_korean_headings_wrap_in_all_five_layouts():
+    """Prevent heading overflow when Korean legal/technical tokens lack spaces."""
+    from playwright.sync_api import sync_playwright
+
+    unspaced = "주택임대차보호법상대항력확인방법" * 4
+    base = (
+        "<html><head><style></style></head><body><main>"
+        "<h1>" + unspaced + "</h1>"
+        "<h2>" + unspaced + "</h2>"
+        "</main></body></html>"
+    )
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": 390, "height": 844})
+            for category in THEMES:
+                page.set_content(themed_html(base, category), wait_until="load")
+                page.evaluate("document.fonts.ready")
+                checks = page.evaluate("""() => ({
+                  pageWidth: document.documentElement.scrollWidth,
+                  headings: [...document.querySelectorAll('h1,h2')].map(el => ({
+                    overflow: el.scrollWidth > el.clientWidth + 2,
+                    tooWide: el.getBoundingClientRect().right > innerWidth + 2,
+                  }))
+                })""")
+                assert checks["pageWidth"] <= 392, category
+                assert not any(h["overflow"] or h["tooWide"] for h in checks["headings"]), category
+        finally:
+            browser.close()
