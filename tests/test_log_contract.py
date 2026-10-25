@@ -6,17 +6,90 @@ from pathlib import Path
 import pytest
 
 from tools.contract_types import PIPELINE_VERSION, ContractError
-from tools.log_contract import validate_log
+from tools.log_contract import read_events, validate_log
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_historical_logs_remain_readable() -> None:
-    assert validate_log(PROJECT_ROOT / "runs" / "beta-2026-08-26-energy-day.jsonl") == 8
-    assert (
-        validate_log(PROJECT_ROOT / "runs" / "beta-gate0-2026-08-26-9topics.jsonl")
-        == 66
+    """Check real historical logs only when both original, untracked files exist.
+
+    The repository deliberately ignores runs/, so a clean GitHub checkout has
+    no original August 2026 records. Do NOT fabricate those records, replace
+    their contents, or report that historical files were actually examined.
+    The mandatory portable legacy-format regression below always runs.
+    """
+    originals = (
+        (PROJECT_ROOT / "runs" / "beta-2026-08-26-energy-day.jsonl", 8),
+        (PROJECT_ROOT / "runs" / "beta-gate0-2026-08-26-9topics.jsonl", 66),
     )
+    available = [path.is_file() for path, _ in originals]
+    if not any(available):
+        assert "runs/" in (PROJECT_ROOT / ".gitignore").read_text(
+            encoding="utf-8"
+        ).splitlines(), "missing files must be a documented ignore policy"
+        pytest.skip(
+            "Authentic 2026-08-26 run logs are local-only and not checked in; "
+            "their compatibility is unverified in CI (portable fixtures run separately)"
+        )
+    assert all(available), "partial historical logs: cannot verify either run as complete"
+    for path, expected_count in originals:
+        assert validate_log(path) == expected_count
+
+
+def test_portable_synthetic_legacy_formats_are_readable(tmp_path: Path) -> None:
+    """Mandatory deterministic offline regression; never authentic history.
+
+    Keep two batch sizes from the historical-test contract, but generate
+    explicitly SYNTHETIC records to test the old JSONL reader without claiming
+    access to files excluded by .gitignore.
+    """
+    stages = (
+        "topic-selector", "researcher", "writer", "image-maker",
+        "content-assembler", "notion-rider", "naver-rider",
+    )
+    statuses = (
+        "success", "completed", "not-run", "passed", "failed",
+        "pending", "running", "blocked",
+    )
+    for count in (8, 66):
+        events: list[dict[str, object]] = []
+        for index in range(count):
+            common: dict[str, object] = {
+                "fixture_provenance": "SYNTHETIC_FOR_TESTING_NOT_HISTORICAL",
+                "run_id": f"SYNTHETIC-{count}-{index}",
+            }
+            kind = index % 11
+            if kind in (0, 1, 2, 3, 4, 5):
+                event = {
+                    **common,
+                    "event_type": "lane" if kind == 5 else "stage",
+                    "stage": stages[index % len(stages)],
+                    "status": statuses[index % len(statuses)],
+                }
+            elif kind == 6:
+                event = {**common, "event_type": "baseline"}
+            elif kind == 7:
+                event = {**common, "event_type": "batch_preparation"}
+            elif kind == 8:
+                event = {**common, "event_type": "batch_completion"}
+            elif kind == 9:
+                event = {
+                    **common, "event_type": "approval",
+                    "gate": "notion_write", "decision": "approved",
+                    "scope": "per-run",
+                }
+            else:
+                event = {**common, "event_type": None}
+            events.append(event)
+        path = tmp_path / f"SYNTHETIC-legacy-{count}.jsonl"
+        path.write_text(
+            "".join(json.dumps(event, ensure_ascii=False) + "\n"
+                    for event in events),
+            encoding="utf-8",
+        )
+        assert validate_log(path) == count
+        assert read_events(path) == events
 
 
 def test_legacy_status_aliases_remain_supported(tmp_path: Path) -> None:
