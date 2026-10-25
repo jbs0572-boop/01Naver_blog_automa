@@ -461,10 +461,11 @@ def run(case_path: Path, output_root: Path, *, text_backend: str,
 
         visual_spec = {
             "category": case["category"],
-            "headline": article["title"],
+            "headline": re.sub(r"\s+", " ", article["title"]).strip(),
             "deck": re.sub(r"\s+", " ", article["intro"]).strip()[:240],
             "eyebrow": profile["title"],
-            "bullets": [section["heading"] for section in article["sections"][:3]],
+            "bullets": [re.sub(r"\s+", " ", section["heading"]).strip()
+                        for section in article["sections"][:3]],
             "source_caption": (
                 "사용자가 사용권을 확인한 원본 사진 · 근거 자료 별도 확인"
                 if image_backend == "original" else
