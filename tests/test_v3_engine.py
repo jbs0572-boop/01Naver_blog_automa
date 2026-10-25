@@ -80,6 +80,7 @@ def test_five_distinct_articles_each_have_three_real_files_and_role_ids(rendered
     assert len({row["category"] for row in rendered["results"]}) == 5
     for row in rendered["results"]:
         assert row["image_count"] == 3
+        assert len(set(row["image_sha256"].values())) == 3
         assert row["original_same_sha256"] is True
         assert row["evaluation"]["score"] >= engine.MIN_SCORE
         assert row["evaluation"]["status"] == "REVIEW_CANDIDATE"
