@@ -246,3 +246,68 @@ def test_missing_section_evidence_is_never_accepted():
     with pytest.raises(ValueError, match="fact role"):
         engine.create_article("life_health", pack, article, "original.jpg",
                               "facts.png", "check.png", "사진", editor)
+
+
+
+def test_mobile_canvas_horizontal_overflow_is_rejected_with_real_viewport():
+    """A 1,000-px mobile slide must not pass an outdated 1,282-px check."""
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": 800, "height": 1200})
+            markup = engine.card_html(
+                "news_policy", "facts", "근거 비교",
+                ["첫째 근거", "둘째 근거", "셋째 근거"], "공식 출처", 0
+            ).replace("</head>", "<style>#canvas{width:1000px!important}</style></head>")
+            page.set_content(markup, wait_until="load")
+            assert "horizontal-overflow" in page.evaluate(engine.QA_JS)["issues"]
+        finally:
+            browser.close()
+
+
+def test_untrusted_source_url_cannot_create_javascript_evidence_link():
+    editor = json.loads((ROOT / "editorial_studio/v3/cases.json").read_text(
+        encoding="utf-8"
+    ))["articles"][0]
+    pack = {
+        "topic": "실내", "as_of": "2026-10-22",
+        "sources": [{"id": "S1", "title": "가짜 출처",
+                     "url": "javascript:alert(document.domain)"}],
+        "facts": [{"id": f"F{i}", "role": i, "source_id": "S1",
+                   "text": f"문장 {i}"} for i in range(5)],
+    }
+    article = {
+        "sections": [{"role": i, "heading": f"설명 {i}",
+                      "body": f"근거를 확인하는 문장 {i}",
+                      "fact_ids": [f"F{i}"]} for i in range(5)]
+    }
+    with pytest.raises(ValueError, match="source URL must be HTTPS"):
+        engine.create_article(
+            "life_health", pack, article, "original.jpg",
+            "facts.png", "check.png", "원본 사진", editor
+        )
+
+
+def test_zip_archive_aggregate_expansion_limit_is_checked_before_writing(tmp_path, monkeypatch):
+    """Thirty entries below the individual limit can still exceed a safe total."""
+    class SyntheticMember:
+        filename = "articles/source.json"
+        file_size = 20_000_000
+        compress_size = 12_000_000
+        external_attr = 0
+        def is_dir(self):
+            return False
+
+    class SyntheticZip:
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+        def infolist(self):
+            return [SyntheticMember() for _ in range(30)]
+
+    monkeypatch.setattr(engine.zipfile, "ZipFile", lambda _: SyntheticZip())
+    with pytest.raises(ValueError, match="total uncompressed size"):
+        engine._extract_source(tmp_path / "not-a-real-zip.zip", tmp_path / "output")
+    assert not (tmp_path / "output" / "articles").exists()
