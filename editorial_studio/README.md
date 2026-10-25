@@ -155,3 +155,17 @@ python -m coverage report -m
 ```
 
 전용 GitHub Actions에서는 실제 실행된 편집 엔진의 줄·분기 커버리지 JSON도 아티팩트로 남깁니다. 모델 과금 API는 테스트에서 모킹합니다.
+
+## 2026-10-25 이미지 정책 업데이트: 원본 사진 우선
+
+사용자가 권한을 확인한 원본 인물·장소·영화·제품·건물 사진은 다시 승인 절차를 반복하지 않고 우선 활용합니다. 이미지를 생성해야 할 때에는 정보 그래픽을 HTML/CSS → Playwright 캡처 → DOM·PNG·모바일 검수 → 최대 3회 조정으로 처리합니다.
+
+기본 엔진의 새로운 이미지 선택 옵션:
+- --image-backend auto --image-file /path/to/approved.jpg : 원본 사진 보존+합성
+- --image-backend auto : HTML/CSS 기반 정확한 정보 이미지
+- --image-backend original, html : 제작 방식 강제
+- 기존 import, openai, none은 유지
+
+모든 원본 파일은 byte-for-byte 및 SHA-256으로 기록합니다. Chromium 캡처 결과에는 cover.png, mobile.png, slide.html, 시도별 PNG/검사 JSON이 남습니다. 텍스트·이미지 잘림이 끝내 해결되지 않으면 QA_FAIL로 처리하고 생성 완료를 선언하지 않습니다.
+
+자세한 기준: MEDIA_POLICY.md. 사람의 맥락·저작권·미적 검수는 기술 검사와 별개입니다.

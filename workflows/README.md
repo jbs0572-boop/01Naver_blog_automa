@@ -45,3 +45,5 @@
 - [editorial-preview](v2/editorial-preview/intend.md) — 출처를 함께 확인하는 오프라인 반응형 HTML 미리보기
 
 - [editorial-studio-quality](ci/editorial-studio-quality/intend.md) — 다섯 편집 스타일의 독립 오프라인 5×2 반복 벤치마크, 이미지 품질 테스트와 점수 v1/v2 비교
+
+- [visual-qa](ci/visual-qa/intend.md) — 승인 원본 보존, HTML/CSS 이미지 생성, Chromium 시각 품질 검사
