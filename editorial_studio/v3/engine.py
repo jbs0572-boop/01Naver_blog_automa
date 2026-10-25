@@ -375,6 +375,9 @@ def generate(source_archive:Path, out:Path)->dict:
                 check_source='점검 항목 · '+' · '.join(source_map[sid]['title'] for sid in all_ids)
                 facts_png,qa1=create_visual(page,imagefolder,cat,'facts',spec['fact_title'],fact_entries,facts_source)
                 check_png,qa2=create_visual(page,imagefolder,cat,'check',spec['check_title'],check_entries,check_source)
+                image_hashes={'original':sha(dest),'facts':sha(facts_png),'check':sha(check_png)}
+                if len(set(image_hashes.values()))!=3:
+                    raise ValueError('image role files are identical; three distinct visuals required')
                 html_content=create_article(cat,pack,article,dest.name,facts_png.name,check_png.name,spec['photo_caption'],spec,provenance)
                 (sub/'article.html').write_text(html_content,encoding='utf8')
                 (sub/'draft.md').write_text('# '+spec['title']+'\n\n'+spec['intro']+'\n\n'+'\n\n'.join('## '+spec['headings'][i]+'\n'+s['body'] for i,s in enumerate(article['sections']))+'\n',encoding='utf8')
@@ -401,6 +404,7 @@ def generate(source_archive:Path, out:Path)->dict:
                 row={'category':cat,'title':spec['title'],'article_dir':cat,'images':{
                   'original':dest.name,'facts':facts_png.name,'check':check_png.name},
                   'original_sha256':sha(dest),'original_same_sha256':original_same,
+                  'image_sha256':image_hashes,
                   'original_credit':provenance['credit'],'image_captions':[spec['photo_caption'],'핵심 정보 비교','실행 전 점검'],
                   'diagram_qa':[qa1,qa2],'mobile_qa':mobile,'desktop_qa':desktop,
                   'screenshot_sha256':sha(mobile_png),'image_count':3,'published':False}
