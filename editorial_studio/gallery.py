@@ -118,7 +118,9 @@ def screenshot_qa(page, category: str) -> dict:
        if (document.documentElement.scrollWidth > innerWidth+2) issues.push('horizontal-overflow');
        if (!title||!title.innerText.trim()) issues.push('missing-title');
        if (sections.length!==5) issues.push('not-five-sections');
-       if (img.length!==1||img.some(i=>!i.complete||i.naturalWidth<1280)) issues.push('cover-not-loaded');
+       if (img.length<1||img.length>2||!img[0]?.complete||img[0].naturalWidth<1280) issues.push('cover-not-loaded');
+       if (img.length===2 && (!document.querySelector('.source-photo img')||
+           !img[1].complete||img[1].naturalWidth<640)) issues.push('original-photo-not-loaded');
        if (links.length<5||badLinks.length) issues.push('evidence-links-invalid');
        if (document.body.dataset.editorial!==expected) issues.push('wrong-category-theme');
        for (const [index, node] of [title,...document.querySelectorAll('h2')].entries()) {
@@ -128,7 +130,9 @@ def screenshot_qa(page, category: str) -> dict:
        }
        return {issues, actualWidth:innerWidth, scrollWidth:document.documentElement.scrollWidth,
                fullHeight:document.documentElement.scrollHeight, sections:sections.length,
-               loadedCover:img.length===1&&img[0].naturalWidth>0,
+               loadedCover:img.length>=1&&img[0].naturalWidth>=1280,
+               originalImageCount:img.length-1,
+               loadedOriginal:img.length===2&&img[1].naturalWidth>=640,
                theme:document.body.dataset.editorial, evidenceLinks:links.length};
     }""", category)
 
