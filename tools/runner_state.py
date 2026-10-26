@@ -189,18 +189,44 @@ def _write_state_temp(parent_fd: int, name: str, encoded: bytes) -> tuple[int, i
         0o600,
         dir_fd=parent_fd,
     )
-    identity = os.fstat(descriptor)
+    path_identity: os.stat_result | None = None
     try:
-        with os.fdopen(descriptor, "wb") as handle:
+        path_identity = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+        identity = os.fstat(descriptor)
+        if (path_identity.st_dev, path_identity.st_ino) != (
+            identity.st_dev,
+            identity.st_ino,
+        ):
+            raise OSError("temporary state path changed after creation")
+    except OSError:
+        os.close(descriptor)
+        try:
+            current = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+            if (
+                path_identity is not None
+                and stat.S_ISREG(current.st_mode)
+                and (current.st_dev, current.st_ino)
+                == (path_identity.st_dev, path_identity.st_ino)
+            ):
+                os.unlink(name, dir_fd=parent_fd)
+        except OSError:
+            pass
+        raise
+    owns_descriptor = True
+    try:
+        handle = os.fdopen(descriptor, "wb")
+        owns_descriptor = False
+        with handle:
             _ = handle.write(encoded)
             handle.flush()
             _ = os.fsync(handle.fileno())
         return identity.st_dev, identity.st_ino
     except BaseException:
-        try:
-            os.close(descriptor)
-        except OSError:
-            pass
+        if owns_descriptor:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
         try:
             current = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
             if (current.st_dev, current.st_ino) == (identity.st_dev, identity.st_ino):

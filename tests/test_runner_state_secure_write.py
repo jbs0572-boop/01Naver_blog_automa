@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from typing import Self
 
 import pytest
 
@@ -72,3 +73,63 @@ def test_atomic_state_write_keeps_existing_json_contract(tmp_path: Path) -> None
         "label": "검증",
         "status": "passed",
     }
+
+
+def test_temp_write_failure_does_not_close_reused_descriptor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    parent_fd = os.open(tmp_path, os.O_RDONLY | os.O_DIRECTORY)
+    original_fdopen = os.fdopen
+    unrelated_fd: int | None = None
+
+    class ClosedWriterThenRaises:
+        def __init__(self, descriptor: int, mode: str) -> None:
+            self.handle = original_fdopen(descriptor, mode)
+
+        def __enter__(self) -> Self:
+            return self
+
+        def write(self, data: bytes) -> int:
+            return self.handle.write(data)
+
+        def flush(self) -> None:
+            self.handle.flush()
+
+        def fileno(self) -> int:
+            return self.handle.fileno()
+
+        def __exit__(self, *_: object) -> None:
+            nonlocal unrelated_fd
+            self.handle.close()
+            unrelated_fd = os.open("/dev/null", os.O_RDONLY)
+            raise OSError("simulated flush failure after close")
+
+    monkeypatch.setattr(os, "fdopen", ClosedWriterThenRaises)
+    try:
+        with pytest.raises(OSError, match="simulated flush failure"):
+            runner_state._write_state_temp(parent_fd, ".state.tmp", b"{}")
+        assert unrelated_fd is not None
+        assert os.fstat(unrelated_fd)
+        assert list(tmp_path.iterdir()) == []
+    finally:
+        if unrelated_fd is not None:
+            os.close(unrelated_fd)
+        os.close(parent_fd)
+
+
+def test_temp_write_fstat_failure_closes_descriptor_and_removes_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    parent_fd = os.open(tmp_path, os.O_RDONLY | os.O_DIRECTORY)
+
+    def fail_fstat(descriptor: int) -> os.stat_result:
+        _ = descriptor
+        raise OSError("simulated fstat failure")
+
+    monkeypatch.setattr(os, "fstat", fail_fstat)
+    try:
+        with pytest.raises(OSError, match="simulated fstat failure"):
+            runner_state._write_state_temp(parent_fd, ".state.tmp", b"{}")
+        assert list(tmp_path.iterdir()) == []
+    finally:
+        os.close(parent_fd)
