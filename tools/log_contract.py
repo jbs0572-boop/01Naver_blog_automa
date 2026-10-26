@@ -43,7 +43,10 @@ def read_events(path: Path) -> list[JSONMap]:
             continue
         try:
             raw: JSONValue = json.loads(line)
-        except json.JSONDecodeError as error:
+        except (ValueError, RecursionError) as error:
+            # The standard decoder may raise ValueError for oversized integers
+            # or RecursionError for deeply nested untrusted JSON, not just
+            # JSONDecodeError. Treat all decoder failures as invalid evidence.
             raise ContractError(f"invalid JSON at {path}:{line_no}") from error
         event = _map(raw, f"{path}:{line_no}")
         event_type = event.get("event_type")
