@@ -85,7 +85,7 @@ def test_deeply_nested_json_fails_closed_at_every_approval_boundary(
     tmp_path: Path, boundary: str,
 ) -> None:
     target, bundle = _target(tmp_path, boundary)
-    target.write_text("[" * 1500 + "0" + "]" * 1500, encoding="utf-8")
+    target.write_text("[" * 20000 + "0" + "]" * 20000, encoding="utf-8")
     with pytest.raises(ContentError, match="cannot read JSON"):
         if boundary == "sourcepack":
             build_bundle(target, tmp_path / "output")
