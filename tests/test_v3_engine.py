@@ -67,7 +67,9 @@ def build_fixture_archive(tmp_path: Path) -> Path:
 @pytest.fixture(scope="module")
 def rendered(tmp_path_factory):
     folder = tmp_path_factory.mktemp("v3-actual-chromium")
-    return engine.generate(build_fixture_archive(folder), folder / "output")
+    result = engine.generate(build_fixture_archive(folder), folder / "output")
+    result["_fixture_output_root"] = str(folder / "output")
+    return result
 
 
 def test_five_distinct_articles_each_have_three_real_files_and_role_ids(rendered):
@@ -489,3 +491,38 @@ def test_matching_hash_does_not_allow_tiny_original_photo(tmp_path):
     provenance.write_text(json.dumps(info), encoding="utf-8")
     with pytest.raises(ValueError, match="dimensions/format invalid"):
         engine._source_category(extracted, "economy")
+
+
+
+def test_every_rendered_article_has_topic_level_intend_and_source_sha(rendered):
+    from editorial_studio import topic_intents
+    output = Path(rendered["_fixture_output_root"])
+    assert rendered["intends_total"] == 5
+    assert {row["category"] for row in rendered["results"]} == set(engine.CATEGORIES)
+    for row in rendered["results"]:
+        path = output / row["category"] / "intend.md"
+        assert path.is_file()
+        assert hashlib.sha256(path.read_bytes()).hexdigest() == row["intend_sha256"]
+        assert row["intend_source_sha256"] == topic_intents.load(row["category"])["sha256"]
+        assert row["intend_contract_verified"] is True
+        assert row["intent_review"] == "PENDING"
+        assert row["evaluation"]["checks"]["intent_contract"] is True
+        assert row["evaluation"]["weights"]["intent_contract"] == 0
+        body = path.read_text(encoding="utf-8")
+        assert row["title"] in body
+        assert "실제 원문과의 대조: 아직 사람 확인 필요" in body
+        for role in topic_intents.IMAGE_ROLES:
+            assert role in body
+
+
+def test_v3_fails_closed_if_even_one_category_intend_is_missing(tmp_path, monkeypatch):
+    from editorial_studio import topic_intents
+    import shutil
+    archived = build_fixture_archive(tmp_path)
+    temp_dir = tmp_path / "intends-copy"
+    shutil.copytree(topic_intents.TOPIC_DIR, temp_dir)
+    (temp_dir / "news_policy" / "intend.md").unlink()
+    monkeypatch.setattr(topic_intents, "TOPIC_DIR", temp_dir)
+    with pytest.raises(topic_intents.IntentError, match="missing category intend.md"):
+        engine.generate(archived, tmp_path / "must-block")
+
