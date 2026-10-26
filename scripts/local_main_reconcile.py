@@ -200,7 +200,26 @@ def index_path(repo: Path) -> Path:
     return path if path.is_absolute() else repo / path
 
 
+def require_restorable_index(repo: Path) -> None:
+    """Fail closed on index layouts this backup cannot restore byte-for-byte.
+
+    Unmerged index stages may reference blobs unreachable from saved refs.
+    A split index depends on a separate sharedindex file not included in
+    git-index.raw. Reject both *before* claiming a complete backup.
+    """
+    if git(repo, "ls-files", "--unmerged", "-z"):
+        raise ReconcileError(
+            "Unmerged index stages need separate recovery; backup not started"
+        )
+    if text(git(repo, "rev-parse", "--shared-index-path")):
+        raise ReconcileError(
+            "Split-index depends on a separate sharedindex file; "
+            "disable it in a separate copy or use a complete Git-aware backup"
+        )
+
+
 def repo_state(repo: Path) -> dict:
+    require_restorable_index(repo)
     status = git(repo, "status", "--porcelain=v1", "-z", "--untracked-files=all")
     tracked = raw_diff(repo)
     staged = raw_diff(repo, staged=True)
@@ -221,37 +240,62 @@ def repo_state(repo: Path) -> dict:
 
 def commit_report(repo: Path, commit: str, remote: str, cherry: dict) -> dict:
     stamp, _, subject = text(git(repo, "show", "-s", "--format=%aI%x09%s", commit)).partition("\t")
-    raw = git(repo, "diff-tree", "--no-commit-id", "--name-status", "-r",
-              "--root", commit, "-z")
-    parts = raw.split(b"\x00")
-    idx, files = 0, []
-    while idx < len(parts) and parts[idx]:
-        operation = text(parts[idx]); idx += 1
-        if not re.fullmatch(r"[ACDMRTUXB][0-9]*", operation):
-            raise ReconcileError("Unexpected Git diff-tree status: " + operation)
-        n = 2 if operation[0] in "RC" else 1
-        paths = [path_text(parts[idx + j]) for j in range(n)]
-        idx += n
-        path = paths[-1]
-        remote_blob, old_blob = blob(repo, remote, path), blob(repo, commit, path)
-        history = text(git(repo, "log", "-n", "2", "--format=%h %as %s",
-                           remote, "--", path))
-        files.append({
-            "operation": operation, "paths": paths,
-            "remote_path_exists": remote_blob is not None,
-            "byte_identical_at_local_commit": remote_blob is not None and remote_blob == old_blob,
-            "remote_path_recent_commits": history.splitlines() if history else [],
-        })
+    parents = text(git(repo, "rev-list", "--parents", "-n", "1", commit)).split()[1:]
+    if len(parents) > 1:
+        # A merge's default diff-tree view is empty. Compare against ALL parents
+        # so conflict-resolution-only changes and second-parent files survive.
+        comparisons = [
+            (parent, git(repo, "diff-tree", "--no-commit-id", "--name-status",
+                         "-r", "-z", parent, commit))
+            for parent in parents
+        ]
+    else:
+        comparisons = [(
+            parents[0] if parents else "ROOT",
+            git(repo, "diff-tree", "--no-commit-id", "--name-status", "-r",
+                "--root", commit, "-z"),
+        )]
+
+    files_by_paths: dict[tuple[str, ...], dict] = {}
+    for parent, raw in comparisons:
+        parts = raw.split(b"\x00")
+        idx = 0
+        while idx < len(parts) and parts[idx]:
+            operation = text(parts[idx]); idx += 1
+            if not re.fullmatch(r"[ACDMRTUXB][0-9]*", operation):
+                raise ReconcileError("Unexpected Git diff-tree status: " + operation)
+            count = 2 if operation[0] in "RC" else 1
+            paths = [path_text(parts[idx + j]) for j in range(count)]
+            idx += count
+            key = tuple(paths)
+            if key in files_by_paths:
+                files_by_paths[key]["changes_by_parent"][parent] = operation
+                continue
+            path = paths[-1]
+            remote_blob, local_blob = blob(repo, remote, path), blob(repo, commit, path)
+            history = text(git(repo, "log", "-n", "2", "--format=%h %as %s",
+                               remote, "--", path))
+            files_by_paths[key] = {
+                "operation": operation,
+                "paths": paths,
+                "changes_by_parent": {parent: operation},
+                "remote_path_exists": remote_blob is not None,
+                "byte_identical_at_local_commit": (
+                    remote_blob is not None and remote_blob == local_blob
+                ),
+                "remote_path_recent_commits": history.splitlines() if history else [],
+            }
+    files = list(files_by_paths.values())
     august = next((v for prefix, v in AUGUST.items() if commit.startswith(prefix)), None)
     decision = august[0] if august else "NEEDS_SEMANTIC_REVIEW"
     rationale = (august[1] + " (PR #12 interpretation; verify against current main)"
                  if august else "Same path or patch alone does not prove equal behavior")
     return {
         "sha": commit, "short": commit[:10], "date": stamp, "subject": subject,
-        "files": files, "patch_equivalence": cherry.get(commit, "unknown"),
+        "parents_compared": parents, "files": files,
+        "patch_equivalence": cherry.get(commit, "unknown"),
         "classification": decision, "reason": rationale,
     }
-
 
 def audit(repo: Path, remote: str = "origin/main") -> dict:
     local = text(git(repo, "rev-parse", "refs/heads/main"))
