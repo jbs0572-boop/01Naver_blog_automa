@@ -266,16 +266,14 @@ def create_article(category:str,pack:dict,article:dict,src_name:str,
     if not pack['topic'].split()[0] in title:raise ValueError('topic omitted from title')
     # Evidence links in a reviewed archive are still untrusted URLs.
     # Every rendered citation must be an actual HTTPS origin, never javascript:.
-    from urllib.parse import urlsplit
+    # Apply the same public-HTTPS validator as the frozen evidence pack.
+    # Direct HTML renderer calls must not allow links to local/IP endpoints.
+    from editorial_studio.engine import _url as public_https_url, EngineError
     for source in pack['sources']:
-        candidate = source.get('url', '')
-        if not isinstance(candidate, str):
-            raise ValueError('source URL must be HTTPS')
-        parsed = urlsplit(candidate)
-        if (parsed.scheme != 'https' or not parsed.hostname
-                or parsed.username is not None or parsed.password is not None
-                or parsed.port not in (None, 443)):
-            raise ValueError('source URL must be HTTPS')
+        try:
+            public_https_url(source.get('url', ''))
+        except EngineError as exc:
+            raise ValueError('source URL must be HTTPS (public host)') from exc
     sources={item['id']:item for item in pack['sources']}
     facts={item['id']:item for item in pack['facts']}
     referenced=set()
@@ -329,9 +327,10 @@ section{{border-top:1px solid {theme['accent']};padding-top:6px;margin-top:35px}
         page_url=provenance.get('page_url') or provenance.get('original_file_url')
         license_text=provenance.get('license')
         if page_url:
-            from urllib.parse import urlsplit
-            if urlsplit(page_url).scheme!='https':
-                raise ValueError('photo attribution URL must be HTTPS')
+            try:
+                public_https_url(page_url)
+            except EngineError as exc:
+                raise ValueError('photo attribution URL must be HTTPS (public host)') from exc
             line=f'원본 출처: <a href="{esc(page_url)}" target="_blank" rel="noopener noreferrer">{esc(credit)}</a>'
         else:
             line=f'원본 출처: {esc(credit)}'
