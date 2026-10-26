@@ -69,7 +69,7 @@ def test_deeply_nested_image_proof_json_is_a_contract_rejection(
     tmp_path: Path, kind: str,
 ) -> None:
     path = tmp_path / "proof.jsonl"
-    path.write_text("[" * 1500 + "0" + "]" * 1500 + "\n", encoding="utf-8")
+    path.write_text("[" * 20000 + "0" + "]" * 20000 + "\n", encoding="utf-8")
     with pytest.raises(ContractError, match="invalid JSON"):
         if kind == "metadata":
             validate_image_metadata(path, "formal")
