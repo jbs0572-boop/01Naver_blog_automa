@@ -48,7 +48,7 @@ def _metadata(image: Path) -> dict[str, object]:
         "generation_snapshot": "gpt-image-2-2026-04-21",
         "generation_control": "locked",
         "quality": "high",
-        "size": "1600x900",
+        "size": "1x1",
         "prompt_template_version": "image-prompt-v1",
         "prompt_sha256": "sha256:" + "1" * 64,
         "reference_sha256": [],
@@ -57,6 +57,17 @@ def _metadata(image: Path) -> dict[str, object]:
         "generated_at": "2026-08-27T10:00:00+09:00",
         "provenance_status": "generated",
     }
+
+
+def test_valid_png_with_forged_large_metadata_size_is_rejected(tmp_path: Path) -> None:
+    image = tmp_path / "tiny.png"
+    image.write_bytes(VALID_PNG)
+    metadata = tmp_path / "image-generation.jsonl"
+    values = _metadata(image)
+    values["size"] = "1600x900"  # Historically passed with a real 1x1 image.
+    metadata.write_text(json.dumps(values) + "\\n", encoding="utf-8")
+    with pytest.raises(ContractError, match="size does not match decoded pixels"):
+        validate_image_metadata(metadata, "formal")
 
 
 def _quality(image: Path) -> dict[str, object]:
