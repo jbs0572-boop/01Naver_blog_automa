@@ -8,7 +8,7 @@ Python 스크립트 scripts/local_main_reconcile.py는 원본 로컬 main을 che
 
 - /tmp/naver-main-reconcile-20261026의 기존 복구 스냅샷 복제, SHA-256 대조
 - 모든 Git refs를 all-git-refs.bundle 파일로 저장하고 git bundle verify 수행
-- Tracked/staged 변경의 바이너리 diff, Git 비무시 untracked 파일의 개인용 tar.gz 아카이브
+- Tracked/staged 변경의 변환되지 않은 바이너리 diff와, **모든 tracked 작업트리 파일의 실제 바이트 사본**, Git 비무시 untracked 파일의 개인용 tar.gz 아카이브
 - 백업 전후 HEAD 및 작업 트리 상태 해시 검증
 - origin/main..main에 있는 모든 로컬 커밋 SHA, 제목, 날짜, 변경 경로, 동일 경로의 원격 최근 이력, git cherry 패치 동등성 기록
 - 개인용 AUDIT.md, audit.json, backup-sha256.json 생성
@@ -52,3 +52,11 @@ AUDIT.md와 audit.json을 Mac Codex가 모두 검토합니다. 자동 수집된 
 5. 현행 제품에 실제 필요한 누락 사항만 새로운 PR로 구현·CI 검증
 
 GitHub Actions에서 Python 코드 자체의 재현성은 검증할 수 있지만, Mac에서 스크립트를 실행하기 전까지는 1~3 완료라고 주장할 수 없습니다.
+
+## Git index 숨김 플래그와 submodule 보존
+
+Git의 assume-unchanged 또는 skip-worktree 플래그가 있으면 git diff가 변경된 실제 바이트를 놓칠 수 있습니다. 이 백업 도구는 Git의 상태 보고와 무관하게 모든 tracked 작업트리 파일을 직접 읽고 tracked-worktree.tar.gz에 별도 보존하며, 아카이브를 다시 읽어 SHA-256을 검증합니다. 해당 검사는 리포지터리의 플래그나 index를 변경하지 않습니다.
+
+부모 Git bundle은 자식 submodule의 객체나 dirty 파일을 포함하지 않습니다. 따라서 tracked submodule(gitlink)이 발견되면 **백업 성공을 거부**합니다. Mac Codex가 그 submodule 저장소의 refs/작업트리/미커밋 및 미추적 파일을 별도 백업한 뒤 통합 복구 절차를 결정해야 합니다. untracked 내부 Git 저장소도 조용히 누락시키지 않고 중단합니다.
+
+Git bundle 검증은 단순 header 확인 외에 **독립 bare 저장소의 실제 unbundle·객체 fsck 및 원본 main ref 비교**를 수행합니다.
