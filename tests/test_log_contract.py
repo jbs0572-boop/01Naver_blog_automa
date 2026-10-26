@@ -138,3 +138,20 @@ def test_optimized_event_requires_timezone(tmp_path: Path) -> None:
 
     with pytest.raises(ContractError, match="schema"):
         _ = validate_log(path)
+
+
+def test_oversized_run_log_rejected_before_json_parse(tmp_path: Path, monkeypatch) -> None:
+    import tools.log_contract as log_contract
+
+    monkeypatch.setattr(log_contract, "MAX_RUN_LOG_BYTES", 40)
+    path = tmp_path / "oversized.jsonl"
+    _ = path.write_bytes((b'{"event_type": "baseline"}\\n'.replace(b"\\\\n", b"\\n")) * 3)
+    with pytest.raises(ContractError, match="run log exceeds"):
+        _ = read_events(path)
+
+
+def test_run_log_invalid_utf8_returns_contract_error(tmp_path: Path) -> None:
+    path = tmp_path / "invalid-utf8.jsonl"
+    _ = path.write_bytes(b'{"event_type": "baseline"}\\n\\xff'.replace(b"\\\\", b"\\"))
+    with pytest.raises(ContractError, match="not valid UTF-8"):
+        _ = read_events(path)

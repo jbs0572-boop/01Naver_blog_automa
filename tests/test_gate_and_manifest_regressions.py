@@ -265,3 +265,50 @@ def test_non_stage_approval_event_cannot_impersonate_q1(tmp_path: Path) -> None:
             root, manifest_path, run_log, "notion_write", run_id,
             "datasource-fixture",
         )
+
+
+def test_gate_refuses_manifest_from_other_run_even_if_digest_matches(
+    tmp_path: Path,
+) -> None:
+    root, manifest_path, manifest, _ = _fixture(tmp_path)
+    run_id = "RUN-unrelated"
+    log = root / "run.jsonl"
+    _write_log(log, [_stage(run_id), _approval(manifest, run_id)])
+    with pytest.raises(ContractError, match="manifest run_id"):
+        _ = verify_gate(root, manifest_path, log, "notion_write", run_id, "datasource-fixture")
+
+
+def test_gate_refuses_q1_stage_from_unrelated_topic(tmp_path: Path) -> None:
+    root, manifest_path, manifest, run_id = _fixture(tmp_path)
+    log = root / "run.jsonl"
+    stage = _stage(run_id)
+    stage["topic_id"] = "TOPIC-other"
+    _write_log(log, [stage, _approval(manifest, run_id)])
+    with pytest.raises(ContractError, match="content-assembler Q1 pass is missing"):
+        _ = verify_gate(root, manifest_path, log, "notion_write", run_id, "datasource-fixture")
+
+
+def test_gate_b_refuses_q2_stage_from_unrelated_topic(tmp_path: Path) -> None:
+    root, manifest_path, manifest, run_id = _fixture(tmp_path, mode="formal")
+    log = root / "run.jsonl"
+    wrong_q2 = _stage(run_id)
+    wrong_q2["stage"] = "notion-rider"
+    wrong_q2["topic_id"] = "TOPIC-other"
+    wrong_q2["ended_at"] = "2026-08-27T00:02:00+00:00"
+    approved = _approval(
+        manifest,
+        run_id,
+        gate="naver_draft_save",
+        target_id="blog-fixture",
+        notion_page_id="page-fixture",
+        notion_last_verified_at="2026-08-27T00:02:00+00:00",
+        notion_roundtrip_digest=manifest["artifact_digest"],
+        blog_id="blog-fixture",
+    )
+    _write_log(log, [_stage(run_id), wrong_q2, approved])
+    with pytest.raises(ContractError, match="Notion Q2 pass is missing"):
+        _ = verify_gate(
+            root, manifest_path, log, "naver_draft_save", run_id,
+            "blog-fixture", notion_page_id="page-fixture",
+            notion_verified_at="2026-08-27T00:02:00+00:00", blog_id="blog-fixture",
+        )
