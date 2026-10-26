@@ -4,7 +4,25 @@ on:
   pull_request:
     paths:
       - 'editorial_studio/v3/**'
+      - 'editorial_studio/*.py'
+      - 'editorial_studio/profiles/**'
+      - 'editorial_studio/benchmarks/**'
+      - 'editorial_studio/examples/**'
       - 'tests/test_v3_engine.py'
+      - 'tests/test_editorial_*.py'
+      - '.github/workflows/v3-three-image-quality.yml'
+      - 'workflows/ci/v3-three-image-quality/intend.md'
+  push:
+    branches:
+      - main
+    paths:
+      - 'editorial_studio/v3/**'
+      - 'editorial_studio/*.py'
+      - 'editorial_studio/profiles/**'
+      - 'editorial_studio/benchmarks/**'
+      - 'editorial_studio/examples/**'
+      - 'tests/test_v3_engine.py'
+      - 'tests/test_editorial_*.py'
       - '.github/workflows/v3-three-image-quality.yml'
       - 'workflows/ci/v3-three-image-quality/intend.md'
   workflow_dispatch:

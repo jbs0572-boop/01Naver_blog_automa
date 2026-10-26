@@ -209,6 +209,75 @@ def test_section_cites_only_its_own_fact_sources_and_preserves_photo_credit():
     assert "CC BY 2.0" in rendered
 
 
+
+
+def _minimal_html_case_for_security():
+    editor = json.loads((ROOT / "editorial_studio/v3/cases.json").read_text(
+        encoding="utf-8"
+    ))["articles"][0]
+    pack = {
+        "topic": "실내 습도",
+        "as_of": "2026-10-22",
+        "sources": [{"id": "S1", "title": "공개된 자료", "url": "https://example.com/official"}],
+        "facts": [{"id": f"F{i}", "role": i, "source_id": "S1", "text": f"내용 {i}"}
+                  for i in range(5)],
+    }
+    article = {
+        "sections": [{"role": i, "body": f"출처가 있는 문장 {i}",
+                      "fact_ids": [f"F{i}"]} for i in range(5)]
+    }
+    return editor, pack, article
+
+
+@pytest.mark.parametrize("bad_url", [
+    "https://127.0.0.1/private",
+    "https://localhost/private",
+    "https://user:pass@example.com/credit",
+    "https://example.com:8443/credit",
+    "https:///missing-host",
+    "javascript:alert(1)",
+])
+@pytest.mark.parametrize("field", ["page_url", "original_file_url"])
+def test_photo_credit_never_links_to_private_or_malformed_origin(bad_url, field):
+    editor, pack, article = _minimal_html_case_for_security()
+    with pytest.raises(ValueError, match="photo attribution URL must be HTTPS"):
+        engine.create_article(
+            "life_health", pack, article, "original.jpg", "facts.png", "check.png",
+            "맥락 사진", editor, {"credit": "사진 제공자", field: bad_url}
+        )
+
+
+@pytest.mark.parametrize("bad_url", [
+    "https://127.0.0.1/internal",
+    "https://name:pass@public.example.com/evidence",
+    "https://example.com:8443/evidence",
+])
+def test_direct_html_renderer_uses_the_same_public_source_url_policy(bad_url):
+    editor, pack, article = _minimal_html_case_for_security()
+    pack["sources"][0]["url"] = bad_url
+    with pytest.raises(ValueError, match="source URL must be HTTPS"):
+        engine.create_article(
+            "life_health", pack, article, "original.jpg", "facts.png", "check.png",
+            "사진", editor
+        )
+
+
+def test_v3_browser_ci_covers_shared_editorial_inputs_and_main_merges():
+    workflow = (ROOT / ".github/workflows/v3-three-image-quality.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "  push:\n    branches:\n      - main" in workflow
+    for entry in [
+        "editorial_studio/v3/**",
+        "editorial_studio/*.py",
+        "editorial_studio/profiles/**",
+        "editorial_studio/benchmarks/**",
+        "editorial_studio/examples/**",
+        "tests/test_v3_engine.py",
+    ]:
+        assert workflow.count(f"      - '{entry}'") == 2, entry
+
+
 def test_missing_reference_fails_closed_before_publishing():
     editor = json.loads((ROOT / "editorial_studio/v3/cases.json").read_text(encoding="utf-8"))["articles"][0]
     pack = {"topic": "실내", "as_of": "2026-10-22",
