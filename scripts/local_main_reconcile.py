@@ -110,6 +110,90 @@ def untracked_fingerprints(repo: Path) -> dict[str, str]:
     return result
 
 
+def tracked_worktree_fingerprints(repo: Path) -> dict[str, str]:
+    """Hash all actual tracked worktree bytes, independent of Git diff/index flags.
+
+    Git assume-unchanged and skip-worktree can hide dirty bytes from status/diff.
+    An initialized submodule is a distinct repository whose objects and dirty
+    worktree are absent from the superproject bundle, so fail closed.
+    """
+    staged = git(repo, "ls-files", "--stage", "-z")
+    for line in staged.split(b"\x00"):
+        if not line:
+            continue
+        attrs, separator, encoded = line.partition(b"\t")
+        if not separator:
+            raise ReconcileError("Malformed Git index entry")
+        if attrs.startswith(b"160000 "):
+            raise ReconcileError(
+                "Tracked submodule must be archived separately: " + repr(path_text(encoded))
+            )
+    names = [path_text(x) for x in git(repo, "ls-files", "-z").split(b"\x00") if x]
+    result: dict[str, str] = {}
+    for name in names:
+        relative = Path(name)
+        if relative.is_absolute() or ".." in relative.parts:
+            raise ReconcileError("Unsafe tracked file path")
+        source = repo / relative
+        if source.is_symlink():
+            result[name] = "symlink:" + hashlib.sha256(
+                os.readlink(source).encode("utf8", "surrogateescape")
+            ).hexdigest()
+        elif source.is_file():
+            result[name] = "file:" + sha(source)
+        elif not source.exists():
+            # Tracked deletion is restorable from the commit/index + patch.
+            result[name] = "MISSING"
+        else:
+            raise ReconcileError("Unexpected tracked nonfile: " + repr(name))
+    return result
+
+
+def tracked_worktree_archive(repo: Path, output: Path,
+                             expected: dict[str, str]) -> int:
+    """Archive all tracked on-disk files, not only what git diff reports."""
+    actual = tracked_worktree_fingerprints(repo)
+    if actual != expected:
+        raise ReconcileError("Tracked worktree changed before copy")
+    with tarfile.open(output, "w:gz") as archive:
+        for name, fingerprint in expected.items():
+            if fingerprint == "MISSING":
+                continue
+            archive.add(repo / name, arcname=(Path("tracked") / name).as_posix(),
+                        recursive=False)
+    seen: dict[str, str] = {}
+    with tarfile.open(output, "r:gz") as archive:
+        for member in archive.getmembers():
+            if not member.name.startswith("tracked/"):
+                raise ReconcileError("Unexpected path in tracked archive")
+            name = member.name[len("tracked/"):]
+            if member.issym():
+                value = "symlink:" + hashlib.sha256(
+                    member.linkname.encode("utf8", "surrogateescape")
+                ).hexdigest()
+            elif member.isfile():
+                stream = archive.extractfile(member)
+                if stream is None:
+                    raise ReconcileError("Corrupt tracked archive data")
+                digest = hashlib.sha256()
+                with stream:
+                    for block in iter(lambda: stream.read(1024 * 1024), b""):
+                        digest.update(block)
+                value = "file:" + digest.hexdigest()
+            else:
+                raise ReconcileError("Unarchived special tracked path: " + repr(name))
+            if name in seen:
+                raise ReconcileError("Duplicate tracked archive path")
+            seen[name] = value
+    complete = dict(seen)
+    for name, fingerprint in expected.items():
+        if fingerprint == "MISSING":
+            complete[name] = "MISSING"
+    if complete != expected:
+        raise ReconcileError("Tracked worktree archive bytes differ from originals")
+    return len(expected)
+
+
 def repo_state(repo: Path) -> dict:
     status = git(repo, "status", "--porcelain=v1", "-z", "--untracked-files=all")
     tracked = raw_diff(repo)
@@ -123,6 +207,7 @@ def repo_state(repo: Path) -> dict:
         "tracked_bytes_patch_sha256": hashlib.sha256(tracked).hexdigest(),
         "staged_bytes_patch_sha256": hashlib.sha256(staged).hexdigest(),
         "index_entries_sha256": hashlib.sha256(index).hexdigest(),
+        "tracked_worktree_sha256": tracked_worktree_fingerprints(repo),
         "untracked_sha256": untracked_fingerprints(repo),
     }
 
@@ -351,6 +436,8 @@ def backup(repo: Path, snapshot: Path, destination: Path, expected_main: str,
         (folder / "staged-vs-HEAD.patch").write_bytes(raw_diff(repo, staged=True))
         (folder / "original-status.z").write_bytes(
             git(repo, "status", "--porcelain=v1", "-z", "--untracked-files=all"))
+        summary["tracked_worktree_file_count"] = tracked_worktree_archive(
+            repo, folder / "tracked-worktree.tar.gz", before["tracked_worktree_sha256"])
         summary["untracked_count"] = untracked_archive(
             repo, folder / "untracked.tar.gz", before["untracked_sha256"])
         (folder / "AUDIT.md").write_text(audit_markdown(summary), encoding="utf8")
