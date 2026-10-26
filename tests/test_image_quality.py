@@ -174,5 +174,69 @@ class ImageQualityTests(unittest.TestCase):
             _ = validate_image_quality(quality)
 
 
+    def test_image_metadata_rejects_symlink_outside_evidence_directory(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="outside-image-proof-") as external:
+            external_image = Path(external) / "original.png"
+            _ = external_image.write_bytes(self._image_bytes())
+            (self.root / "image.png").symlink_to(external_image)
+            digest = f"sha256:{hashlib.sha256(external_image.read_bytes()).hexdigest()}"
+            metadata = self._write_jsonl(
+                "symlink-image-metadata.jsonl",
+                {
+                    "generation_provider": "openai",
+                    "generation_model": "gpt-image-2",
+                    "generation_snapshot": "gpt-image-2-2026-04-21",
+                    "generation_control": "locked",
+                    "quality": "high",
+                    "size": "1600x900",
+                    "prompt_template_version": "image-prompt-v1",
+                    "prompt_sha256": "sha256:" + "1" * 64,
+                    "reference_sha256": [],
+                    "output_sha256": digest,
+                    "output_path": "image.png",
+                    "generated_at": "2026-08-27T10:00:00+09:00",
+                    "provenance_status": "generated",
+                },
+            )
+            with self.assertRaisesRegex(ContractError, "unsafe output_path"):
+                _ = validate_image_metadata(metadata, "formal")
+
+    def test_mobile_quality_rejects_symlinked_directory_outside_proof_root(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="outside-mobile-proof-") as external:
+            outside = Path(external)
+            mobile = outside / "mobile.png"
+            _ = mobile.write_bytes(self._image_bytes())
+            (self.root / "offsite").symlink_to(outside, target_is_directory=True)
+            quality = self._write_jsonl(
+                "symlink-mobile-quality.jsonl",
+                {
+                    "automated_checks": {
+                        key: "passed"
+                        for key in (
+                            "decode_check", "duplicate_check", "ocr_check",
+                            "visual_contract_check", "mobile_render_check",
+                        )
+                    },
+                    "scores": {
+                        "subject_relevance": 4,
+                        "composition_legibility": 4,
+                        "rendering_completion": 3,
+                        "information_contribution": 4,
+                        "style_consistency": 3,
+                    },
+                    "immediate_failure": False,
+                    "mobile_rendered": True,
+                    "mobile_viewport": "390x844",
+                    "mobile_render_path": "offsite/mobile.png",
+                    "mobile_render_sha256": "sha256:" + hashlib.sha256(
+                        mobile.read_bytes()
+                    ).hexdigest(),
+                    "human_verdict": "passed",
+                },
+            )
+            with self.assertRaisesRegex(ContractError, "unsafe mobile_render_path"):
+                _ = validate_image_quality(quality)
+
+
 if __name__ == "__main__":
     _ = unittest.main()
