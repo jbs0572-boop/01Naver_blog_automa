@@ -62,3 +62,11 @@ Git의 assume-unchanged 또는 skip-worktree 플래그가 있으면 git diff가 
 Git bundle 검증은 단순 header 확인 외에 **독립 bare 저장소의 실제 unbundle·객체 fsck 및 원본 main ref 비교**를 수행합니다.
 
 Git index의 숨김 플래그 등 stage metadata는 별도의 git-index.raw에 바이트 그대로 보존하고 백업 전 index SHA와 비교합니다. 모든 원격/로컬 ref도 독립 bundle unbundle의 반환 refs 목록과 직접 대조합니다. 복구 용도로만 보존하며 git-index.raw를 원본 checkout에 자동 복원하거나 적용하지는 않습니다.
+
+## 안전하게 처리할 수 없는 인덱스와 병합 커밋
+
+- **충돌 중인 인덱스(unmerged stages)**: refs에 연결되지 않은 임시 Git blob이 존재할 수 있어 백업을 시작하기 전에 오류로 중단합니다. 먼저 원본을 임의로 수정하지 말고 별도 Git 전문가 검토를 받습니다.
+- **분할 인덱스(split-index)**: 원본 `git-index.raw` 이외의 `sharedindex.*` 파일에도 정보가 저장됩니다. 현재 백업 형식에서는 그 내용을 보존하지 않으므로 성공으로 보고하지 않습니다. 인덱스 설정을 원본에서 직접 바꾸지 마세요.
+- **병합 커밋(merge commit)**: 첫 번째 부모만 검사하면 충돌 해결 과정의 변경이 빠집니다. 모든 부모와 병합 결과를 비교하고, 파일별 부모 정보(`changes_by_parent`)를 감사 결과에 기록합니다.
+
+거부된 경우 원본 `main`과 기존 `/tmp` 스냅샷은 유지합니다. 거부 상태에서 복구 완료를 주장하거나 기존 백업을 삭제하지 않습니다.
