@@ -149,14 +149,16 @@ def verify_gate(
         )
     events = read_events(run_log)
     if not any(
-        event.get("run_id") == run_id
+        event.get("event_type") == "stage"
+        and event.get("run_id") == run_id
         and event.get("stage") == "content-assembler"
         and _passed(event)
         for event in events
     ):
         raise ContractError("content-assembler Q1 pass is missing")
     if gate == "naver_draft_save" and not any(
-        event.get("run_id") == run_id
+        event.get("event_type") == "stage"
+        and event.get("run_id") == run_id
         and event.get("stage") == "notion-rider"
         and _passed(event)
         for event in events
@@ -165,7 +167,29 @@ def verify_gate(
     approvals = _approval_events(events, gate, target_id, run_id)
     if not approvals:
         raise ContractError("approval event with matching target and run is missing")
-    _, approval = approvals[-1]
+    decided_at, approval = approvals[-1]
+    # Both real time and append order matter: backdated stages added after an
+    # approval cannot retroactively authorize that already-recorded approval.
+    approval_position = next(
+        index for index, event in enumerate(events) if event is approval
+    )
+    preceding_events = events[:approval_position]
+    for required_stage in (
+        ("content-assembler", "notion-rider")
+        if gate == "naver_draft_save"
+        else ("content-assembler",)
+    ):
+        if not any(
+            event.get("event_type") == "stage"
+            and event.get("run_id") == run_id
+            and event.get("stage") == required_stage
+            and _passed(event)
+            and parse_aware_datetime(
+                event.get("ended_at"), f"{required_stage}.ended_at"
+            ) <= decided_at
+            for event in preceding_events
+        ):
+            raise ContractError(f"approval predates {required_stage} pass")
     if approval.get("decision") != "approved":
         raise ContractError("latest matching approval is not approved")
     _ensure_not_expired(approval, datetime.now(UTC))
