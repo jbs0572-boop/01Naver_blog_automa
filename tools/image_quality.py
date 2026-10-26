@@ -5,6 +5,7 @@ import hashlib
 import json
 import re
 import struct
+import zlib
 from datetime import datetime
 from pathlib import Path
 from typing import Final
@@ -85,14 +86,103 @@ def _timestamp(value: JSONValue, key: str) -> None:
         raise ContractError(f"timestamp must include timezone: {key}")
 
 
+def _complete_png(raw: bytes) -> bool:
+    """Verify PNG chunk CRCs, compressed scanlines and the final IEND chunk.
+
+    A valid PNG signature and IHDR alone do not prove the image is readable.
+    Check the bounded raster stream without requiring an image library in
+    the legacy workflow validator. This does not replace visual inspection.
+    """
+    offset = 8
+    header: tuple[int, int, int, int, int] | None = None
+    image_data: list[bytes] = []
+    while offset + 12 <= len(raw):
+        length = struct.unpack(">I", raw[offset : offset + 4])[0]
+        end = offset + 12 + length
+        if end > len(raw):
+            return False
+        kind = raw[offset + 4 : offset + 8]
+        payload = raw[offset + 8 : offset + 8 + length]
+        recorded_crc = struct.unpack(">I", raw[end - 4 : end])[0]
+        if zlib.crc32(kind + payload) & 0xFFFFFFFF != recorded_crc:
+            return False
+        if header is None:
+            if kind != b"IHDR" or length != 13:
+                return False
+            width, height, depth, color, compression, filtering, interlace = (
+                struct.unpack(">IIBBBBB", payload)
+            )
+            channels = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}.get(color)
+            depths = {
+                0: (1, 2, 4, 8, 16),
+                2: (8, 16),
+                3: (1, 2, 4, 8),
+                4: (8, 16),
+                6: (8, 16),
+            }
+            if (
+                not width or not height or channels is None
+                or depth not in depths[color]
+                or compression != 0 or filtering != 0 or interlace not in (0, 1)
+            ):
+                return False
+            header = width, height, depth, channels, interlace
+        elif kind == b"IHDR":
+            return False
+        if kind == b"IDAT":
+            image_data.append(payload)
+        if kind == b"IEND":
+            if length or end != len(raw) or not image_data:
+                return False
+            width, height, depth, channels, interlace = header
+            passes = (
+                ((0, 0, 1, 1),)
+                if interlace == 0
+                else (
+                    (0, 0, 8, 8), (4, 0, 8, 8), (0, 4, 4, 8),
+                    (2, 0, 4, 4), (0, 2, 2, 4), (1, 0, 2, 2),
+                    (0, 1, 1, 2),
+                )
+            )
+            rows: list[tuple[int, int]] = []
+            expected = 0
+            for x, y, dx, dy in passes:
+                pass_width = max(0, (width - x + dx - 1) // dx)
+                pass_height = max(0, (height - y + dy - 1) // dy)
+                if pass_width and pass_height:
+                    stride = 1 + (pass_width * depth * channels + 7) // 8
+                    expected += pass_height * stride
+                    rows.append((pass_height, stride))
+            # Reject decompression bombs, including forged large IHDR values.
+            if expected > 256 * 1024 * 1024:
+                return False
+            try:
+                decoder = zlib.decompressobj()
+                pixels = decoder.decompress(b"".join(image_data), expected + 1)
+            except zlib.error:
+                return False
+            if (
+                len(pixels) != expected or not decoder.eof
+                or decoder.unused_data or decoder.unconsumed_tail
+            ):
+                return False
+            position = 0
+            for height_in_pass, stride in rows:
+                for _ in range(height_in_pass):
+                    if pixels[position] > 4:  # PNG scanline filter byte
+                        return False
+                    position += stride
+            return True
+        offset = end
+    return False
+
+
 def _has_image_signature(path: Path) -> bool:
     raw = path.read_bytes()
     if raw.startswith(b"\x89PNG\r\n\x1a\n"):
-        return (
-            len(raw) >= 24
-            and raw[12:16] == b"IHDR"
-            and struct.unpack(">II", raw[16:24]) > (0, 0)
-        )
+        return _complete_png(raw)
+    # Other formats retain their existing signature-level check; they
+    # require a separate decoder-level follow-up.
     return raw.startswith((b"\xff\xd8\xff", b"GIF87a", b"GIF89a", b"RIFF")) and (
         b"WEBP" in raw[:16] or raw.startswith((b"\xff\xd8\xff", b"GIF87a", b"GIF89a"))
     )

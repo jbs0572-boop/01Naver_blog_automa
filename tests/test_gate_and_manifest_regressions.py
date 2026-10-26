@@ -196,3 +196,46 @@ def test_manifest_rejects_thumbnail_as_body_image(tmp_path: Path) -> None:
             "beta",
             "2026-08-27T00:00:00+00:00",
         )
+
+
+def test_approval_before_q1_cannot_be_reused_after_stage_pass(tmp_path: Path) -> None:
+    root, manifest_path, manifest, run_id = _fixture(tmp_path)
+    run_log = root / "run.jsonl"
+    late_q1 = _stage(run_id)
+    late_q1["started_at"] = "2026-08-27T01:00:00+00:00"
+    late_q1["ended_at"] = "2026-08-27T01:01:00+00:00"
+    approved_before_q1 = _approval(manifest, run_id)
+    _write_log(run_log, [approved_before_q1, late_q1])
+
+    with pytest.raises(ContractError, match="approval predates content-assembler"):
+        _ = verify_gate(
+            root, manifest_path, run_log, "notion_write", run_id,
+            "datasource-fixture",
+        )
+
+
+def test_gate_b_approval_before_notion_q2_cannot_be_reused(tmp_path: Path) -> None:
+    root, manifest_path, manifest, run_id = _fixture(tmp_path, mode="formal")
+    run_log = root / "run.jsonl"
+    late_q2 = _stage(run_id)
+    late_q2["stage"] = "notion-rider"
+    late_q2["started_at"] = "2026-08-27T01:00:00+00:00"
+    late_q2["ended_at"] = "2026-08-27T01:01:00+00:00"
+    approval = _approval(
+        manifest, run_id,
+        gate="naver_draft_save",
+        target_id="blog-fixture",
+        notion_page_id="page-fixture",
+        notion_last_verified_at="2026-08-27T01:01:00+00:00",
+        notion_roundtrip_digest=manifest["artifact_digest"],
+        blog_id="blog-fixture",
+    )
+    _write_log(run_log, [_stage(run_id), approval, late_q2])
+
+    with pytest.raises(ContractError, match="approval predates notion-rider"):
+        _ = verify_gate(
+            root, manifest_path, run_log, "naver_draft_save", run_id,
+            "blog-fixture", notion_page_id="page-fixture",
+            notion_verified_at="2026-08-27T01:01:00+00:00",
+            blog_id="blog-fixture",
+        )
