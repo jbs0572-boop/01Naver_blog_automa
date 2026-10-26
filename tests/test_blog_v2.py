@@ -143,6 +143,37 @@ def test_forbidden_evidence_urls(url):
         verified_url(url)
 
 
+@pytest.mark.parametrize("url", [
+    "https://localhost./admin",
+    "https://localhost.localdomain./admin",
+    "https://service.local./internal",
+    "https://service.internal./internal",
+    "https://review.test./internal",
+    "https://docs.invalid./internal",
+    "https://sub.localhost./internal",
+    "https://127.0.0.1./internal",
+    "https://0177.0.0.1/internal",
+    "https://0x7f.1/internal",
+    "https://example..com/invalid",
+    "https://-example.com/invalid",
+    "https://example-.com/invalid",
+    "https://./invalid",
+])
+def test_disguised_local_and_invalid_evidence_hosts_are_rejected(url):
+    with pytest.raises(ContentError):
+        verified_url(url)
+
+    edited = pack()
+    edited["sources"][0]["url"] = url
+    with pytest.raises(ContentError):
+        validate_pack(edited)
+
+
+def test_valid_public_fqdn_with_single_trailing_dot_remains_allowed():
+    url = "https://developers.naver.com./notice/article/7527"
+    assert verified_url(url) == url
+
+
 def test_valid_public_https_url():
     assert verified_url("https://developers.naver.com/notice/article/7527") == "https://developers.naver.com/notice/article/7527"
 
