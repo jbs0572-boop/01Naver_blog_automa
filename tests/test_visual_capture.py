@@ -222,3 +222,21 @@ def test_multiline_headings_and_title_are_normalized_for_image_only(tmp_path):
     assert metadata["visual_qa"]["status"] == "PASS"
     assert "먼저 확인할\n답" in (bundle / "draft.md").read_text()
     assert (bundle / "cover.png").is_file()
+
+
+def test_original_first_chromium_ci_runs_on_pr_and_main_changes():
+    workflow = (Path(__file__).resolve().parents[1] /
+                ".github/workflows/visual-qa.yml").read_text(encoding="utf-8")
+    assert "  pull_request:\n    paths:\n" in workflow
+    assert "  push:\n    branches:\n      - main\n    paths:\n" in workflow
+    assert "  workflow_dispatch:\n" in workflow
+    for path in (
+        "editorial_studio/*.py",
+        "editorial_studio/profiles/**",
+        "editorial_studio/benchmarks/**",
+        "tests/test_visual_capture.py",
+        "tests/test_workflow_intend_docs.py",
+        ".github/workflows/visual-qa.yml",
+        "workflows/ci/visual-qa/intend.md",
+    ):
+        assert workflow.count(f"      - '{path}'") == 2, path
