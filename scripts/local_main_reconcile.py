@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import tempfile
 from pathlib import Path
 
 AUGUST = {
@@ -43,7 +44,13 @@ def git(repo: Path, *args: str, allow_failure: bool = False) -> bytes:
 
 
 def text(raw: bytes) -> str:
+    """Only for conventional text command output, NOT nul-delimited filenames."""
     return raw.decode("utf8", "surrogateescape").strip()
+
+
+def path_text(raw: bytes) -> str:
+    """Preserve every byte of an opaque Git path, including leading/trailing spaces."""
+    return raw.decode("utf8", "surrogateescape")
 
 
 def sha(path: Path) -> str:
@@ -72,13 +79,51 @@ def blob(repo: Path, rev: str, path: str) -> str | None:
     return text(raw) if raw else None
 
 
+def raw_diff(repo: Path, *, staged: bool = False) -> bytes:
+    """Never run repository-configured external diff or non-restorable textconv."""
+    flags = ("diff", "--no-textconv", "--no-ext-diff", "--binary")
+    return git(repo, *flags, *(("--cached",) if staged else ()), "HEAD")
+
+
+def untracked_fingerprints(repo: Path) -> dict[str, str]:
+    paths = [path_text(x) for x in git(
+        repo, "ls-files", "--others", "--exclude-standard", "-z"
+    ).split(b"\x00") if x]
+    result: dict[str, str] = {}
+    for name in paths:
+        rel = Path(name)
+        if rel.is_absolute() or ".." in rel.parts or not name:
+            raise ReconcileError("Unsafe untracked path")
+        source = repo / rel
+        if source.is_symlink():
+            result[name] = "symlink:" + hashlib.sha256(
+                os.readlink(source).encode("utf8", "surrogateescape")
+            ).hexdigest()
+        elif source.is_dir():
+            # Nested Git worktrees collapse to ONE ls-files directory entry.
+            # Explicitly fail rather than silently drop their private files.
+            raise ReconcileError("Untracked directory needs its own full backup: " + repr(name))
+        elif source.is_file():
+            result[name] = "file:" + sha(source)
+        else:
+            raise ReconcileError("Untracked file missing or not a regular file: " + repr(name))
+    return result
+
+
 def repo_state(repo: Path) -> dict:
     status = git(repo, "status", "--porcelain=v1", "-z", "--untracked-files=all")
+    tracked = raw_diff(repo)
+    staged = raw_diff(repo, staged=True)
+    index = git(repo, "ls-files", "--stage", "-z")
     return {
         "checked_out": text(git(repo, "symbolic-ref", "--short", "HEAD")),
         "main": text(git(repo, "rev-parse", "refs/heads/main")),
         "head": text(git(repo, "rev-parse", "HEAD")),
         "working_status_sha256": hashlib.sha256(status).hexdigest(),
+        "tracked_bytes_patch_sha256": hashlib.sha256(tracked).hexdigest(),
+        "staged_bytes_patch_sha256": hashlib.sha256(staged).hexdigest(),
+        "index_entries_sha256": hashlib.sha256(index).hexdigest(),
+        "untracked_sha256": untracked_fingerprints(repo),
     }
 
 
@@ -93,7 +138,7 @@ def commit_report(repo: Path, commit: str, remote: str, cherry: dict) -> dict:
         if not re.fullmatch(r"[ACDMRTUXB][0-9]*", operation):
             raise ReconcileError("Unexpected Git diff-tree status: " + operation)
         n = 2 if operation[0] in "RC" else 1
-        paths = [text(parts[idx + j]) for j in range(n)]
+        paths = [path_text(parts[idx + j]) for j in range(n)]
         idx += n
         path = paths[-1]
         remote_blob, old_blob = blob(repo, remote, path), blob(repo, commit, path)
@@ -176,19 +221,90 @@ def audit_markdown(data: dict) -> str:
     return "\n".join(output) + "\n"
 
 
-def untracked_archive(repo: Path, output: Path) -> int:
-    names = [text(n) for n in git(repo, "ls-files", "--others", "--exclude-standard",
-                                  "-z").split(b"\x00") if n]
+def untracked_archive(repo: Path, output: Path, expected: dict[str, str]) -> int:
+    """Archive every listed nonignored file and verify decoded tar contents."""
+    names = list(untracked_fingerprints(repo))
+    if set(names) != set(expected):
+        raise ReconcileError("Untracked files changed before archive")
     with tarfile.open(output, "w:gz") as archive:
         for name in names:
             relative = Path(name)
-            if relative.is_absolute() or ".." in relative.parts:
-                raise ReconcileError("Unsafe untracked path encountered")
             path = repo / relative
-            if not path.exists() and not path.is_symlink():
-                raise ReconcileError("Untracked file changed during copy: " + name)
-            archive.add(path, arcname=(Path("untracked") / relative).as_posix(), recursive=False)
+            if path.is_dir() and not path.is_symlink():
+                raise ReconcileError("Untracked nested directory cannot be silently omitted")
+            archive.add(path, arcname=(Path("untracked") / relative).as_posix(),
+                        recursive=False)
+    found: dict[str, str] = {}
+    with tarfile.open(output, "r:gz") as archive:
+        for member in archive.getmembers():
+            name = member.name
+            if not name.startswith("untracked/"):
+                raise ReconcileError("Unexpected path inside untracked backup")
+            path = name[len("untracked/"):]
+            if member.issym():
+                value = "symlink:" + hashlib.sha256(
+                    member.linkname.encode("utf8", "surrogateescape")
+                ).hexdigest()
+            elif member.isfile():
+                stream = archive.extractfile(member)
+                if stream is None:
+                    raise ReconcileError("Could not decode a stored untracked file")
+                digest = hashlib.sha256()
+                with stream:
+                    for block in iter(lambda: stream.read(1024 * 1024), b""):
+                        digest.update(block)
+                value = "file:" + digest.hexdigest()
+            else:
+                raise ReconcileError("Untracked archive contains non-file entry: " + repr(name))
+            if path in found:
+                raise ReconcileError("Duplicate path in untracked archive")
+            found[path] = value
+    if found != expected:
+        raise ReconcileError("Untracked archive content differs from pre-backup files")
     return len(names)
+
+
+def verify_restorable_bundle(repo: Path, bundle: Path, local_sha: str) -> str:
+    """An isolated bundle import + object fsck, not merely git bundle verify."""
+    env = dict(os.environ, GIT_OPTIONAL_LOCKS="0")
+    header = subprocess.run(
+        ["git", "-C", str(repo), "bundle", "verify", str(bundle)],
+        capture_output=True, env=env,
+    )
+    if header.returncode:
+        raise ReconcileError("Git bundle header failed verification: " + text(header.stderr))
+    with tempfile.TemporaryDirectory(prefix="inspect-bundle-", dir=bundle.parent) as temp:
+        bare = Path(temp) / "repo.git"
+        init = subprocess.run(["git", "init", "--bare", "-q", str(bare)],
+                              capture_output=True, env=env)
+        if init.returncode:
+            raise ReconcileError("Could not create isolated Git bundle verifier")
+        imported = subprocess.run(
+            ["git", "-C", str(bare), "bundle", "unbundle", str(bundle)],
+            capture_output=True, env=env,
+        )
+        if imported.returncode:
+            raise ReconcileError("Git bundle payload failed isolated import: "
+                                 + text(imported.stderr))
+        refs = imported.stdout.decode("utf8", "replace").splitlines()
+        if not refs or not any(line.startswith(local_sha + " ") for line in refs):
+            raise ReconcileError("Imported bundle omitted the original local main")
+        for line in refs:
+            object_id = line.split(" ", 1)[0]
+            check = subprocess.run(
+                ["git", "-C", str(bare), "cat-file", "-e", object_id + "^{object}"],
+                capture_output=True, env=env,
+            )
+            if check.returncode:
+                raise ReconcileError("Referenced bundle object missing: " + object_id)
+        fsck = subprocess.run(
+            ["git", "-C", str(bare), "fsck", "--full", "--strict", "--no-reflogs"],
+            capture_output=True, env=env,
+        )
+        if fsck.returncode:
+            raise ReconcileError("Imported Git objects failed fsck: " + text(fsck.stderr))
+    return ("header: VERIFIED\npayload import: VERIFIED\n"
+            "objects: VERIFIED BY FSCK\nreferences: " + str(len(refs)) + "\n")
 
 
 def backup(repo: Path, snapshot: Path, destination: Path, expected_main: str,
@@ -226,17 +342,16 @@ def backup(repo: Path, snapshot: Path, destination: Path, expected_main: str,
         env = dict(os.environ, GIT_OPTIONAL_LOCKS="0")
         b = subprocess.run(["git", "-C", str(repo), "bundle", "create",
                             str(bundle), "--all"], env=env, capture_output=True)
-        v = subprocess.run(["git", "-C", str(repo), "bundle", "verify",
-                            str(bundle)], env=env, capture_output=True) if b.returncode == 0 else b
-        if b.returncode or v.returncode:
-            raise ReconcileError("Cannot create/verify Git bundle: " + text(v.stderr))
-        (folder / "bundle-verification.txt").write_bytes(v.stdout + b"\n" + v.stderr)
-        (folder / "tracked-vs-HEAD.patch").write_bytes(git(repo, "diff", "--binary", "HEAD"))
-        (folder / "staged-vs-HEAD.patch").write_bytes(
-            git(repo, "diff", "--cached", "--binary", "HEAD"))
+        if b.returncode:
+            raise ReconcileError("Could not create Git ref bundle: " + text(b.stderr))
+        bundle_report = verify_restorable_bundle(repo, bundle, before["main"])
+        (folder / "bundle-verification.txt").write_text(
+            bundle_report, encoding="utf8")
+        (folder / "tracked-vs-HEAD.patch").write_bytes(raw_diff(repo))
+        (folder / "staged-vs-HEAD.patch").write_bytes(raw_diff(repo, staged=True))
         (folder / "original-status.z").write_bytes(
             git(repo, "status", "--porcelain=v1", "-z", "--untracked-files=all"))
-        summary["untracked_count"] = untracked_archive(repo, folder / "untracked.tar.gz")
+        summary["untracked_count"] = untracked_archive(\n            repo, folder / "untracked.tar.gz", before["untracked_sha256"])
         (folder / "AUDIT.md").write_text(audit_markdown(summary), encoding="utf8")
         (folder / "audit.json").write_text(
             json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf8")
