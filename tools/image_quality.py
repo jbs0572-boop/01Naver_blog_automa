@@ -506,6 +506,21 @@ def validate_image_quality(path: Path) -> JSONMap:
             raise ContractError(
                 f"image quality render evidence changed: {mobile_render_path}"
             )
+        # A matching checksum and a claimed viewport do not prove that the
+        # supplied mobile screenshot actually depicts that viewport. Support
+        # common 1x/2x/3x browser device-pixel ratios, not arbitrary thumbnails.
+        viewport_width, viewport_height = (
+            int(part) for part in MOBILE_VIEWPORT.split("x")
+        )
+        rendered_width, rendered_height = _decoded_dimensions(verified_bytes)
+        if not any(
+            rendered_width == viewport_width * scale
+            and rendered_height == viewport_height * scale
+            for scale in (1, 2, 3)
+        ):
+            raise ContractError(
+                f"image quality record {index} mobile render dimensions do not match viewport"
+            )
         if (
             record.get("immediate_failure") is not False
             or record.get("mobile_rendered") is not True
