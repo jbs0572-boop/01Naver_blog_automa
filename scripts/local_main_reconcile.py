@@ -351,7 +351,8 @@ def backup(repo: Path, snapshot: Path, destination: Path, expected_main: str,
         (folder / "staged-vs-HEAD.patch").write_bytes(raw_diff(repo, staged=True))
         (folder / "original-status.z").write_bytes(
             git(repo, "status", "--porcelain=v1", "-z", "--untracked-files=all"))
-        summary["untracked_count"] = untracked_archive(\n            repo, folder / "untracked.tar.gz", before["untracked_sha256"])
+        summary["untracked_count"] = untracked_archive(
+            repo, folder / "untracked.tar.gz", before["untracked_sha256"])
         (folder / "AUDIT.md").write_text(audit_markdown(summary), encoding="utf8")
         (folder / "audit.json").write_text(
             json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf8")
