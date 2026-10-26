@@ -164,3 +164,54 @@ def test_valid_indexed_png_with_palette_is_accepted(tmp_path: Path) -> None:
     metadata = tmp_path / "indexed.jsonl"
     metadata.write_text(json.dumps(_metadata(image)) + "\n", encoding="utf-8")
     assert validate_image_metadata(metadata, "formal")["formal_ready"] is True
+
+
+def _rechunk_valid_png(*, separate_idat: bool) -> bytes:
+    """Split a real fixture's zlib stream; only interleaving is invalid."""
+    marker = VALID_PNG.index(b"IDAT")
+    start = marker - 4
+    length = int.from_bytes(VALID_PNG[start:marker], "big")
+    compressed = VALID_PNG[marker + 4:marker + 4 + length]
+    midpoint = max(1, len(compressed) // 2)
+    between = _chunk(b"tEXt", b"Comment\\x00proof") if separate_idat else b""
+    return (
+        VALID_PNG[:start]
+        + _chunk(b"IDAT", compressed[:midpoint])
+        + between
+        + _chunk(b"IDAT", compressed[midpoint:])
+        + VALID_PNG[marker + 8 + length:]
+    )
+
+
+@pytest.mark.parametrize("kind", [b"FAKE", b"abcD"])
+def test_png_rejects_unknown_critical_or_invalid_reserved_chunk(
+    tmp_path: Path, kind: bytes
+) -> None:
+    image = tmp_path / "bad-chunk.png"
+    # A correct CRC does not make an unknown critical chunk decodable.
+    image.write_bytes(VALID_PNG[:-12] + _chunk(kind, b"") + VALID_PNG[-12:])
+    metadata = tmp_path / "metadata.jsonl"
+    metadata.write_text(json.dumps(_metadata(image)) + "\\n", encoding="utf-8")
+    with pytest.raises(ContractError, match="not a recognized image"):
+        validate_image_metadata(metadata, "formal")
+
+
+def test_png_rejects_ancillary_chunk_between_idat_chunks(tmp_path: Path) -> None:
+    image = tmp_path / "out-of-order.png"
+    image.write_bytes(_rechunk_valid_png(separate_idat=True))
+    metadata = tmp_path / "metadata.jsonl"
+    metadata.write_text(json.dumps(_metadata(image)) + "\\n", encoding="utf-8")
+    with pytest.raises(ContractError, match="not a recognized image"):
+        validate_image_metadata(metadata, "formal")
+
+
+def test_png_accepts_consecutive_idat_and_trailing_ancillary(tmp_path: Path) -> None:
+    for name, data in (
+        ("consecutive.png", _rechunk_valid_png(separate_idat=False)),
+        ("trailing-text.png", VALID_PNG[:-12] + _chunk(b"tEXt", b"Note\\x00ok") + VALID_PNG[-12:]),
+    ):
+        image = tmp_path / name
+        image.write_bytes(data)
+        metadata = tmp_path / f"{name}.jsonl"
+        metadata.write_text(json.dumps(_metadata(image)) + "\\n", encoding="utf-8")
+        assert validate_image_metadata(metadata, "formal")["formal_ready"] is True
