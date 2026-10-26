@@ -12,6 +12,10 @@ The seven August commits are not ancestors of `origin/main`, and `git cherry -v 
 
 No August commit was cherry-picked. The distinctions below are behavioral, based on current source, tests, workflow intent, and merged PRs; they do not claim that different implementations have identical diffs.
 
+- **Fully reflected as the same feature:** none of the seven. The SHA-level comparison also found no patch-identical remote commit.
+- **Partially reflected:** `3c5d34a`'s local workflow outcome is now handled by v2's offline evidence-pack/export path, without the old external writes; `c3e19a7`'s discovery goal has a bounded Naver API search, but not automatic browser reading of source pages.
+- **Not implemented in the active v2 scope:** beta Notion writes, generated Q1 retries, external dashboard retries, and Naver editor title parsing. They depend on the retired online runner or producer; current plans explicitly keep AI generation, external-site collection, and account writes outside this v2 preview.
+
 | Local August commit | Behavior in that commit | Current `origin/main` evidence | Classification and action |
 |---|---|---|---|
 | `8aa1a91` — `feat: enforce beta Notion write policy` | Allows a narrow beta Notion write after Q1 while denying unapproved external writes; adds workflow hook and policy tests. | Current v2 approval only creates a local manual-copy export (`tools/blog_v2.py::approve_bundle`, `export_copy`; `tests/test_blog_v2.py`). README says there is no Notion account connection. | **Retired/replaced.** The beta write exception is absent by design; current v2 has no matching Notion operation to authorize. Do not restore the exception or old hook. |
