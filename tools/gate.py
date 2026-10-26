@@ -149,14 +149,16 @@ def verify_gate(
         )
     events = read_events(run_log)
     if not any(
-        event.get("run_id") == run_id
+        event.get("event_type") == "stage"
+        and event.get("run_id") == run_id
         and event.get("stage") == "content-assembler"
         and _passed(event)
         for event in events
     ):
         raise ContractError("content-assembler Q1 pass is missing")
     if gate == "naver_draft_save" and not any(
-        event.get("run_id") == run_id
+        event.get("event_type") == "stage"
+        and event.get("run_id") == run_id
         and event.get("stage") == "notion-rider"
         and _passed(event)
         for event in events
@@ -178,7 +180,8 @@ def verify_gate(
         else ("content-assembler",)
     ):
         if not any(
-            event.get("run_id") == run_id
+            event.get("event_type") == "stage"
+            and event.get("run_id") == run_id
             and event.get("stage") == required_stage
             and _passed(event)
             and parse_aware_datetime(

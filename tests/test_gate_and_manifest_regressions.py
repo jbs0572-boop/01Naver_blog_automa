@@ -240,3 +240,28 @@ def test_gate_b_approval_before_notion_q2_cannot_be_reused(tmp_path: Path) -> No
             notion_verified_at="2026-08-27T00:02:00+00:00",
             blog_id="blog-fixture",
         )
+
+
+def test_non_stage_approval_event_cannot_impersonate_q1(tmp_path: Path) -> None:
+    root, manifest_path, manifest, run_id = _fixture(tmp_path)
+    run_log = root / "run.jsonl"
+    impersonator = _approval(
+        manifest, run_id,
+        target_id="unrelated-target",
+        requested_at="2026-08-27T00:00:00+00:00",
+        decided_at="2026-08-27T00:01:00+00:00",
+    )
+    # The schema permits extra keys; event_type must still be checked.
+    impersonator.update({
+        "stage": "content-assembler",
+        "status": "passed",
+        "ended_at": "2026-08-27T00:01:00+00:00",
+    })
+    real_approval = _approval(manifest, run_id)
+    _write_log(run_log, [impersonator, real_approval])
+
+    with pytest.raises(ContractError, match="content-assembler Q1 pass is missing"):
+        _ = verify_gate(
+            root, manifest_path, run_log, "notion_write", run_id,
+            "datasource-fixture",
+        )
