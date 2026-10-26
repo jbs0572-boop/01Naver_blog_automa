@@ -216,3 +216,67 @@ def test_gitlink_submodule_is_rejected_as_separate_repository(tmp_path: Path) ->
     with pytest.raises(ReconcileError, match="submodule"):
         backup(repo, snapshot, tmp_path / "safe", head[:8])
     assert not (tmp_path / "safe").exists()
+
+
+def test_unmerged_index_is_rejected_before_backup(tmp_path: Path) -> None:
+    repo, snapshot, head, _remote = fixture_repository(tmp_path)
+    # Emulate three unmerged index stages containing a blob not reachable
+    # from saved refs. These bytes would be lost without an explicit policy.
+    blob = subprocess.run(
+        ["git", "-C", str(repo), "hash-object", "-w", "--stdin"],
+        input=b"unmerged-only-stage-content", capture_output=True, check=True,
+    ).stdout.decode().strip()
+    name = "conflict-only.txt"
+    entries = (
+        f"0 {'0' * 40}\\t{name}\\0".replace("\\t", "\t").replace("\\0", "\0")
+        + "".join(f"100644 {blob} {stage}\\t{name}\\0".replace("\\t", "\t").replace("\\0", "\0")
+                  for stage in (1, 2, 3))
+    ).encode()
+    subprocess.run(
+        ["git", "-C", str(repo), "update-index", "-z", "--index-info"],
+        input=entries, capture_output=True, check=True,
+    )
+    assert subprocess.run(
+        ["git", "-C", str(repo), "ls-files", "--unmerged", "-z"],
+        capture_output=True, check=True,
+    ).stdout
+    dest = tmp_path / "must-not-succeed"
+    with pytest.raises(ReconcileError, match="Unmerged index"):
+        backup(repo, snapshot, dest, head[:8])
+    assert not dest.exists()
+
+
+def test_split_index_requires_separate_recovery(tmp_path: Path) -> None:
+    repo, snapshot, head, _remote = fixture_repository(tmp_path)
+    command(repo, "update-index", "--split-index")
+    assert command(repo, "rev-parse", "--shared-index-path")
+    dest = tmp_path / "must-not-succeed"
+    with pytest.raises(ReconcileError, match="Split-index"):
+        backup(repo, snapshot, dest, head[:8])
+    assert not dest.exists()
+
+
+def test_merge_commit_inventory_includes_resolution_only_files(tmp_path: Path) -> None:
+    repo, _snapshot, _head, _remote = fixture_repository(tmp_path)
+    command(repo, "switch", "-c", "audit-side")
+    (repo / "side-only.txt").write_text("from side\\n".replace("\\n", "\n"))
+    command(repo, "add", "side-only.txt")
+    command(repo, "commit", "-m", "side branch")
+    command(repo, "switch", "main")
+    (repo / "main-only.txt").write_text("from main\\n".replace("\\n", "\n"))
+    command(repo, "add", "main-only.txt")
+    command(repo, "commit", "-m", "main branch")
+    command(repo, "merge", "--no-ff", "--no-commit", "audit-side")
+    (repo / "resolution-only.txt").write_text("created during merge\\n".replace("\\n", "\n"))
+    command(repo, "add", "resolution-only.txt")
+    command(repo, "commit", "-m", "merge with resolution-only work")
+    merge_sha = command(repo, "rev-parse", "HEAD")
+    report = audit(repo)
+    row = next(item for item in report["commits"] if item["sha"] == merge_sha)
+    assert len(row["parents_compared"]) == 2
+    matches = [item for item in row["files"]
+               if "resolution-only.txt" in item["paths"]]
+    assert len(matches) == 1
+    assert set(matches[0]["changes_by_parent"]) == set(row["parents_compared"])
+    assert any("side-only.txt" in file["paths"] for file in row["files"])
+    assert any("main-only.txt" in file["paths"] for file in row["files"])
