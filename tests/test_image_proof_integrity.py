@@ -65,7 +65,7 @@ def test_valid_png_with_forged_large_metadata_size_is_rejected(tmp_path: Path) -
     metadata = tmp_path / "image-generation.jsonl"
     values = _metadata(image)
     values["size"] = "1600x900"  # Historically passed with a real 1x1 image.
-    metadata.write_text(json.dumps(values) + "\\n", encoding="utf-8")
+    metadata.write_text(json.dumps(values) + "\n", encoding="utf-8")
     with pytest.raises(ContractError, match="size does not match decoded pixels"):
         validate_image_metadata(metadata, "formal")
 
