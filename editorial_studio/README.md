@@ -1,3 +1,16 @@
+## 2026-10-27 추가: 카테고리·개별 글마다 intend.md 적용
+
+문체와 레이아웃은 `profiles/{category}.md`에, **글을 쓰는 목적·검색 의도·원문 조사·이미지 역할·완료 기준은 `topics/{category}/intend.md`**에 나눠 관리합니다.
+
+- [생활·건강](topics/life_health/intend.md): 문제·측정 조건·안전한 점검 순서
+- [뉴스·정책](topics/news_policy/intend.md): 공식 발표·시행일·대상·예외
+- [영화·드라마·인물](topics/culture_people/intend.md): 공식 사실과 작품 해석·스포일러 구분
+- [부동산](topics/real_estate/intend.md): 실거래 조건·시차·권리·계약 점검
+- [경제](topics/economy/intend.md): 지표의 정의·기준연도·기간·단위·해석
+
+`editorial_studio.studio build`는 **주제별 별도 `intend.md`**와 글쓰기·이미지 제작 지시서를 같이 생성합니다. `style-lock.json`이 스타일 SHA와 의도 SHA, 이 글의 의도 파일 해시를 검증합니다. v3도 5개 글 출력 폴더 각각에 `intend.md`를 저장하고 JSON 증거에 SHA를 기록합니다.
+
+원본 사진·공식 자료 이미지와 정보 도해·실행 점검 도해는 서로 다른 정보 역할을 맡아야 합니다. 원문 조사를 자동 수행했다고 주장하지 않으며 인간 검수와 게시 승인·유입 측정은 별도입니다.
 # 독립 편집 스튜디오 — 5개 카테고리, 5개 고정 스타일
 
 이 디렉터리는 이전 복잡한 Gate/Notion/Naver 체계와 연결되지 않은 독립적인 새 편집 모듈입니다.

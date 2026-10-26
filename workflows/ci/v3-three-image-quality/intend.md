@@ -20,6 +20,9 @@ Python 3.13 / Playwright / Chromium / Pillow 환경, 저장소가 보유한 카�
 
 editorial_studio/v3/engine.py, cases.json, INTEND.md, IMAGE_ROLES.md, QUALITY_GATE.md 및 승인받은 근거팩과 이미지. 자동화 동작의 출처는 실행 가능한 코드이고 MD는 사람 편집·정책 기준이다.
 
+## 각 주제의 제작 의도 계약
+원본 파일 `editorial_studio/topics/{category}/intend.md`의 독립된 5개 제작 목적을 엔진이 읽고, 5개 글마다 SHA-256이 기록된 `intend.md`를 출력한다. 누락·형식 오류·중복된 카테고리 목적이 있으면 CI가 실패한다. 외부 자료의 실시간 진위 검수·발행은 이 검증이 수행하지 않는다.
+
 ## 처리 및 산출물
 
 이미지 3종의 HTML/CSS 및 PNG, PC·모바일 전체 글 스크린샷 10장, 원본 SHA-256, Playwright 글자 잘림·오버플로 검사 기록, 100점 평가 JSON, 예외 진단 로그 및 검수용 아티팩트.

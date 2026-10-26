@@ -1,3 +1,8 @@
+## 2026-10-27: 개별 기사 intend.md 자동 생성
+
+원본 문서 `editorial_studio/topics/{category}/intend.md`에 다섯 카테고리별 **독자 문제·검색 의도·원문 조사 순위·이미지 3개 역할**을 기록했습니다. 기존 `profiles/{category}.md`는 각 카테고리의 문체·디자인 전용입니다.
+
+v3의 5개 결과 폴더 각각에는 그 글의 제목, 근거팩 주제·기준일·근거 개수 및 원본 이미지 목적을 반영한 별도 `intend.md`가 생성됩니다. `result.json`은 카테고리 원본 의도 SHA-256과 개별 기사 의도 SHA-256을 제공합니다. 이는 저장된 자료의 기계적 조립이지 실시간 원문 조사나 발행 완료가 아닙니다.
 # Blog Editorial V3 — 5 independent articles, 3 meaningful visuals each
 
 **As of 2026-10-26 KST.** This is a review-only, deterministic renderer. It assembles previously researched source packs and reviewed draft bodies, **not a real-time AI writer or publisher**.
