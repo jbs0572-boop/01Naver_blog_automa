@@ -43,6 +43,11 @@ def safe_text(value: object, name: str, *, maximum: int = 500) -> str:
 
 
 def verified_url(value: object) -> str:
+    """Accept public HTTPS references only; never follow these links automatically.
+
+    A final dot is valid DNS notation, so normalize it for security checks.
+    Otherwise localhost./service.local. bypasses the local-host exclusions.
+    """
     value = safe_text(value, "source URL", maximum=2048)
     try:
         url = urlsplit(value)
@@ -50,22 +55,41 @@ def verified_url(value: object) -> str:
         port = url.port
     except ValueError as error:
         raise ContentError("malformed source URL") from error
-    if (url.scheme != "https" or not host or url.username or url.password
-            or port not in {None, 443} or host.lower() in {"localhost", "localhost.localdomain"}
-            or host.endswith((".local", ".internal"))):
+
+    normalized_host = host.lower().rstrip(".") if host else ""
+    labels = normalized_host.split(".")
+    reserved = {"localhost", "localdomain", "local", "internal", "test", "invalid", "example"}
+    if (
+        url.scheme != "https"
+        or not normalized_host
+        or url.username or url.password
+        or port not in {None, 443}
+        or len(labels) < 2
+        or labels[-1] in reserved
+        or normalized_host == "localhost.localdomain"
+    ):
         raise ContentError("only public HTTPS evidence URLs without credentials are permitted")
-    # URLs are references only; never fetch source pack URLs as instructions.
+
+    # URLs are references, not network fetch instructions. Still block local
+    # DNS aliases and invalid labels so a browser reviewer is not directed to
+    # an internal host by a purported public evidence link.
     import ipaddress
     try:
-        ipaddress.ip_address(host)
+        ipaddress.ip_address(normalized_host)
     except ValueError:
         pass
     else:
         raise ContentError("IP-address evidence URLs are prohibited")
-    if "." not in host or not re.fullmatch(r"[a-zA-Z0-9.-]+", host):
+    if (
+        len(normalized_host) > 253
+        or labels[-1].isdigit()
+        or any(
+            not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?", label)
+            for label in labels
+        )
+    ):
         raise ContentError("source URL requires a public DNS name")
     return value
-
 
 def markdown_url(url: str) -> str:
     """Escape Markdown link delimiters even when the HTTPS URL is otherwise valid."""
