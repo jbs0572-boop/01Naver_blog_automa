@@ -23,7 +23,7 @@ jobs:
         run: |
           python -m pip install 'pytest>=9,<10' 'playwright>=1.50,<2'
           python -m playwright install --with-deps chromium
-          python -m pytest -q tests/test_blog_v2.py tests/test_naver_search_v2.py tests/test_review_site_v2.py tests/test_workflow_intend_docs.py
+          python -m pytest -q tests/test_blog_v2.py tests/test_naver_search_v2.py tests/test_review_site_v2.py tests/test_workflow_intend_docs.py tests/test_preview_ci_contract.py
       - name: Generate deterministic offline preview
         run: |
           python -m tools.blog_v2 demo --output-root preview
