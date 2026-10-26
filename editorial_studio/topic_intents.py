@@ -42,7 +42,8 @@ def load(category: str) -> dict:
         original_bytes = path.read_bytes()
         # Decode in memory. read_text() normalizes CRLF and would silently
         # change the intended byte-for-byte SHA-256 proof.
-        source = original_bytes.decode("utf-8")
+        # Normalize only for parsing; never normalize bytes used in the digest.
+        source = original_bytes.decode("utf-8").replace("\r\n", "\n")
     except (OSError, UnicodeError) as error:
         raise IntentError("missing or unreadable category intend.md: " + str(path)) from error
     marker = re.escape(chr(96) * 3)
