@@ -307,7 +307,9 @@ def _records(path: Path) -> list[JSONMap]:
             continue
         try:
             raw: JSONValue = json.loads(line)
-        except json.JSONDecodeError as error:
+        except (ValueError, RecursionError) as error:
+            # Excessively nested structures and oversized JSON integers
+            # must fail the contract instead of crashing the CLI.
             raise ContractError(f"invalid JSON at {path}:{line_no}") from error
         records.append(_map(raw, f"{path}:{line_no}"))
     if not records:
