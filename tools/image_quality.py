@@ -5,8 +5,10 @@ import hashlib
 import json
 import re
 import struct
+import warnings
 import zlib
 from datetime import datetime
+from io import BytesIO
 from pathlib import Path
 from typing import Final
 
@@ -209,15 +211,70 @@ def _complete_png(raw: bytes) -> bool:
     return False
 
 
-def _has_image_signature(path: Path) -> bool:
+def _complete_non_png(raw: bytes) -> bool:
+    """Decode every frame, not just the magic bytes, of JPEG/GIF/WebP evidence.
+
+    Pillow is already required by the editorial image pipeline and installed
+    in the Python-quality CI. Without a decoder we fail closed; a file header
+    cannot establish that an image is readable.
+    """
+    if raw.startswith(b"\xff\xd8\xff"):
+        expected_format = "JPEG"
+        if not raw.endswith(b"\xff\xd9"):
+            return False
+    elif raw.startswith((b"GIF87a", b"GIF89a")):
+        expected_format = "GIF"
+        if not raw.endswith(b"\x3b"):
+            return False
+    elif len(raw) >= 12 and raw[:4] == b"RIFF" and raw[8:12] == b"WEBP":
+        expected_format = "WEBP"
+        if int.from_bytes(raw[4:8], "little") != len(raw) - 8:
+            return False
+    else:
+        return False
+
+    try:
+        from PIL import Image
+    except ImportError:
+        return False
+
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            # verify() checks file structure; load() checks compressed pixels.
+            # They require independent decoders because verify() closes the
+            # first decoder. Both use the very same immutable bytes.
+            with Image.open(BytesIO(raw)) as image:
+                if image.format != expected_format:
+                    return False
+                image.verify()
+            with Image.open(BytesIO(raw)) as image:
+                if image.format != expected_format:
+                    return False
+                frames = getattr(image, "n_frames", 1)
+                if frames < 1 or frames > 256:
+                    return False
+                # Bound animated GIF/WebP and decompression resource use.
+                frame_pixels = image.width * image.height
+                if frame_pixels <= 0 or frame_pixels * frames > 64_000_000:
+                    return False
+                for index in range(frames):
+                    image.seek(index)
+                    image.load()
+        return True
+    except (
+        OSError, ValueError, SyntaxError, EOFError,
+        Image.DecompressionBombError, Image.DecompressionBombWarning,
+    ):
+        return False
+
+
+def _verified_image_bytes(path: Path) -> bytes | None:
+    """Read the evidence once so the decoded bytes are also the hashed bytes."""
     raw = path.read_bytes()
     if raw.startswith(b"\x89PNG\r\n\x1a\n"):
-        return _complete_png(raw)
-    # Other formats retain their existing signature-level check; they
-    # require a separate decoder-level follow-up.
-    return raw.startswith((b"\xff\xd8\xff", b"GIF87a", b"GIF89a", b"RIFF")) and (
-        b"WEBP" in raw[:16] or raw.startswith((b"\xff\xd8\xff", b"GIF87a", b"GIF89a"))
-    )
+        return raw if _complete_png(raw) else None
+    return raw if _complete_non_png(raw) else None
 
 
 def _records(path: Path) -> list[JSONMap]:
@@ -319,11 +376,12 @@ def _check_metadata(record: JSONMap, index: int, mode: str, metadata_path: Path)
     output_file = _local_evidence_path(metadata_path, output_path, "output_path")
     if not output_file.is_file():
         raise ContractError(f"image metadata output is missing: {output_path}")
-    if not _has_image_signature(output_file):
+    verified_bytes = _verified_image_bytes(output_file)
+    if verified_bytes is None:
         raise ContractError(
             f"image metadata output is not a recognized image: {output_path}"
         )
-    actual = f"sha256:{hashlib.sha256(output_file.read_bytes()).hexdigest()}"
+    actual = f"sha256:{hashlib.sha256(verified_bytes).hexdigest()}"
     if actual != output_digest:
         raise ContractError(f"image metadata output hash changed: {output_path}")
     return control
@@ -400,7 +458,8 @@ def validate_image_quality(path: Path) -> JSONMap:
             raise ContractError(
                 f"image quality render evidence is missing: {mobile_render_path}"
             )
-        if not _has_image_signature(mobile_file):
+        verified_bytes = _verified_image_bytes(mobile_file)
+        if verified_bytes is None:
             raise ContractError(
                 f"image quality render evidence is not a recognized image: {mobile_render_path}"
             )
@@ -411,7 +470,7 @@ def validate_image_quality(path: Path) -> JSONMap:
             raise ContractError(
                 f"image quality record {index} has invalid mobile render hash"
             )
-        actual_mobile_digest = f"sha256:{hashlib.sha256(mobile_file.read_bytes()).hexdigest()}"
+        actual_mobile_digest = f"sha256:{hashlib.sha256(verified_bytes).hexdigest()}"
         if actual_mobile_digest != mobile_render_digest:
             raise ContractError(
                 f"image quality render evidence changed: {mobile_render_path}"
