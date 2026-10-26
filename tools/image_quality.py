@@ -113,6 +113,25 @@ def _records(path: Path) -> list[JSONMap]:
     return records
 
 
+def _local_evidence_path(record_path: Path, value: JSONValue, field: str) -> Path:
+    """Resolve image evidence within its JSONL folder, including symlink targets."""
+    if (
+        not isinstance(value, str)
+        or not value
+        or Path(value).is_absolute()
+        or ".." in Path(value).parts
+    ):
+        raise ContractError(f"unsafe {field}")
+    base = record_path.parent.resolve()
+    try:
+        resolved = (base / value).resolve()
+    except (OSError, RuntimeError) as error:
+        raise ContractError(f"unsafe {field}") from error
+    if not resolved.is_relative_to(base):
+        raise ContractError(f"unsafe {field}: symlink escapes evidence directory")
+    return resolved
+
+
 def _check_metadata(record: JSONMap, index: int, mode: str, metadata_path: Path) -> str:
     try:
         validate_instance(record, SCHEMA_PATH)
@@ -175,13 +194,7 @@ def _check_metadata(record: JSONMap, index: int, mode: str, metadata_path: Path)
     if "seed" in record:
         raise ContractError(f"image metadata record {index} contains unsupported seed")
     output_path = record["output_path"]
-    if (
-        not isinstance(output_path, str)
-        or output_path.startswith("/")
-        or ".." in Path(output_path).parts
-    ):
-        raise ContractError(f"image metadata record {index} has unsafe output_path")
-    output_file = metadata_path.parent / output_path
+    output_file = _local_evidence_path(metadata_path, output_path, "output_path")
     if not output_file.is_file():
         raise ContractError(f"image metadata output is missing: {output_path}")
     if not _has_image_signature(output_file):
@@ -256,20 +269,16 @@ def validate_image_quality(path: Path) -> JSONMap:
             )
         mobile_viewport = record.get("mobile_viewport")
         mobile_render_path = record.get("mobile_render_path")
-        if (
-            mobile_viewport != MOBILE_VIEWPORT
-            or not isinstance(mobile_render_path, str)
-            or mobile_render_path.startswith("/")
-            or ".." in Path(mobile_render_path).parts
-        ):
+        if mobile_viewport != MOBILE_VIEWPORT:
             raise ContractError(
                 f"image quality record {index} is missing the fixed mobile render evidence"
             )
-        if not (path.parent / mobile_render_path).is_file():
+        mobile_file = _local_evidence_path(path, mobile_render_path, "mobile_render_path")
+        if not mobile_file.is_file():
             raise ContractError(
                 f"image quality render evidence is missing: {mobile_render_path}"
             )
-        if not _has_image_signature(path.parent / mobile_render_path):
+        if not _has_image_signature(mobile_file):
             raise ContractError(
                 f"image quality render evidence is not a recognized image: {mobile_render_path}"
             )
@@ -280,7 +289,7 @@ def validate_image_quality(path: Path) -> JSONMap:
             raise ContractError(
                 f"image quality record {index} has invalid mobile render hash"
             )
-        actual_mobile_digest = f"sha256:{hashlib.sha256((path.parent / mobile_render_path).read_bytes()).hexdigest()}"
+        actual_mobile_digest = f"sha256:{hashlib.sha256(mobile_file.read_bytes()).hexdigest()}"
         if actual_mobile_digest != mobile_render_digest:
             raise ContractError(
                 f"image quality render evidence changed: {mobile_render_path}"
