@@ -263,7 +263,7 @@ def _complete_non_png(raw: bytes) -> bool:
                     image.load()
         return True
     except (
-        OSError, ValueError, SyntaxError, EOFError,
+        OSError, ValueError, SyntaxError, EOFError, IndexError, struct.error,
         Image.DecompressionBombError, Image.DecompressionBombWarning,
     ):
         return False
