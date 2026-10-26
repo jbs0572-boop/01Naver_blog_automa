@@ -142,7 +142,7 @@ def build_bundle(topic: str, output_root: Path, explicit: str | None = None) -> 
         "번들 intend.md의 이미지 역할·원본 우선순위를 먼저 적용하세요.\n"
         f"원본 사진 대상: {intent['original_visual_target']}\n"
         + "\n".join(f"{role}: {intent['image_roles'][role]}" for role in topic_intents.IMAGE_ROLES) + "\n\n"
-        f"표현 스타일: {profile['image_style']}\n"
+        + f"표현 스타일: {profile['image_style']}\n"
         f"시각적 DNA: {profile.get('visual_dna', profile['image_style'])}\n"
         f"추천 배치: {profile['image_plan']}\n\n"
         "이미지를 실제 생성하기 전에는 생성 완료라고 표시하지 마세요.\n"
