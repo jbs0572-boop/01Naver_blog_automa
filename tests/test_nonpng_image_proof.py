@@ -12,9 +12,9 @@ from tools.image_quality import validate_image_metadata, validate_image_quality
 from tools.workflow_contract import ContractError
 
 
-def _image(fmt: str) -> bytes:
+def _image(fmt: str, *, size: tuple[int, int] = (17, 10)) -> bytes:
     output = BytesIO()
-    Image.new("RGB", (17, 10), (43, 120, 207)).save(output, format=fmt)
+    Image.new("RGB", size, (43, 120, 207)).save(output, format=fmt)
     return output.getvalue()
 
 
@@ -61,21 +61,41 @@ def _quality(path: Path) -> dict[str, object]:
     }
 
 
-def _proofs(tmp_path: Path, raw: bytes) -> tuple[Path, Path]:
+def _proofs(
+    tmp_path: Path, raw: bytes, *, mobile_raw: bytes | None = None,
+) -> tuple[Path, Path]:
     image = tmp_path / "image.bin"
     image.write_bytes(raw)
+    mobile_image = image
+    if mobile_raw is not None:
+        mobile_image = tmp_path / "mobile.bin"
+        mobile_image.write_bytes(mobile_raw)
     metadata = tmp_path / "image-generation.jsonl"
     quality = tmp_path / "image-quality.jsonl"
     metadata.write_text(json.dumps(_metadata(image)) + "\n", encoding="utf-8")
-    quality.write_text(json.dumps(_quality(image)) + "\n", encoding="utf-8")
+    quality.write_text(json.dumps(_quality(mobile_image)) + "\n", encoding="utf-8")
     return metadata, quality
+
+
+@pytest.mark.parametrize("fmt", ["JPEG", "GIF", "WEBP"])
+def test_nonpng_size_must_match_decoded_pixels(tmp_path: Path, fmt: str) -> None:
+    path = tmp_path / "image.bin"
+    path.write_bytes(_image(fmt))
+    metadata = tmp_path / "image-generation.jsonl"
+    values = _metadata(path)
+    values["size"] = "18x10"  # Actual JPEG/GIF/WebP fixture is 17x10.
+    metadata.write_text(json.dumps(values) + "\n", encoding="utf-8")
+    with pytest.raises(ContractError, match="size does not match decoded pixels"):
+        validate_image_metadata(metadata, "formal")
 
 
 @pytest.mark.parametrize("fmt", ["JPEG", "GIF", "WEBP"])
 def test_valid_non_png_proofs_decode_in_metadata_and_mobile_quality(
     tmp_path: Path, fmt: str,
 ) -> None:
-    metadata, quality = _proofs(tmp_path, _image(fmt))
+    metadata, quality = _proofs(
+        tmp_path, _image(fmt), mobile_raw=_image(fmt, size=(390, 844)),
+    )
     assert validate_image_metadata(metadata, "formal")["formal_ready"] is True
     assert validate_image_quality(quality)["passed"] is True
 
@@ -138,21 +158,23 @@ def test_animated_gif_rejects_corrupted_later_frame(tmp_path: Path) -> None:
 def test_image_files_are_decoded_and_hashed_from_one_read(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    metadata, quality = _proofs(tmp_path, _image("JPEG"))
-    image = tmp_path / "image.bin"
+    metadata, quality = _proofs(
+        tmp_path, _image("JPEG"), mobile_raw=_image("JPEG", size=(390, 844)),
+    )
+    proof_files = {tmp_path / "image.bin", tmp_path / "mobile.bin"}
     original_open = Path.open
     reads = 0
 
     def counted_open(path: Path, *args: object, **kwargs: object):
         nonlocal reads
-        if path == image:
+        if path in proof_files:
             reads += 1
         return original_open(path, *args, **kwargs)
 
     monkeypatch.setattr(Path, "open", counted_open)
     assert validate_image_metadata(metadata, "formal")["formal_ready"] is True
     assert validate_image_quality(quality)["passed"] is True
-    assert reads == 2  # Once for each public validator, not twice per proof.
+    assert reads == 2  # One bounded read per independent image proof.
 
 
 @pytest.mark.parametrize("fmt", ["PNG", "JPEG", "GIF", "WEBP"])

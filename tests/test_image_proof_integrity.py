@@ -48,7 +48,7 @@ def _metadata(image: Path) -> dict[str, object]:
         "generation_snapshot": "gpt-image-2-2026-04-21",
         "generation_control": "locked",
         "quality": "high",
-        "size": "1600x900",
+        "size": "1x1",
         "prompt_template_version": "image-prompt-v1",
         "prompt_sha256": "sha256:" + "1" * 64,
         "reference_sha256": [],
@@ -57,6 +57,17 @@ def _metadata(image: Path) -> dict[str, object]:
         "generated_at": "2026-08-27T10:00:00+09:00",
         "provenance_status": "generated",
     }
+
+
+def test_valid_png_with_forged_large_metadata_size_is_rejected(tmp_path: Path) -> None:
+    image = tmp_path / "tiny.png"
+    image.write_bytes(VALID_PNG)
+    metadata = tmp_path / "image-generation.jsonl"
+    values = _metadata(image)
+    values["size"] = "1600x900"  # Historically passed with a real 1x1 image.
+    metadata.write_text(json.dumps(values) + "\n", encoding="utf-8")
+    with pytest.raises(ContractError, match="size does not match decoded pixels"):
+        validate_image_metadata(metadata, "formal")
 
 
 def _quality(image: Path) -> dict[str, object]:
@@ -109,10 +120,12 @@ def test_corrupt_mobile_render_does_not_pass_claimed_checks(tmp_path: Path) -> N
 def test_valid_png_remains_accepted_as_metadata_and_mobile_proof(tmp_path: Path) -> None:
     image = tmp_path / "real.png"
     image.write_bytes(VALID_PNG)
+    mobile = tmp_path / "mobile.png"
+    mobile.write_bytes(_mobile_png())
     metadata = tmp_path / "image-generation.jsonl"
     quality = tmp_path / "image-quality.jsonl"
     metadata.write_text(json.dumps(_metadata(image)) + "\n", encoding="utf-8")
-    quality.write_text(json.dumps(_quality(image)) + "\n", encoding="utf-8")
+    quality.write_text(json.dumps(_quality(mobile)) + "\n", encoding="utf-8")
     assert validate_image_metadata(metadata, "formal")["formal_ready"] is True
     assert validate_image_quality(quality)["passed"] is True
 
@@ -122,6 +135,40 @@ def _chunk(kind: bytes, data: bytes) -> bytes:
         len(data).to_bytes(4, "big") + kind + data
         + zlib.crc32(kind + data).to_bytes(4, "big")
     )
+
+
+def _mobile_png(*, width: int = 390, height: int = 844) -> bytes:
+    ihdr = struct.pack(">IIBBBBB", width, height, 8, 0, 0, 0, 0)
+    scanlines = (b"\x00" + bytes(width)) * height
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + _chunk(b"IHDR", ihdr)
+        + _chunk(b"IDAT", zlib.compress(scanlines))
+        + _chunk(b"IEND", b"")
+    )
+
+
+@pytest.mark.parametrize("width,height", [(1, 1), (390, 800), (780, 844)])
+def test_mobile_proof_rejects_matching_hash_but_wrong_viewport_pixels(
+    tmp_path: Path, width: int, height: int,
+) -> None:
+    image = tmp_path / "mobile.png"
+    image.write_bytes(_mobile_png(width=width, height=height))
+    quality = tmp_path / "image-quality.jsonl"
+    quality.write_text(json.dumps(_quality(image)) + "\n", encoding="utf-8")
+    with pytest.raises(ContractError, match="dimensions do not match viewport"):
+        validate_image_quality(quality)
+
+
+@pytest.mark.parametrize("scale", [1, 2, 3])
+def test_mobile_proof_accepts_exact_device_pixel_scales(
+    tmp_path: Path, scale: int,
+) -> None:
+    image = tmp_path / "mobile.png"
+    image.write_bytes(_mobile_png(width=390 * scale, height=844 * scale))
+    quality = tmp_path / "image-quality.jsonl"
+    quality.write_text(json.dumps(_quality(image)) + "\n", encoding="utf-8")
+    assert validate_image_quality(quality)["passed"] is True
 
 
 def _indexed_png(palette: bytes | None, *, after_idat: bool = False) -> bytes:

@@ -3,7 +3,9 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import struct
 import tempfile
+import zlib
 import unittest
 from pathlib import Path
 from typing import final, override
@@ -42,6 +44,20 @@ class ImageQualityTests(unittest.TestCase):
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
         )
 
+    def _mobile_image_bytes(self) -> bytes:
+        def chunk(kind: bytes, payload: bytes) -> bytes:
+            return (
+                len(payload).to_bytes(4, "big") + kind + payload
+                + zlib.crc32(kind + payload).to_bytes(4, "big")
+            )
+
+        return (
+            b"\x89PNG\r\n\x1a\n"
+            + chunk(b"IHDR", struct.pack(">IIBBBBB", 390, 844, 8, 0, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress((b"\x00" + b"\x00" * 390) * 844))
+            + chunk(b"IEND", b"")
+        )
+
     def test_locked_generation_metadata_matches_output_hash(self) -> None:
         output = self.root / "image.png"
         _ = output.write_bytes(self._image_bytes())
@@ -54,7 +70,7 @@ class ImageQualityTests(unittest.TestCase):
                 "generation_snapshot": "gpt-image-2-2026-04-21",
                 "generation_control": "locked",
                 "quality": "high",
-                "size": "1600x900",
+                "size": "1x1",
                 "prompt_template_version": "image-prompt-v1",
                 "prompt_sha256": "sha256:" + "1" * 64,
                 "reference_sha256": [],
@@ -76,7 +92,7 @@ class ImageQualityTests(unittest.TestCase):
                 "generation_snapshot": "gpt-image-2-2026-04-21",
                 "generation_control": "unlocked",
                 "quality": "high",
-                "size": "1600x900",
+                "size": "1x1",
                 "prompt_template_version": "image-prompt-v1",
                 "prompt_sha256": "sha256:" + "1" * 64,
                 "reference_sha256": [],
@@ -96,7 +112,7 @@ class ImageQualityTests(unittest.TestCase):
                 "generation_model": "gpt-image-2",
                 "generation_control": "locked",
                 "quality": "high",
-                "size": "1600x900",
+                "size": "1x1",
                 "prompt_template_version": "image-prompt-v1",
                 "prompt_sha256": "sha256:" + "1" * 64,
                 "reference_sha256": [],
@@ -109,7 +125,7 @@ class ImageQualityTests(unittest.TestCase):
             _ = validate_image_metadata(metadata, "beta")
 
     def test_quality_requires_mobile_human_pass(self) -> None:
-        _ = (self.root / "mobile.png").write_bytes(self._image_bytes())
+        _ = (self.root / "mobile.png").write_bytes(self._mobile_image_bytes())
         mobile_digest = f"sha256:{hashlib.sha256((self.root / 'mobile.png').read_bytes()).hexdigest()}"
         quality = self._write_jsonl(
             "image-quality.jsonl",
@@ -140,7 +156,7 @@ class ImageQualityTests(unittest.TestCase):
         self.assertEqual(result["passed"], True)
 
     def test_quality_score_below_threshold_is_blocked(self) -> None:
-        _ = (self.root / "mobile.png").write_bytes(self._image_bytes())
+        _ = (self.root / "mobile.png").write_bytes(self._mobile_image_bytes())
         mobile_digest = f"sha256:{hashlib.sha256((self.root / 'mobile.png').read_bytes()).hexdigest()}"
         quality = self._write_jsonl(
             "low-quality.jsonl",
@@ -188,7 +204,7 @@ class ImageQualityTests(unittest.TestCase):
                     "generation_snapshot": "gpt-image-2-2026-04-21",
                     "generation_control": "locked",
                     "quality": "high",
-                    "size": "1600x900",
+                    "size": "1x1",
                     "prompt_template_version": "image-prompt-v1",
                     "prompt_sha256": "sha256:" + "1" * 64,
                     "reference_sha256": [],
