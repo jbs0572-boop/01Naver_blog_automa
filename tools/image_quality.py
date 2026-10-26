@@ -59,6 +59,9 @@ MOBILE_VIEWPORT: Final = "390x844"
 # Bound raw image evidence before decoding or hashing; sparse/hostile files
 # must never cause an unbounded Path.read_bytes() allocation.
 MAX_IMAGE_EVIDENCE_BYTES: Final = 256 * 1024 * 1024
+# Treat JSONL proof metadata as untrusted input too; never allocate an
+# entire arbitrarily large log before validating its records.
+MAX_IMAGE_LOG_BYTES: Final = 32 * 1024 * 1024
 
 
 def _map(value: JSONValue, label: str) -> JSONMap:
@@ -288,8 +291,18 @@ def _verified_image_bytes(path: Path) -> bytes | None:
 
 
 def _records(path: Path) -> list[JSONMap]:
+    # Binary bounded read prevents sparse and concurrently growing evidence
+    # logs from exhausting memory before JSON validation even begins.
+    with path.open("rb") as stream:
+        raw = stream.read(MAX_IMAGE_LOG_BYTES + 1)
+    if len(raw) > MAX_IMAGE_LOG_BYTES:
+        raise ContractError(f"image evidence JSONL exceeds {MAX_IMAGE_LOG_BYTES} bytes: {path}")
+    try:
+        lines = raw.decode("utf-8").splitlines()
+    except UnicodeDecodeError as error:
+        raise ContractError(f"image evidence JSONL is not UTF-8: {path}") from error
     records: list[JSONMap] = []
-    for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+    for line_no, line in enumerate(lines, 1):
         if not line.strip():
             continue
         try:
