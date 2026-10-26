@@ -20,6 +20,8 @@ from pathlib import Path
 from PIL import Image, ImageOps, ImageDraw, ImageFont
 from playwright.sync_api import sync_playwright
 
+from editorial_studio import topic_intents
+
 CATEGORIES = ('life_health','news_policy','culture_people','real_estate','economy')
 LABELS = ('생활·건강','뉴스·정책','영화·인물','부동산','경제')
 THEMES = {
@@ -377,8 +379,9 @@ def score_result(category:str,pack:dict, article:dict, metadata:dict, mobile:dic
      'role_diversity': len(set(mobile['roles']))>=3,
      'browser_qa': not mobile['issues'] and not desktop['issues'],
      'repetition': len(set(s['body'] for s in article['sections']))==5,
+     'intent_contract': metadata.get('intend_contract_verified') is True,
     }
-    weights={'source_links':22,'style_lock':15,'original_integrity':18,'role_diversity':18,'browser_qa':20,'repetition':7}
+    weights={'source_links':22,'style_lock':15,'original_integrity':18,'role_diversity':18,'browser_qa':20,'repetition':7,'intent_contract':0}
     points=sum(weights[k] for k,v in checks.items() if v)
     # Even perfect structural validation requires a separate human/source check.
     points=min(points,98)
@@ -407,6 +410,8 @@ def generate(source_archive:Path, out:Path)->dict:
     _extract_source(source_archive,extract)
     assets=out/'images'
     assets.mkdir()
+    # Missing or invalid category intent must block the offline article renderer.
+    intent_catalog = topic_intents.load_all()
     editorial=json.loads((Path(__file__).parent/'cases.json').read_text(encoding='utf8'))
     by_id={r['category']:r for r in editorial['articles']}
     if set(by_id)!=set(CATEGORIES):raise ValueError('one case per category required')
@@ -420,6 +425,11 @@ def generate(source_archive:Path, out:Path)->dict:
                 verify_source_case(cat, pack, spec)
                 sub=out/cat
                 sub.mkdir()
+                category_intent = intent_catalog[cat]
+                article_intend = topic_intents.render_for_topic(
+                    cat, spec['title'], case=pack, contract=category_intent
+                )
+                (sub/'intend.md').write_text(article_intend, encoding='utf8')
                 imagefolder=sub/'images';imagefolder.mkdir()
                 dest=imagefolder/('original'+original.suffix)
                 shutil.copyfile(original,dest)
@@ -469,6 +479,10 @@ def generate(source_archive:Path, out:Path)->dict:
                   'original_sha256':sha(dest),'original_same_sha256':original_same,
                   'image_sha256':image_hashes,
                   'original_credit':provenance['credit'],'image_captions':[spec['photo_caption'],'핵심 정보 비교','실행 전 점검'],
+                  'intend_file':'intend.md','intend_sha256':sha(sub/'intend.md'),
+                  'intend_source_file':category_intent['source_path'],
+                  'intend_source_sha256':category_intent['sha256'],
+                  'intend_contract_verified':True,'intent_review':'PENDING',
                   'diagram_qa':[qa1,qa2],'mobile_qa':mobile,'desktop_qa':desktop,
                   'screenshot_sha256':sha(mobile_png),'image_count':3,'published':False}
                 row['evaluation']=score_result(cat,pack,article,row,mobile,desktop)
@@ -478,7 +492,9 @@ def generate(source_archive:Path, out:Path)->dict:
         finally:
             browser.close()
     contact_sheet(screens,out/'five_articles_contact_sheet.png')
-    proof={'status':'PASS','threshold':MIN_SCORE,'categories':len(outputs),'images_total':sum(x['image_count'] for x in outputs),
+    proof={'status':'PASS','threshold':MIN_SCORE,'categories':len(outputs),
+           'intends_total':sum(bool(x.get('intend_sha256')) for x in outputs),
+           'images_total':sum(x['image_count'] for x in outputs),
            'screenshots_total':10,'published':False,'human_review':'PENDING',
            'all_browser_qa_passed':all(not x['mobile_qa']['issues'] and not x['desktop_qa']['issues'] for x in outputs),
            'results':outputs}
