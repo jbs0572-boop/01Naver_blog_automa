@@ -56,6 +56,9 @@ AUTOMATED_CHECKS: Final = (
     "mobile_render_check",
 )
 MOBILE_VIEWPORT: Final = "390x844"
+# Bound raw image evidence before decoding or hashing; sparse/hostile files
+# must never cause an unbounded Path.read_bytes() allocation.
+MAX_IMAGE_EVIDENCE_BYTES: Final = 256 * 1024 * 1024
 
 
 def _map(value: JSONValue, label: str) -> JSONMap:
@@ -270,8 +273,15 @@ def _complete_non_png(raw: bytes) -> bool:
 
 
 def _verified_image_bytes(path: Path) -> bytes | None:
-    """Read the evidence once so the decoded bytes are also the hashed bytes."""
-    raw = path.read_bytes()
+    """Read at most one bounded snapshot for both decoding and SHA-256.
+
+    A giant or concurrently growing evidence file is rejected before a
+    full-file allocation. Never hash different bytes from those decoded.
+    """
+    with path.open("rb") as stream:
+        raw = stream.read(MAX_IMAGE_EVIDENCE_BYTES + 1)
+    if len(raw) > MAX_IMAGE_EVIDENCE_BYTES:
+        return None
     if raw.startswith(b"\x89PNG\r\n\x1a\n"):
         return raw if _complete_png(raw) else None
     return raw if _complete_non_png(raw) else None
