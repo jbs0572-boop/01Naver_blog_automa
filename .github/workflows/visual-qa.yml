@@ -1,6 +1,26 @@
 name: Original-first visual QA (Chromium)
 
 on:
+  pull_request:
+    paths:
+      - 'editorial_studio/*.py'
+      - 'editorial_studio/profiles/**'
+      - 'editorial_studio/benchmarks/**'
+      - 'tests/test_visual_capture.py'
+      - 'tests/test_workflow_intend_docs.py'
+      - '.github/workflows/visual-qa.yml'
+      - 'workflows/ci/visual-qa/intend.md'
+  push:
+    branches:
+      - main
+    paths:
+      - 'editorial_studio/*.py'
+      - 'editorial_studio/profiles/**'
+      - 'editorial_studio/benchmarks/**'
+      - 'tests/test_visual_capture.py'
+      - 'tests/test_workflow_intend_docs.py'
+      - '.github/workflows/visual-qa.yml'
+      - 'workflows/ci/visual-qa/intend.md'
   workflow_dispatch:
 
 permissions:
