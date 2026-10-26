@@ -163,6 +163,11 @@ def card_html(category: str, role: str, title: str, entries: list[str], caption:
     css=CARD_CSS
     for k,v in theme.items():css=css.replace(k.upper(),v)
     css+=f'\n.card .text{{font-size:{27-2*shrink}px!important}} h1{{font-size:{48-3*shrink}px!important}}'
+    # Mobile slide (800px) is displayed at ~354px wide in a 390px
+    # article. Preserve effective 15–17px text, not microscopic ~12px.
+    # Bound the three existing retries at 38, 36, 34 source pixels.
+    # Photo bytes and evidence text remain completely unchanged.
+    css+=f'\n@media(max-width:850px){{.card .text{{font-size:{38-2*shrink}px!important}} .source{{font-size:{28-shrink}px!important}}}}'
     cards=''.join(f'<div class="card"><div class="count">{i:02}</div><div class="text" data-card-text>{esc(text)}</div></div>' for i,text in enumerate(entries,1))
     return f'''<!doctype html><html lang="ko"><head><meta charset="utf-8"><style>{css}</style></head>
 <body><article id="canvas" data-role="{role}" data-category="{category}"><div class="label">{esc('한눈에 보는 핵심' if role=='facts' else '점검할 순서')}</div><h1>{esc(title)}</h1><div class="content">{cards}</div><div class="source">{esc(caption)}</div></article></body></html>'''
@@ -171,14 +176,22 @@ def card_html(category: str, role: str, title: str, entries: list[str], caption:
 QA_JS = r'''() => {
  const issues=[];
  const canvas=document.querySelector('#canvas').getBoundingClientRect();
- const footer=document.querySelector('.source').getBoundingClientRect();
+ const sourceElement=document.querySelector('.source');
+ const footer=sourceElement.getBoundingClientRect();
  const title=document.querySelector('h1').getBoundingClientRect();
+ // A perfect bounding-box result is NOT sufficient if bitmap text becomes
+ // unreadable when scaled to a 390px phone-width article.
+ const isMobileSlide=canvas.width<900;
+ if(isMobileSlide && parseFloat(getComputedStyle(sourceElement).fontSize)<26)
+   issues.push('mobile-source-too-small');
  if(title.bottom>footer.top-20)issues.push('headline-overlap');
  if(title.left<canvas.left-2||title.right>canvas.right+2)issues.push('headline-out-of-bounds');
  if(footer.left<canvas.left-2||footer.right>canvas.right+2||footer.bottom>canvas.bottom+2)
    issues.push('footer-out-of-bounds');
  for(const [i,el] of [...document.querySelectorAll('[data-card-text]')].entries()){
    const card=el.closest('.card').getBoundingClientRect(),r=el.getBoundingClientRect();
+   if(isMobileSlide && parseFloat(getComputedStyle(el).fontSize)<34)
+     issues.push('card-'+i+'-unreadable-mobile-text');
    if(r.top<card.top+4 || r.bottom>card.bottom-5 || r.right>card.right-5)
      issues.push('card-'+i+'-out-of-bounds');
    const range=document.createRange();range.selectNodeContents(el);

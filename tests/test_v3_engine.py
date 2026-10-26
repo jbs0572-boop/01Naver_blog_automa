@@ -489,3 +489,45 @@ def test_matching_hash_does_not_allow_tiny_original_photo(tmp_path):
     provenance.write_text(json.dumps(info), encoding="utf-8")
     with pytest.raises(ValueError, match="dimensions/format invalid"):
         engine._source_category(extracted, "economy")
+
+
+def test_mobile_infographic_requires_legible_font_and_fails_tiny_text():
+    """A rasterized 800px slide is rendered at ~354px in a 390px article."""
+    from playwright.sync_api import sync_playwright
+
+    entries = [
+        "네이버 공식 스팸 사례에는 실제 본문과 무관한 키워드를 이용한 낚시성 콘텐츠가 포함됩니다.",
+        "상위 노출을 위해 검색어를 과도하게 반복하는 글은 저품질로 평가될 수 있습니다.",
+        "독자가 찾는 내용을 충분한 근거와 함께 제공해야 합니다.",
+    ]
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": 800, "height": 1200})
+            markup = engine.card_html(
+                "news_policy", "facts", "글의 품질을 나누는 세 기준",
+                entries, "원문: 공식 스팸 정책", 0
+            )
+            page.set_content(markup, wait_until="load")
+            page.evaluate("document.fonts.ready")
+            measured = page.evaluate("""() => ({
+                card: parseFloat(getComputedStyle(document.querySelector('[data-card-text]')).fontSize),
+                source: parseFloat(getComputedStyle(document.querySelector('.source')).fontSize)
+            })""")
+            assert measured["card"] >= 34
+            assert measured["source"] >= 26
+            assert not page.evaluate(engine.QA_JS)["issues"]
+            # Force a visually illegible yet geometrically non-clipped card;
+            # this MUST be rejected instead of awarded a 98-point pass.
+            # A trailing stylesheet deliberately overrides the normal rules.
+            degraded = markup.replace(
+                "</head>",
+                "<style>@media(max-width:850px){.card .text{font-size:18px!important}"
+                ".source{font-size:12px!important}}</style></head>", 1
+            )
+            page.set_content(degraded, wait_until="load")
+            issues = page.evaluate(engine.QA_JS)["issues"]
+            assert any("unreadable-mobile-text" in issue for issue in issues)
+            assert "mobile-source-too-small" in issues
+        finally:
+            browser.close()
