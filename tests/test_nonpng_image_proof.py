@@ -140,16 +140,44 @@ def test_image_files_are_decoded_and_hashed_from_one_read(
 ) -> None:
     metadata, quality = _proofs(tmp_path, _image("JPEG"))
     image = tmp_path / "image.bin"
-    original_read = Path.read_bytes
+    original_open = Path.open
     reads = 0
 
-    def counted_read(path: Path) -> bytes:
+    def counted_open(path: Path, *args: object, **kwargs: object):
         nonlocal reads
         if path == image:
             reads += 1
-        return original_read(path)
+        return original_open(path, *args, **kwargs)
 
-    monkeypatch.setattr(Path, "read_bytes", counted_read)
+    monkeypatch.setattr(Path, "open", counted_open)
     assert validate_image_metadata(metadata, "formal")["formal_ready"] is True
     assert validate_image_quality(quality)["passed"] is True
     assert reads == 2  # Once for each public validator, not twice per proof.
+
+
+@pytest.mark.parametrize("fmt", ["PNG", "JPEG", "GIF", "WEBP"])
+def test_oversized_image_proofs_fail_before_unbounded_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fmt: str,
+) -> None:
+    import tools.image_quality as image_quality
+
+    raw = _image(fmt)
+    metadata, quality = _proofs(tmp_path, raw)
+    image = tmp_path / "image.bin"
+    # Exercise the real size-limit path without allocating a multi-GB fixture.
+    # Production retains its explicit 256 MiB upper bound.
+    assert image_quality.MAX_IMAGE_EVIDENCE_BYTES == 256 * 1024 * 1024
+    monkeypatch.setattr(image_quality, "MAX_IMAGE_EVIDENCE_BYTES", len(raw) - 1)
+
+    original_read = Path.read_bytes
+
+    def forbid_unbounded_read(path: Path) -> bytes:
+        if path == image:
+            raise AssertionError("image proof must not use unbounded read_bytes")
+        return original_read(path)
+
+    monkeypatch.setattr(Path, "read_bytes", forbid_unbounded_read)
+    with pytest.raises(ContractError, match="not a recognized image"):
+        validate_image_metadata(metadata, "formal")
+    with pytest.raises(ContractError, match="not a recognized image"):
+        validate_image_quality(quality)
