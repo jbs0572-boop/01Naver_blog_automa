@@ -103,3 +103,77 @@ def test_path_overlap_rejected_and_audit_never_guesses_semantics(tmp_path: Path)
     assert not report["semantic_audit_complete"]
     assert all(x["patch_equivalence"] == "different_patch"
                for x in report["commits"])
+
+
+
+def test_untracked_filenames_keep_leading_and_trailing_spaces(tmp_path: Path) -> None:
+    repo, snapshot, head, remote = fixture_repository(tmp_path)
+    (repo / "secret").write_text("first\n")
+    (repo / "secret ").write_text("second\n")
+    (repo / " leading").write_text("third\n")
+    output = backup(repo, snapshot, tmp_path / "secure", head[:8])
+    with tarfile.open(output / "untracked.tar.gz") as archive:
+        assert archive.extractfile("untracked/secret").read() == b"first\n"
+        assert archive.extractfile("untracked/secret ").read() == b"second\n"
+        assert archive.extractfile("untracked/ leading").read() == b"third\n"
+    from scripts.local_main_reconcile import repo_state
+    state = repo_state(repo)
+    assert "secret " in state["untracked_sha256"]
+    assert " leading" in state["untracked_sha256"]
+
+
+def test_diff_never_uses_repository_textconv_or_external_helper(tmp_path: Path) -> None:
+    repo, snapshot, head, remote = fixture_repository(tmp_path)
+    from scripts.local_main_reconcile import raw_diff
+    (repo / ".gitattributes").write_text("local_1.py diff=filterx\n")
+    command(repo, "config", "diff.filterx.textconv", "printf constant")
+    original = raw_diff(repo)
+    assert b"return 99" in original
+    output = backup(repo, snapshot, tmp_path / "safe", head[:8])
+    assert b"return 99" in (output / "tracked-vs-HEAD.patch").read_bytes()
+
+
+def test_nested_untracked_git_repo_fails_instead_of_silent_omission(tmp_path: Path) -> None:
+    repo, snapshot, head, remote = fixture_repository(tmp_path)
+    nested = repo / "nested"
+    nested.mkdir()
+    command(nested, "init", "-b", "main")
+    (nested / "lost.txt").write_text("MUST PRESERVE\n")
+    with pytest.raises(ReconcileError, match="Untracked directory"):
+        backup(repo, snapshot, tmp_path / "safe", head[:8])
+    assert not (tmp_path / "safe").exists()
+
+
+def test_concurrent_dirty_content_change_detectable_even_with_same_status(tmp_path: Path) -> None:
+    repo, snapshot, head, remote = fixture_repository(tmp_path)
+    from scripts.local_main_reconcile import repo_state
+    before = repo_state(repo)
+    (repo / "local_1.py").write_text("def local_1():\n    return 123\n")
+    (repo / "untracked notes with space.txt").write_text("new private bytes\n")
+    after = repo_state(repo)
+    assert before["working_status_sha256"] == after["working_status_sha256"]
+    assert before["tracked_bytes_patch_sha256"] != after["tracked_bytes_patch_sha256"]
+    assert before["untracked_sha256"] != after["untracked_sha256"]
+
+
+def test_truncated_bundle_payload_rejected_even_if_header_looks_correct(tmp_path: Path) -> None:
+    repo, snapshot, head, remote = fixture_repository(tmp_path)
+    from scripts.local_main_reconcile import verify_restorable_bundle
+    bundle = tmp_path / "truncated.bundle"
+    command(repo, "bundle", "create", str(bundle), "--all")
+    data = bundle.read_bytes()
+    header_end = data.find(b"\n\n")
+    assert header_end > 0 and len(data) > header_end + 100
+    bundle.write_bytes(data[:header_end + 2])
+    with pytest.raises(ReconcileError, match="bundle"):
+        verify_restorable_bundle(repo, bundle, head)
+
+
+def test_committed_filename_trailing_space_preserved_in_audit(tmp_path: Path) -> None:
+    repo, snapshot, old_head, remote = fixture_repository(tmp_path)
+    (repo / "meaningful-name ").write_text("some code\n")
+    command(repo, "add", "meaningful-name ")
+    command(repo, "commit", "-m", "local with whitespace suffix")
+    report = audit(repo)
+    last = report["commits"][-1]
+    assert last["files"][0]["paths"] == ["meaningful-name "]
