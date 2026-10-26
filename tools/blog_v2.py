@@ -62,11 +62,15 @@ def verified_url(value: object) -> str:
     if (
         url.scheme != "https"
         or not normalized_host
-        or url.username or url.password
+        or url.username is not None or url.password is not None
         or port not in {None, 443}
         or len(labels) < 2
         or labels[-1] in reserved
         or normalized_host == "localhost.localdomain"
+        # RFC 8375 reserves home.arpa for local residential networks. A link
+        # to router.home.arpa must not be presented as public evidence.
+        or normalized_host == "home.arpa"
+        or normalized_host.endswith(".home.arpa")
     ):
         raise ContentError("only public HTTPS evidence URLs without credentials are permitted")
 

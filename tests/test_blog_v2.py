@@ -146,6 +146,11 @@ def test_forbidden_evidence_urls(url):
 @pytest.mark.parametrize("url", [
     "https://localhost./admin",
     "https://localhost.localdomain./admin",
+    "https://router.home.arpa/admin",
+    "https://router.home.arpa./admin",
+    "https://home.arpa/admin",
+    "https://@developers.naver.com/notice/article/7527",
+    "https://:@developers.naver.com/notice/article/7527",
     "https://service.local./internal",
     "https://service.internal./internal",
     "https://review.test./internal",
