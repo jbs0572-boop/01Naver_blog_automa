@@ -210,7 +210,9 @@ class ProtocolAndCLITests(unittest.TestCase):
         self.assertIn(purpose["image_roles"]["context-photo"], prompt)
         self.assertIn("DO NOT simulate a photo as real", prompt)
         with self.assertRaisesRegex(engine.EngineError, "purpose/category mismatch"):
-            engine.llm_article(case, profile, purpose=topic_intents.load("economy"))
+            wrong_category = next(c for c in topic_intents.CATEGORIES
+                                  if c != case["category"])
+            engine.llm_article(case, profile, purpose=topic_intents.load(wrong_category))
 
 
 
