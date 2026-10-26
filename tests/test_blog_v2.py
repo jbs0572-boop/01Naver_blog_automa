@@ -155,6 +155,8 @@ def test_forbidden_evidence_urls(url):
     "https://0177.0.0.1/internal",
     "https://0x7f.1/internal",
     "https://0x7f.0x1/internal",
+    "https://0x7f.0x/internal",
+    "https://0x7f.0x./internal",
     "https://0x7f.0x0.0x0.0x1/internal",
     "https://example..com/invalid",
     "https://-example.com/invalid",
