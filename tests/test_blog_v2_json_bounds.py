@@ -81,12 +81,47 @@ def test_invalid_utf8_json_is_rejected_without_manual_export(
 
 
 @pytest.mark.parametrize("boundary", ["sourcepack", "manifest", "approval"])
-def test_deeply_nested_json_fails_closed_at_every_approval_boundary(
+def test_parser_recursion_error_is_rejected_at_every_approval_boundary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, boundary: str,
+) -> None:
+    from tools import blog_v2
+
+    target, bundle = _target(tmp_path, boundary)
+    marker = '{"trigger":"parser-recursion"}'
+    target.write_text(marker, encoding="utf-8")
+    original_loads = blog_v2.json.loads
+
+    def simulated_recursion_error(payload: str, *args: object, **kwargs: object) -> object:
+        if payload == marker:
+            raise RecursionError("JSON parser exceeded depth limit")
+        return original_loads(payload, *args, **kwargs)
+
+    # Parser recursion limits differ across Python versions. Force only the
+    # target document's decoder failure, preserving a strict error assertion.
+    monkeypatch.setattr(blog_v2.json, "loads", simulated_recursion_error)
+    with pytest.raises(ContentError, match="cannot read JSON"):
+        if boundary == "sourcepack":
+            build_bundle(target, tmp_path / "output")
+        elif boundary == "manifest":
+            assert bundle is not None
+            verify_bundle(bundle)
+        else:
+            assert bundle is not None
+            export_copy(bundle)
+    if boundary != "sourcepack":
+        assert bundle is not None
+        assert not (bundle / "naver-copy.md").exists()
+
+
+@pytest.mark.parametrize("boundary", ["sourcepack", "manifest", "approval"])
+def test_extreme_json_nesting_never_creates_manual_export(
     tmp_path: Path, boundary: str,
 ) -> None:
     target, bundle = _target(tmp_path, boundary)
     target.write_text("[" * 20000 + "0" + "]" * 20000, encoding="utf-8")
-    with pytest.raises(ContentError, match="cannot read JSON"):
+    # Python 3.14 may parse this successfully; schema/approval checks must
+    # still reject it. Decoder failure is tested deterministically above.
+    with pytest.raises(ContentError):
         if boundary == "sourcepack":
             build_bundle(target, tmp_path / "output")
         elif boundary == "manifest":
