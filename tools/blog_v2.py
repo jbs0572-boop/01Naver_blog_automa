@@ -188,7 +188,8 @@ def _read_json(path: Path) -> object:
         raise ContentError(f"JSON input exceeds {MAX_BUNDLE_JSON_BYTES} bytes: {path}")
     try:
         return json.loads(raw.decode("utf-8"))
-    except (ValueError, UnicodeError) as error:
+    except (ValueError, UnicodeError, RecursionError) as error:
+        # Nested JSON bombs are invalid evidence, not unhandled CLI failures.
         raise ContentError(f"cannot read JSON: {path}") from error
 
 
