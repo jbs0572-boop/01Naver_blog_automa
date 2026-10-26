@@ -145,7 +145,8 @@ class IndependentStyleTests(unittest.TestCase):
                         lock["artifacts_sha256"]["intend.md"],
                         hashlib.sha256(article).hexdigest(),
                     )
-                    self.assertIn(topic, article.decode("utf-8"))
+                    # Literal underscores are escaped when rendered as Markdown.
+                    self.assertIn(topic.replace("_", "\\_"), article.decode("utf-8"))
                     self.assertIn(intent["search_intent"], article.decode("utf-8"))
                     self.assertIn("네이버·Notion 미저장", article.decode("utf-8"))
                     self.assertEqual(studio.check_bundle(bundle)["intent_lock"], "passed")
