@@ -139,6 +139,9 @@ def verify_gate(
     blog_id: str | None = None,
 ) -> JSONMap:
     manifest = verify_manifest(root, manifest_path)
+    # A valid digest alone must never authorize an artifact from a different run.
+    if manifest.run_id != run_id:
+        raise ContractError("manifest run_id does not match requested gate run_id")
     if gate not in {"notion_write", "naver_draft_save"}:
         raise ContractError(f"unsupported gate: {gate}")
     if gate == "naver_draft_save" and manifest.mode != "formal":
@@ -151,6 +154,7 @@ def verify_gate(
     if not any(
         event.get("event_type") == "stage"
         and event.get("run_id") == run_id
+        and event.get("topic_id") == manifest.topic_id
         and event.get("stage") == "content-assembler"
         and _passed(event)
         for event in events
@@ -159,6 +163,7 @@ def verify_gate(
     if gate == "naver_draft_save" and not any(
         event.get("event_type") == "stage"
         and event.get("run_id") == run_id
+        and event.get("topic_id") == manifest.topic_id
         and event.get("stage") == "notion-rider"
         and _passed(event)
         for event in events
@@ -182,6 +187,7 @@ def verify_gate(
         if not any(
             event.get("event_type") == "stage"
             and event.get("run_id") == run_id
+            and event.get("topic_id") == manifest.topic_id
             and event.get("stage") == required_stage
             and _passed(event)
             and parse_aware_datetime(
