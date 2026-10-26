@@ -19,6 +19,9 @@ from urllib.parse import quote, urlsplit
 VERSION = "2.0.0-preview"
 MAX_SOURCES = 20
 MAX_CLAIMS = 60
+# Bound source packs, manifests and approval records before JSON parsing.
+# All accepted field counts/text lengths are far below this ceiling.
+MAX_BUNDLE_JSON_BYTES = 8 * 1024 * 1024
 V2_WORKFLOWS = ("evidence-packet", "review-export", "naver-search-discovery", "editorial-preview")
 
 
@@ -174,9 +177,18 @@ def render_draft(pack: dict) -> str:
 
 
 def _read_json(path: Path) -> object:
+    # Never load an attacker-controlled sparse/oversized JSON file into
+    # memory just to discover that its contents fail the approval contract.
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as error:
+        with path.open("rb") as stream:
+            raw = stream.read(MAX_BUNDLE_JSON_BYTES + 1)
+    except OSError as error:
+        raise ContentError(f"cannot read JSON: {path}") from error
+    if len(raw) > MAX_BUNDLE_JSON_BYTES:
+        raise ContentError(f"JSON input exceeds {MAX_BUNDLE_JSON_BYTES} bytes: {path}")
+    try:
+        return json.loads(raw.decode("utf-8"))
+    except (ValueError, UnicodeError) as error:
         raise ContentError(f"cannot read JSON: {path}") from error
 
 
