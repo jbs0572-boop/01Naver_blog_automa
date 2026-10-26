@@ -2,6 +2,9 @@ name: Blog v2 safe preview
 
 on:
   pull_request:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -10,7 +13,7 @@ permissions:
 jobs:
   preview:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -18,8 +21,9 @@ jobs:
           python-version: '3.13'
       - name: Run v2 behavioral tests and document inventory
         run: |
-          python -m pip install 'pytest>=9,<10'
-          python -m pytest -q tests/test_blog_v2.py tests/test_naver_search_v2.py tests/test_review_site_v2.py tests/test_workflow_intend_docs.py
+          python -m pip install 'pytest>=9,<10' 'playwright>=1.50,<2'
+          python -m playwright install --with-deps chromium
+          python -m pytest -q tests/test_blog_v2.py tests/test_naver_search_v2.py tests/test_review_site_v2.py tests/test_workflow_intend_docs.py tests/test_preview_ci_contract.py
       - name: Generate deterministic offline preview
         run: |
           python -m tools.blog_v2 demo --output-root preview
@@ -29,38 +33,57 @@ jobs:
           python -m tools.naver_search_v2 --query "블로그 자동화" --as-of 2026-10-22 --limit 3 > preview/naver-search-plan.json
           python -m tools.review_site_v2 --folder "$(find preview -mindepth 1 -maxdepth 1 -type d | head -n 1)"
           test "$(find preview -name preview.html | wc -l)" -eq 1
-      - name: Install Korean font coverage for browser screenshots
+      - name: Require Korean font coverage for real browser screenshots
         timeout-minutes: 4
         run: |
           set -eu
-          BROWSER="$(command -v google-chrome || command -v chromium || true)"
-          if [ -n "$BROWSER" ]; then
-            # Avoid an unbounded apt/network stall. Existing Korean fonts are
-            # valid; otherwise install Noto CJK, then VERIFY before capture.
-            if [ -z "$(fc-list :lang=ko family | head -n 1)" ]; then
-              sudo timeout 90s apt-get update -qq
-              sudo env DEBIAN_FRONTEND=noninteractive timeout 120s apt-get install -y -qq --no-install-recommends fonts-noto-cjk
-              fc-cache -f
-            fi
-            test -n "$(fc-list :lang=ko family | head -n 1)"
+          if [ -z "$(fc-list :lang=ko family | head -n 1)" ]; then
+            sudo timeout 90s apt-get update -qq
+            sudo env DEBIAN_FRONTEND=noninteractive timeout 120s apt-get install -y -qq --no-install-recommends fonts-noto-cjk
+            fc-cache -f
           fi
-      - name: Render responsive snapshots if Chrome is available
+          test -n "$(fc-list :lang=ko family | head -n 1)"
+      - name: Capture mobile and desktop with mandatory Chromium
         run: |
           set -eu
-          HTML_FILE="$(find preview -name preview.html -print -quit)"
-          test -n "$HTML_FILE"
-          BROWSER="$(command -v google-chrome || command -v chromium || true)"
-          if [ -n "$BROWSER" ]; then
-            mkdir -p preview/screenshots
-            "$BROWSER" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --hide-scrollbars --window-size=390,844 --screenshot="$PWD/preview/screenshots/mobile.png" "file://$PWD/$HTML_FILE"
-            "$BROWSER" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --hide-scrollbars --window-size=1440,900 --screenshot="$PWD/preview/screenshots/desktop.png" "file://$PWD/$HTML_FILE"
-            test -s preview/screenshots/mobile.png
-            test -s preview/screenshots/desktop.png
-            fc-match -f '%{family}\n' ':lang=ko' > preview/korean-font.txt
-            test -s preview/korean-font.txt
-          else
-            echo "No Chrome executable; real-browser visual verification pending" > preview/visual-validation.txt
-          fi
+          python - <<'PY'
+          from pathlib import Path
+          from playwright.sync_api import sync_playwright
+
+          pages = list(Path("preview").glob("*/preview.html"))
+          assert len(pages) == 1, "expected exactly one verified preview"
+          screenshots = Path("preview/screenshots")
+          screenshots.mkdir(parents=True, exist_ok=True)
+          with sync_playwright() as playwright:
+              browser = playwright.chromium.launch(headless=True)
+              for name, width, height in (("mobile", 390, 844), ("desktop", 1440, 900)):
+                  context = browser.new_context(
+                      viewport={"width": width, "height": height},
+                      device_scale_factor=1,
+                  )
+                  # Offline by construction, including image/font subresources.
+                  context.route(
+                      "**/*",
+                      lambda route: route.continue_()
+                      if route.request.url.startswith("file:") else route.abort(),
+                  )
+                  page = context.new_page()
+                  page.goto(pages[0].resolve().as_uri(), wait_until="load")
+                  page.evaluate("document.fonts.ready")
+                  assert "미검수 초안" in page.locator("body").inner_text()
+                  assert page.evaluate(
+                      "document.documentElement.scrollWidth <= window.innerWidth"
+                  ), f"{name} has horizontal overflow"
+                  target = screenshots / f"{name}.png"
+                  page.screenshot(path=str(target), full_page=True, animations="disabled")
+                  assert target.stat().st_size > 512, f"{name} capture missing or empty"
+                  context.close()
+              browser.close()
+          PY
+          fc-match -f '%{family}\\n' ':lang=ko' > preview/korean-font.txt
+          test -s preview/korean-font.txt
+          test -s preview/screenshots/mobile.png
+          test -s preview/screenshots/desktop.png
       - name: Publish review-only artifact (not Naver)
         uses: actions/upload-artifact@v4
         with:
