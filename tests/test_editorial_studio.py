@@ -211,5 +211,44 @@ class IndependentStyleTests(unittest.TestCase):
 
 
 
+    def test_canonical_intent_crlf_parse_and_original_byte_hash(self):
+        with tempfile.TemporaryDirectory() as root:
+            base = Path(root)
+            bundle = studio.build_bundle("경제통계 읽기", base, "economy")
+            cloned = base / "topics"
+            shutil.copytree(topic_intents.TOPIC_DIR, cloned)
+            source = cloned / "economy" / "intend.md"
+            before = source.read_bytes()
+            self.assertNotIn(b"\r\n", before)
+            crlf = before.replace(b"\n", b"\r\n")
+            self.assertNotEqual(before, crlf)
+            source.write_bytes(crlf)
+            with patch.object(topic_intents, "TOPIC_DIR", cloned):
+                canonical = topic_intents.load("economy")
+                self.assertEqual(
+                    canonical["sha256"], hashlib.sha256(crlf).hexdigest()
+                )
+                with self.assertRaisesRegex(studio.StyleError, "intend.md drift"):
+                    studio.check_bundle(bundle)
+
+    def test_source_pack_long_https_url_is_allowed_within_contract(self):
+        url = "https://www.example.com/reference/" + "x" * 1300
+        article = topic_intents.render_for_topic(
+            "news_policy", "정책의 발표일과 시행일",
+            case={"topic": "정책", "as_of": "2026-10-27",
+                  "sources": [{"id": "S1", "title": "정부 공식 원문", "url": url}],
+                  "facts": [{"id": "F1"}]},
+        )
+        self.assertIn(url, article)
+        with self.assertRaisesRegex(topic_intents.IntentError, "2048"):
+            topic_intents.render_for_topic(
+                "news_policy", "정책",
+                case={"topic": "정책", "as_of": "2026-10-27",
+                      "sources": [{"title": "공식", "url": "https://x.test/" + "a" * 2100}],
+                      "facts": [{"id": "F1"}]},
+            )
+
+
+
 if __name__ == "__main__":
     unittest.main()

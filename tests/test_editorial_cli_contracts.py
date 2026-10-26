@@ -177,5 +177,42 @@ class ProtocolAndCLITests(unittest.TestCase):
             self.assertIsNone(item["natural_search_visits"])
 
 
+    def test_trusted_category_intent_reaches_llm_and_generated_cover_prompt(self):
+        from editorial_studio import topic_intents
+        raw = json.loads(DATA.read_text(encoding="utf-8"))
+        case = engine.load_case(raw["cases"][0])
+        profile = studio.profiles()[case["category"]]
+        purpose = topic_intents.load(case["category"])
+        sentinel = "SOURCEPACK_DATA_SENTINEL_NOT_TRUSTED_AS_INSTRUCTIONS"
+        case["facts"][0]["text"] = sentinel
+        observed = []
+
+        def fake_api(path, payload, timeout=60):
+            observed.append({"path": path, "payload": payload})
+            return {"output_text": '{"title":"sample","intro":"sample","sections":[]}'}
+
+        with patch.object(engine, "_api_post", side_effect=fake_api):
+            engine.llm_article(case, profile, purpose=purpose)
+        self.assertEqual(len(observed), 1)
+        self.assertEqual(observed[0]["path"], "/responses")
+        instructions = observed[0]["payload"]["instructions"]
+        self.assertIn(purpose["answer_promise"], instructions)
+        self.assertIn(purpose["search_intent"], instructions)
+        self.assertIn(purpose["fact_checks"][0], instructions)
+        self.assertIn(purpose["forbidden"][0], instructions)
+        self.assertNotIn(sentinel, instructions)
+        self.assertIn(sentinel, observed[0]["payload"]["input"])
+
+        article = {"title": case["title"], "intro": "sample", "sections": []}
+        prompt = engine.image_prompt(case, profile, article, purpose=purpose)
+        self.assertIn(purpose["reader_problem"], prompt)
+        self.assertIn(purpose["answer_promise"], prompt)
+        self.assertIn(purpose["image_roles"]["context-photo"], prompt)
+        self.assertIn("DO NOT simulate a photo as real", prompt)
+        with self.assertRaisesRegex(engine.EngineError, "purpose/category mismatch"):
+            engine.llm_article(case, profile, purpose=topic_intents.load("economy"))
+
+
+
 if __name__ == "__main__":
     unittest.main()
