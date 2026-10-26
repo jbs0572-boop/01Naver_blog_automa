@@ -62,3 +62,16 @@ def test_empty_image_proof_log_still_fails_closed(
             validate_image_metadata(path, "formal")
         else:
             validate_image_quality(path)
+
+
+@pytest.mark.parametrize("kind", ["metadata", "quality"])
+def test_deeply_nested_image_proof_json_is_a_contract_rejection(
+    tmp_path: Path, kind: str,
+) -> None:
+    path = tmp_path / "proof.jsonl"
+    path.write_text("[" * 1500 + "0" + "]" * 1500 + "\n", encoding="utf-8")
+    with pytest.raises(ContractError, match="invalid JSON"):
+        if kind == "metadata":
+            validate_image_metadata(path, "formal")
+        else:
+            validate_image_quality(path)
