@@ -81,14 +81,15 @@
 - 전체 branch/line coverage: `coverage json` + `scripts/coverage_audit.py` 결과 **88.02%**. `coverage report` 정수 표시 **88%**. Callable 본문 실행 입증 **128/132**; 미확인 4개는 3 lambda의 line trace 모호성과 Protocol 선언 1개다.
 - 변경 단위 테스트: state writer/runner **13 passed**; Gate/manifest/workflow 관련 집중 선택 **51 passed**. 변경 파일 Ruff와 basedpyright 통과, `git diff --check` 통과.
 - 변경 파일 Ruff와 basedpyright는 로컬에서 통과했다. 저장소 전체의 원격 기준 lint/type 수치는 동일 revision의 clean-base 측정 자료가 없어 보고하지 않는다. 둘은 현재 `python-quality.yml` 필수 job이 아니다.
-- Python quality GitHub Actions는 PR에서 테스트 전체·branch coverage·function inventory를 실행한다. 원격 run ID와 Codex review 상태는 PR 생성 후 최종 revision evidence 확인 후 기록한다. CI/review 성공은 운영 배포가 아니다.
+- GitHub Actions: PR source/report revision `12d43783a1780fa4d6c8d152cd06cdc4120482b7`에서 `Python tests and function coverage` run **#192 / 40326016144**와 `Blog v2 safe preview` run **#162 / 40326016455**가 모두 성공했다. 최종 보고서 변경은 문서 전용이다.
+- Codex 코드 리뷰는 `1031c77849af27221121e97e8569725bcaa2c916`에서 완료, findings 없음. 이후 변경은 공개 문서의 PR 링크만 추가했으며 코드 변경은 없다. CI/review 성공은 운영 배포가 아니다.
 
 ## 커밋·PR
 
 - Feature 브랜치: `codex/reconcile-local-main-security-20261026` (base `origin/main` SHA 위에서 생성).
 - 커밋: `c09c40c` Gate 승인 무결성, `a3ccc25` 상태파일 경로 보호, `01494b6` 오류 경로 descriptor 소유권 수정.
 - 보고서 커밋: `c3cbd53` (공개 문서 경로 제거 후 `1031c77`). PR: https://github.com/jbs0572-boop/01Naver_blog_automa/pull/23.
-- PR head `1031c77` 기준 CI: `Blog v2 safe preview` run `40325793542` 성공, `Python tests and function coverage` run `40325793514` 확인 시점 진행 중. Codex code review도 같은 revision 기준 진행 중이었다. 최종 CI/review 결과는 PR 체크에서 확인한다.
+- PR head `12d4378`에 연결된 CI 두 개 모두 성공했다. Codex review는 코드 변경이 포함된 `1031c77`에서 완료됐으며 지적이 없었다. 이후 커밋은 문서 수정뿐이다.
 - CI 및 Codex review: PR revision 기준 상태를 생성/완료 후 기록한다. 아직 운영 배포나 외부 Notion/Naver 저장을 수행하지 않았다.
 
 ## 안전한 로컬 동기화 절차
