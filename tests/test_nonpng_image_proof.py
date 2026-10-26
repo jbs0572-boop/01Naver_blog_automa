@@ -72,6 +72,18 @@ def _proofs(tmp_path: Path, raw: bytes) -> tuple[Path, Path]:
 
 
 @pytest.mark.parametrize("fmt", ["JPEG", "GIF", "WEBP"])
+def test_nonpng_size_must_match_decoded_pixels(tmp_path: Path, fmt: str) -> None:
+    path = tmp_path / "image.bin"
+    path.write_bytes(_image(fmt))
+    metadata = tmp_path / "image-generation.jsonl"
+    values = _metadata(path)
+    values["size"] = "18x10"  # Actual JPEG/GIF/WebP fixture is 17x10.
+    metadata.write_text(json.dumps(values) + "\n", encoding="utf-8")
+    with pytest.raises(ContractError, match="size does not match decoded pixels"):
+        validate_image_metadata(metadata, "formal")
+
+
+@pytest.mark.parametrize("fmt", ["JPEG", "GIF", "WEBP"])
 def test_valid_non_png_proofs_decode_in_metadata_and_mobile_quality(
     tmp_path: Path, fmt: str,
 ) -> None:
