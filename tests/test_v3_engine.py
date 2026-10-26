@@ -224,7 +224,7 @@ def _minimal_html_case_for_security():
     }
     article = {
         "sections": [{"role": i, "body": f"출처가 있는 문장 {i}",
-                      "fact_ids": [f"F{i}"]} for i in range(5)
+                      "fact_ids": [f"F{i}"]} for i in range(5)]
     }
     return editor, pack, article
 
