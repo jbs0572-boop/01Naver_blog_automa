@@ -77,6 +77,9 @@ def test_private_snapshot_and_entire_local_commit_inventory_are_preserved(tmp_pa
     assert data["semantic_audit_complete"] is False
     assert (output.stat().st_mode & 0o777) == 0o700
     assert (output / "backup-sha256.json").is_file()
+    import hashlib
+    before_state = json.loads((output / "source-state.json").read_text())["before"]
+    assert hashlib.sha256((output / "git-index.raw").read_bytes()).hexdigest() == before_state["index_raw_sha256"]
 
 
 def test_wrong_original_head_blocks_without_creating_any_backup(tmp_path: Path) -> None:
