@@ -78,3 +78,23 @@ def test_invalid_utf8_json_is_rejected_without_manual_export(
     if boundary != "sourcepack":
         assert bundle is not None
         assert not (bundle / "naver-copy.md").exists()
+
+
+@pytest.mark.parametrize("boundary", ["sourcepack", "manifest", "approval"])
+def test_deeply_nested_json_fails_closed_at_every_approval_boundary(
+    tmp_path: Path, boundary: str,
+) -> None:
+    target, bundle = _target(tmp_path, boundary)
+    target.write_text("[" * 1500 + "0" + "]" * 1500, encoding="utf-8")
+    with pytest.raises(ContentError, match="cannot read JSON"):
+        if boundary == "sourcepack":
+            build_bundle(target, tmp_path / "output")
+        elif boundary == "manifest":
+            assert bundle is not None
+            verify_bundle(bundle)
+        else:
+            assert bundle is not None
+            export_copy(bundle)
+    if boundary != "sourcepack":
+        assert bundle is not None
+        assert not (bundle / "naver-copy.md").exists()
