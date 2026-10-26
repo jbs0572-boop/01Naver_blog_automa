@@ -8,11 +8,13 @@ import re
 import sys
 from pathlib import Path
 
+from . import topic_intents
+
 PROFILE_DIR = Path(__file__).resolve().parent / "profiles"
 PROFILE_IDS = (
     "life_health", "news_policy", "culture_people", "real_estate", "economy"
 )
-ARTIFACT_FILES = ("writer-brief.md", "image-brief.md", "layout-template.md")
+ARTIFACT_FILES = ("writer-brief.md", "image-brief.md", "layout-template.md", "intend.md")
 
 
 class StyleError(ValueError):
@@ -101,6 +103,11 @@ def choose(topic: str, explicit: str | None = None) -> tuple[dict, dict[str, int
 def build_bundle(topic: str, output_root: Path, explicit: str | None = None) -> Path:
     """Create style-locked instructions and an empty layout, not an article."""
     profile, scores = choose(topic, explicit)
+    # Both contracts are required: style controls voice; intent controls purpose.
+    intent = topic_intents.load_all()[profile["id"]]
+    topic_intend = topic_intents.render_for_topic(
+        profile["id"], topic.strip(), contract=intent
+    )
     slug = sha256(topic.strip().encode("utf-8"))[:12]
     bundle = output_root / f"{profile['id']}-{slug}"
     try:
@@ -114,7 +121,11 @@ def build_bundle(topic: str, output_root: Path, explicit: str | None = None) -> 
     writer = (
         f"# 글쓰기 작업 지시서: {topic.strip()}\n\n"
         f"선택 카테고리: {profile['title']} ({profile['id']})\n"
-        f"스타일 잠금 SHA-256: {style_hash}\n\n"
+        f"스타일 잠금 SHA-256: {style_hash}\n"
+        f"글의 의도 잠금 SHA-256: {intent['sha256']}\n\n"
+        "먼저 번들의 intend.md를 읽고 검색 의도·답변 약속·출처 기준을 점검하세요.\n"
+        f"이 글의 검색 의도: {intent['search_intent']}\n"
+        f"독자에게 주는 답: {intent['answer_promise']}\n"
         "다른 카테고리 스타일은 적용하지 않습니다. 아래 스타일 문서만 사용합니다.\n"
         "원문 자료를 실제로 확인한 뒤 사실마다 원문 URL·날짜를 연결하세요.\n"
         "자료의 사실과 해석을 분리하고 실제로 겪지 않은 개인 경험은 쓰지 마세요.\n"
@@ -126,7 +137,11 @@ def build_bundle(topic: str, output_root: Path, explicit: str | None = None) -> 
     image = (
         f"# 이미지 제작 작업 지시서: {topic.strip()}\n\n"
         f"카테고리 고정: {profile['title']} ({profile['id']})\n"
-        f"스타일 잠금 SHA-256: {style_hash}\n\n"
+        f"스타일 잠금 SHA-256: {style_hash}\n"
+        f"글의 의도 잠금 SHA-256: {intent['sha256']}\n\n"
+        "번들 intend.md의 이미지 역할·원본 우선순위를 먼저 적용하세요.\n"
+        f"원본 사진 대상: {intent['original_visual_target']}\n"
+        + "\n".join(f"{role}: {intent['image_roles'][role]}" for role in topic_intents.IMAGE_ROLES) + "\n\n"
         f"표현 스타일: {profile['image_style']}\n"
         f"시각적 DNA: {profile.get('visual_dna', profile['image_style'])}\n"
         f"추천 배치: {profile['image_plan']}\n\n"
@@ -151,6 +166,7 @@ def build_bundle(topic: str, output_root: Path, explicit: str | None = None) -> 
         "writer-brief.md": writer.encode("utf-8"),
         "image-brief.md": image.encode("utf-8"),
         "layout-template.md": layout.encode("utf-8"),
+        "intend.md": topic_intend.encode("utf-8"),
     }
     for filename, raw in content.items():
         (bundle / filename).write_bytes(raw)
@@ -159,6 +175,7 @@ def build_bundle(topic: str, output_root: Path, explicit: str | None = None) -> 
         "topic": topic.strip(), "category": profile["id"], "category_name": profile["title"],
         "profile_file": f"editorial_studio/profiles/{profile['id']}.md",
         "profile_sha256": style_hash, "route_scores": scores,
+        "intend_file": intent["source_path"], "intend_sha256": intent["sha256"],
         "headings": profile["sections"],
         "artifacts_sha256": {name: sha256(content[name]) for name in ARTIFACT_FILES},
         "draft_generated": False, "images_generated": False,
@@ -186,6 +203,10 @@ def check_bundle(bundle: Path, draft: Path | None = None) -> dict:
         raise StyleError("style drift: source Markdown changed after bundle was built")
     if manifest.get("headings") != profile["sections"]:
         raise StyleError("style drift: outline mismatch")
+    intent = topic_intents.load_all()[category]
+    if (manifest.get("intend_sha256") != intent["sha256"]
+            or manifest.get("intend_file") != intent["source_path"]):
+        raise StyleError("intend.md drift: article purpose contract changed")
     expected = manifest.get("artifacts_sha256")
     if not isinstance(expected, dict) or set(expected) != set(ARTIFACT_FILES):
         raise StyleError("missing or unexpected brief artifacts")
@@ -198,6 +219,7 @@ def check_bundle(bundle: Path, draft: Path | None = None) -> dict:
             raise StyleError(f"modified or corrupt artifact: {filename}")
     result = {
         "category": category, "style_lock": "passed",
+        "intent_lock": "passed",
         "draft_structure": "not_checked", "prose_tone": "human_review_required",
         "source_truth": "not_checked", "image_quality": "not_checked",
     }
