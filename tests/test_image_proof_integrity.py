@@ -128,14 +128,14 @@ def _indexed_png(palette: bytes | None, *, after_idat: bool = False) -> bytes:
     ihdr = struct.pack(">IIBBBBB", 1, 1, 8, 3, 0, 0, 0)
     chunks = [
         _chunk(b"IHDR", ihdr),
-        _chunk(b"IDAT", zlib.compress(b"\\x00\\x00".replace(b"\\x00", b"\x00"))),
+        _chunk(b"IDAT", zlib.compress(b"\x00\x00")),
     ]
     if palette is not None:
         if after_idat:
             chunks.append(_chunk(b"PLTE", palette))
         else:
             chunks.insert(1, _chunk(b"PLTE", palette))
-    return b"\\x89PNG\\r\\n\\x1a\\n".decode("unicode_escape").encode("latin-1") + b"".join(chunks) + _chunk(b"IEND", b"")
+    return b"\x89PNG\r\n\x1a\n" + b"".join(chunks) + _chunk(b"IEND", b"")
 
 
 @pytest.mark.parametrize(
@@ -143,7 +143,7 @@ def _indexed_png(palette: bytes | None, *, after_idat: bool = False) -> bytes:
     [
         (None, False),
         (b"invalid-length", False),
-        (b"\\x00\\x00\\x00", True),
+        (b"\x00\x00\x00", True),
         (bytes(257 * 3), False),
     ],
 )
@@ -160,7 +160,7 @@ def test_indexed_png_requires_valid_palette_before_idat(
 
 def test_valid_indexed_png_with_palette_is_accepted(tmp_path: Path) -> None:
     image = tmp_path / "indexed.png"
-    image.write_bytes(_indexed_png(b"\\x00\\x00\\x00"))
+    image.write_bytes(_indexed_png(b"\x00\x00\x00"))
     metadata = tmp_path / "indexed.jsonl"
     metadata.write_text(json.dumps(_metadata(image)) + "\n", encoding="utf-8")
     assert validate_image_metadata(metadata, "formal")["formal_ready"] is True
