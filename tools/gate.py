@@ -166,8 +166,12 @@ def verify_gate(
     if not approvals:
         raise ContractError("approval event with matching target and run is missing")
     decided_at, approval = approvals[-1]
-    # An approval recorded before the prerequisite check must not become
-    # valid retroactively when a later stage event is appended to the log.
+    # Both real time and append order matter: backdated stages added after an
+    # approval cannot retroactively authorize that already-recorded approval.
+    approval_position = next(
+        index for index, event in enumerate(events) if event is approval
+    )
+    preceding_events = events[:approval_position]
     for required_stage in (
         ("content-assembler", "notion-rider")
         if gate == "naver_draft_save"
@@ -180,7 +184,7 @@ def verify_gate(
             and parse_aware_datetime(
                 event.get("ended_at"), f"{required_stage}.ended_at"
             ) <= decided_at
-            for event in events
+            for event in preceding_events
         ):
             raise ContractError(f"approval predates {required_stage} pass")
     if approval.get("decision") != "approved":

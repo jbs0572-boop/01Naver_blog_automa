@@ -96,6 +96,7 @@ def _complete_png(raw: bytes) -> bool:
     offset = 8
     header: tuple[int, int, int, int, int] | None = None
     image_data: list[bytes] = []
+    palette_entries = 0
     while offset + 12 <= len(raw):
         length = struct.unpack(">I", raw[offset : offset + 4])[0]
         end = offset + 12 + length
@@ -129,7 +130,19 @@ def _complete_png(raw: bytes) -> bool:
             header = width, height, depth, channels, interlace
         elif kind == b"IHDR":
             return False
+        if kind == b"PLTE":
+            # Indexed pixels have no meaning without a real palette. A
+            # palette must precede IDAT and contain 1..2**depth RGB entries.
+            if (
+                palette_entries or image_data or color in {0, 4}
+                or not length or length % 3 or length > 768
+                or (color == 3 and length // 3 > (1 << depth))
+            ):
+                return False
+            palette_entries = length // 3
         if kind == b"IDAT":
+            if color == 3 and not palette_entries:
+                return False
             image_data.append(payload)
         if kind == b"IEND":
             if length or end != len(raw) or not image_data:
