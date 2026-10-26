@@ -282,7 +282,7 @@ def _verified_image_bytes(path: Path) -> bytes | None:
         raw = stream.read(MAX_IMAGE_EVIDENCE_BYTES + 1)
     if len(raw) > MAX_IMAGE_EVIDENCE_BYTES:
         return None
-    if raw.startswith(b"\\x89PNG\\r\\n\\x1a\\n"):
+    if raw.startswith(b"\x89PNG\r\n\x1a\n"):
         return raw if _complete_png(raw) else None
     return raw if _complete_non_png(raw) else None
 
