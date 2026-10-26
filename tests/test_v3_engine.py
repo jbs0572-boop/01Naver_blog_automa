@@ -341,6 +341,55 @@ def test_v3_rejects_wrong_film_or_reference_date_even_with_matching_category():
 
 
 
+
+@pytest.mark.parametrize(
+    ("malformation", "diagnostic"),
+    [
+        ("duplicate_source", "source IDs must be unique"),
+        ("duplicate_fact", "fact IDs must be unique"),
+        ("unsafe_source_url", "public HTTPS host"),
+    ],
+)
+def test_archived_sources_cannot_bypass_original_evidence_validation(
+    tmp_path, malformation, diagnostic
+):
+    """A valid lock does not legitimize corrupted IDs or unsafe evidence URLs."""
+    archive = build_fixture_archive(tmp_path)
+    extracted = tmp_path / "corrupt-evidence"
+    extracted.mkdir()
+    engine._extract_source(archive, extracted)
+    path = next((extracted / "articles").glob("economy-*/sourcepack.json"))
+    pack = json.loads(path.read_text(encoding="utf-8"))
+    if malformation == "duplicate_source":
+        pack["sources"].append(
+            dict(pack["sources"][0], title="Conflicting citation",
+                 url="https://example.org/conflicting")
+        )
+    elif malformation == "duplicate_fact":
+        pack["facts"].append(
+            dict(pack["facts"][0], text="Contradictory fact with same ID")
+        )
+    else:
+        pack["sources"][0]["url"] = "https://127.0.0.1/private"
+    path.write_text(json.dumps(pack, ensure_ascii=False), encoding="utf-8")
+    with pytest.raises(ValueError, match=diagnostic):
+        engine._source_category(extracted, "economy")
+
+
+def test_archived_draft_with_fabricated_firsthand_experience_fails(tmp_path):
+    """An altered reviewed draft must still satisfy the primary article gate."""
+    archive = build_fixture_archive(tmp_path)
+    extracted = tmp_path / "corrupt-article"
+    extracted.mkdir()
+    engine._extract_source(archive, extracted)
+    path = next((extracted / "articles").glob("life_health-*/article-structure.json"))
+    article = json.loads(path.read_text(encoding="utf-8"))
+    article["sections"][0]["body"] += " 제가 직접 다녀왔습니다."
+    path.write_text(json.dumps(article, ensure_ascii=False), encoding="utf-8")
+    with pytest.raises(ValueError, match="excluded phrase or fabricated experience"):
+        engine._source_category(extracted, "life_health")
+
+
 def test_matching_hash_does_not_make_a_fake_jpeg_an_original_photo(tmp_path):
     """A forged JPEG with a matching hash must fail before render and scoring."""
     archive = build_fixture_archive(tmp_path)
