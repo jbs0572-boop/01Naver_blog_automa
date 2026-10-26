@@ -83,7 +83,7 @@ def verified_url(value: object) -> str:
     if (
         len(normalized_host) > 253
         # WHATWG URL parsing treats decimal/hex numeric TLDs as IPv4 hosts.
-        or re.fullmatch(r"(?:[0-9]+|0x[0-9a-f]+)", labels[-1]) is not None
+        or re.fullmatch(r"(?:[0-9]+|0x[0-9a-f]*)", labels[-1]) is not None
         or any(
             not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?", label)
             for label in labels
