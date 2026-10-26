@@ -87,7 +87,8 @@
 
 - Feature 브랜치: `codex/reconcile-local-main-security-20261026` (base `origin/main` SHA 위에서 생성).
 - 커밋: `c09c40c` Gate 승인 무결성, `a3ccc25` 상태파일 경로 보호, `01494b6` 오류 경로 descriptor 소유권 수정.
-- 보고서 커밋, PR URL, 최신 PR revision CI 및 Codex review 결과는 PR 생성 후 검증해 기록한다.
+- 보고서 커밋: `c3cbd53` (공개 문서 경로 제거 후 `1031c77`). PR: https://github.com/jbs0572-boop/01Naver_blog_automa/pull/23.
+- PR head `1031c77` 기준 CI: `Blog v2 safe preview` run `40325793542` 성공, `Python tests and function coverage` run `40325793514` 확인 시점 진행 중. Codex code review도 같은 revision 기준 진행 중이었다. 최종 CI/review 결과는 PR 체크에서 확인한다.
 - CI 및 Codex review: PR revision 기준 상태를 생성/완료 후 기록한다. 아직 운영 배포나 외부 Notion/Naver 저장을 수행하지 않았다.
 
 ## 안전한 로컬 동기화 절차
