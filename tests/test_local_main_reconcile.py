@@ -177,3 +177,39 @@ def test_committed_filename_trailing_space_preserved_in_audit(tmp_path: Path) ->
     report = audit(repo)
     last = report["commits"][-1]
     assert last["files"][0]["paths"] == ["meaningful-name "]
+
+
+
+def test_assume_unchanged_dirty_bytes_are_still_saved(tmp_path: Path) -> None:
+    repo, snapshot, head, remote = fixture_repository(tmp_path)
+    command(repo, "update-index", "--assume-unchanged", "local_1.py")
+    content = b"def local_1():\n    return 7777\n"
+    (repo / "local_1.py").write_bytes(content)
+    from scripts.local_main_reconcile import repo_state
+    state = repo_state(repo)
+    assert state["tracked_worktree_sha256"]["local_1.py"].startswith("file:")
+    output = backup(repo, snapshot, tmp_path / "safe", head[:8])
+    with tarfile.open(output / "tracked-worktree.tar.gz") as archive:
+        assert archive.extractfile("tracked/local_1.py").read() == content
+
+
+def test_skip_worktree_dirty_bytes_are_saved_even_when_diff_hidden(tmp_path: Path) -> None:
+    repo, snapshot, head, remote = fixture_repository(tmp_path)
+    command(repo, "update-index", "--skip-worktree", "local_2.py")
+    content = b"def local_2():\n    return 123456\n"
+    (repo / "local_2.py").write_bytes(content)
+    output = backup(repo, snapshot, tmp_path / "safe", head[:8])
+    with tarfile.open(output / "tracked-worktree.tar.gz") as archive:
+        assert archive.extractfile("tracked/local_2.py").read() == content
+
+
+def test_gitlink_submodule_is_rejected_as_separate_repository(tmp_path: Path) -> None:
+    repo, snapshot, head, remote = fixture_repository(tmp_path)
+    # Synthesize a Gitlink in the index without using an external network.
+    command(repo, "update-index", "--add", "--cacheinfo",
+            f"160000,{head},submodule")
+    (repo / "submodule").mkdir()
+    (repo / "submodule" / "unsaved.txt").write_text("would be lost")
+    with pytest.raises(ReconcileError, match="submodule"):
+        backup(repo, snapshot, tmp_path / "safe", head[:8])
+    assert not (tmp_path / "safe").exists()
