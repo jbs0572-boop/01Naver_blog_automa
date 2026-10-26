@@ -287,6 +287,22 @@ def _verified_image_bytes(path: Path) -> bytes | None:
     return raw if _complete_non_png(raw) else None
 
 
+def _decoded_dimensions(raw: bytes) -> tuple[int, int]:
+    """Read dimensions from the same fully validated and hashed image bytes.
+
+    PNG dimensions come from its already CRC-verified IHDR. The other formats
+    have passed full Pillow verification before their header is inspected.
+    """
+    if raw.startswith(b"\\x89PNG\\r\\n\\x1a\\n"):
+        return struct.unpack(">II", raw[16:24])
+    try:
+        from PIL import Image
+        with Image.open(BytesIO(raw)) as image:
+            return image.size
+    except (ImportError, OSError, ValueError, SyntaxError) as error:
+        raise ContractError("verified image dimensions unavailable") from error
+
+
 def _records(path: Path) -> list[JSONMap]:
     records: list[JSONMap] = []
     for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
@@ -394,6 +410,11 @@ def _check_metadata(record: JSONMap, index: int, mode: str, metadata_path: Path)
     actual = f"sha256:{hashlib.sha256(verified_bytes).hexdigest()}"
     if actual != output_digest:
         raise ContractError(f"image metadata output hash changed: {output_path}")
+    actual_width, actual_height = _decoded_dimensions(verified_bytes)
+    if _text(record, "size") != f"{actual_width}x{actual_height}":
+        raise ContractError(
+            f"image metadata output size does not match decoded pixels: {output_path}"
+        )
     return control
 
 
