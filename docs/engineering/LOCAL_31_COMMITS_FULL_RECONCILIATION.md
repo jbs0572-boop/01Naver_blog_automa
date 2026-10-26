@@ -6,9 +6,9 @@
 
 ## 안전 상태와 재현 가능한 백업
 
-- 원본 checkout은 `/Users/beomseok/00_AI/01_ NAVER_BLOG_AUTOMATE`이며, 조사 중 HEAD와 파일 변경을 수정하지 않았다. HEAD는 전후 동일하고 staged 변경은 없었다. tracked 변경 106개(삭제 2개 포함), 미추적 파일 481개였다.
+- 원본 dirty checkout을 조사 대상으로 삼았으며 경로는 개인정보 보호를 위해 공개하지 않는다. 조사 중 HEAD와 파일 변경을 수정하지 않았다. HEAD는 전후 동일하고 staged 변경은 없었다. tracked 변경 106개(삭제 2개 포함), 미추적 파일 481개였다.
 - 최신 원격을 별도 worktree에서 fetch한 시점 분기는 로컬 전용 31개, 원격 전용 214개다. 이전 보고서의 207 behind에서 원격이 7개 더 진행했다. `main`에 checkout, reset, rebase, merge, cherry-pick, pull, push를 수행하지 않았다.
-- 영구 복구 백업: `/Users/beomseok/Documents/naver-blog-recovery/main-recovery-20261026T122558867532Z` (로컬 전용, GitHub 업로드 금지). 기존 임시 스냅샷 `/tmp/naver-main-reconcile-20261026`은 실행 시 존재했다.
+- 영구 복구 백업은 확인된 로컬 Documents 복구 폴더에 보관했다(정확한 개인 경로는 공개 문서에서 생략, GitHub 업로드 금지). 기존 임시 스냅샷도 실행 시 존재했다.
 - 백업 전용 스크립트는 PR #15의 `scripts/local_main_reconcile.py`다. 실행 전 PR #15의 코드/테스트를 확인했으며 `tests/test_local_main_reconcile.py`는 16개 통과했다.
 - 기존 임시 스냅샷의 bundle/patch/tar/status 각 SHA-256이 이전 `SHA256SUMS`와 같았다. 그 스냅샷에는 `AUDIT.md` 및 `audit.json`이 없었으며, 이 실행에서 있다고 가정하지 않았다.
 - 새 백업은 기존 스냅샷 복제 해시, refs bundle 생성 및 별도 bare 저장소 import/fsck, 원시 Git index 복사, staged/unstaged patch, tracked 작업 파일 바이트 197개, 미추적 파일 481개의 archive 검증을 완료했다. 백업 manifest의 19개 payload SHA-256이 모두 일치했다. source-state 전후 값(HEAD, 상태, 실제 tracked 바이트, index 해시)이 동일했다.
