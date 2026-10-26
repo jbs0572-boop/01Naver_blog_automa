@@ -139,6 +139,8 @@ def verify_gate(
     blog_id: str | None = None,
 ) -> JSONMap:
     manifest = verify_manifest(root, manifest_path)
+    if manifest.run_id != run_id:
+        raise ContractError("manifest run_id does not match requested run_id")
     if gate not in {"notion_write", "naver_draft_save"}:
         raise ContractError(f"unsupported gate: {gate}")
     if gate == "naver_draft_save" and manifest.mode != "formal":
@@ -148,22 +150,36 @@ def verify_gate(
             "Gate A target_id does not match notion-config.md data source ID"
         )
     events = read_events(run_log)
-    if not any(
-        event.get("event_type") == "stage"
-        and event.get("run_id") == run_id
-        and event.get("stage") == "content-assembler"
-        and _passed(event)
-        for event in events
-    ):
+    latest_q1 = next(
+        (
+            event for event in reversed(events)
+            if event.get("event_type") == "stage"
+            and event.get("run_id") == run_id
+            and event.get("topic_id") == manifest.topic_id
+            and event.get("stage") == "content-assembler"
+        ),
+        None,
+    )
+    if latest_q1 is None:
         raise ContractError("content-assembler Q1 pass is missing")
-    if gate == "naver_draft_save" and not any(
-        event.get("event_type") == "stage"
-        and event.get("run_id") == run_id
-        and event.get("stage") == "notion-rider"
-        and _passed(event)
-        for event in events
-    ):
-        raise ContractError("Notion Q2 pass is missing before Gate B")
+    if not _passed(latest_q1):
+        raise ContractError("latest content-assembler Q1 result did not pass")
+    latest_q2 = None
+    if gate == "naver_draft_save":
+        latest_q2 = next(
+            (
+                event for event in reversed(events)
+                if event.get("event_type") == "stage"
+                and event.get("run_id") == run_id
+                and event.get("topic_id") == manifest.topic_id
+                and event.get("stage") == "notion-rider"
+            ),
+            None,
+        )
+        if latest_q2 is None:
+            raise ContractError("Notion Q2 pass is missing before Gate B")
+        if not _passed(latest_q2):
+            raise ContractError("latest Notion Q2 result did not pass")
     approvals = _approval_events(events, gate, target_id, run_id)
     if not approvals:
         raise ContractError("approval event with matching target and run is missing")
@@ -183,6 +199,8 @@ def verify_gate(
             event.get("event_type") == "stage"
             and event.get("run_id") == run_id
             and event.get("stage") == required_stage
+            and (required_stage != "content-assembler" or event is latest_q1)
+            and (required_stage != "notion-rider" or event is latest_q2)
             and _passed(event)
             and parse_aware_datetime(
                 event.get("ended_at"), f"{required_stage}.ended_at"
