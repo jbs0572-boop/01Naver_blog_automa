@@ -194,6 +194,12 @@ def tracked_worktree_archive(repo: Path, output: Path,
     return len(expected)
 
 
+def index_path(repo: Path) -> Path:
+    location = text(git(repo, "rev-parse", "--git-path", "index"))
+    path = Path(location)
+    return path if path.is_absolute() else repo / path
+
+
 def repo_state(repo: Path) -> dict:
     status = git(repo, "status", "--porcelain=v1", "-z", "--untracked-files=all")
     tracked = raw_diff(repo)
@@ -207,6 +213,7 @@ def repo_state(repo: Path) -> dict:
         "tracked_bytes_patch_sha256": hashlib.sha256(tracked).hexdigest(),
         "staged_bytes_patch_sha256": hashlib.sha256(staged).hexdigest(),
         "index_entries_sha256": hashlib.sha256(index).hexdigest(),
+        "index_raw_sha256": sha(index_path(repo)),
         "tracked_worktree_sha256": tracked_worktree_fingerprints(repo),
         "untracked_sha256": untracked_fingerprints(repo),
     }
@@ -374,6 +381,10 @@ def verify_restorable_bundle(repo: Path, bundle: Path, local_sha: str) -> str:
         refs = imported.stdout.decode("utf8", "replace").splitlines()
         if not refs or not any(line.startswith(local_sha + " ") for line in refs):
             raise ReconcileError("Imported bundle omitted the original local main")
+        source_refs = set(text(git(repo, "show-ref")).splitlines())
+        imported_refs = set(refs)
+        if not source_refs.issubset(imported_refs):
+            raise ReconcileError("Imported Git bundle omitted a source reference")
         for line in refs:
             object_id = line.split(" ", 1)[0]
             check = subprocess.run(
@@ -432,6 +443,12 @@ def backup(repo: Path, snapshot: Path, destination: Path, expected_main: str,
         bundle_report = verify_restorable_bundle(repo, bundle, before["main"])
         (folder / "bundle-verification.txt").write_text(
             bundle_report, encoding="utf8")
+        # Preserve the actual index metadata, including assume-unchanged and
+        # skip-worktree bits, as well as the separately captured staged patch.
+        saved_index = folder / "git-index.raw"
+        shutil.copyfile(index_path(repo), saved_index)
+        if sha(saved_index) != before["index_raw_sha256"]:
+            raise ReconcileError("Raw Git index was not copied byte-for-byte")
         (folder / "tracked-vs-HEAD.patch").write_bytes(raw_diff(repo))
         (folder / "staged-vs-HEAD.patch").write_bytes(raw_diff(repo, staged=True))
         (folder / "original-status.z").write_bytes(
