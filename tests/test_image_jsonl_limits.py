@@ -65,12 +65,39 @@ def test_empty_image_proof_log_still_fails_closed(
 
 
 @pytest.mark.parametrize("kind", ["metadata", "quality"])
-def test_deeply_nested_image_proof_json_is_a_contract_rejection(
+def test_parser_recursion_failure_is_a_contract_rejection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, kind: str,
+) -> None:
+    from tools import image_quality
+
+    path = tmp_path / "proof.jsonl"
+    marker = '{"trigger":"parser-recursion"}'
+    path.write_text(marker + "\n", encoding="utf-8")
+    original_loads = image_quality.json.loads
+
+    def simulated_recursion_error(payload: str, *args: object, **kwargs: object) -> object:
+        if payload == marker:
+            raise RecursionError("JSON parser exceeded depth limit")
+        return original_loads(payload, *args, **kwargs)
+
+    # Actual JSON decoder recursion thresholds differ by interpreter.
+    monkeypatch.setattr(image_quality.json, "loads", simulated_recursion_error)
+    with pytest.raises(ContractError, match="invalid JSON"):
+        if kind == "metadata":
+            validate_image_metadata(path, "formal")
+        else:
+            validate_image_quality(path)
+
+
+@pytest.mark.parametrize("kind", ["metadata", "quality"])
+def test_extreme_nesting_never_creates_accepted_image_proof(
     tmp_path: Path, kind: str,
 ) -> None:
     path = tmp_path / "proof.jsonl"
     path.write_text("[" * 20000 + "0" + "]" * 20000 + "\n", encoding="utf-8")
-    with pytest.raises(ContractError, match="invalid JSON"):
+    # On other Python versions the decoder may successfully parse this as a
+    # list; then the proof-object gate still must reject it.
+    with pytest.raises(ContractError):
         if kind == "metadata":
             validate_image_metadata(path, "formal")
         else:
