@@ -1,10 +1,13 @@
 """Isolation, routing, and style-lock regression checks; no external services."""
+import hashlib
 import json
+import shutil
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
-from editorial_studio import studio
+from editorial_studio import studio, topic_intents
 
 
 class IndependentStyleTests(unittest.TestCase):
@@ -108,6 +111,101 @@ class IndependentStyleTests(unittest.TestCase):
             draft.write_text("## 엉뚱한 구조\n\n본문", encoding="utf-8")
             with self.assertRaisesRegex(studio.StyleError, "outline mismatch"):
                 studio.check_bundle(bundle, draft)
+
+
+    def test_five_distinct_purpose_intents_are_machine_and_human_readable(self):
+        catalog = topic_intents.load_all()
+        self.assertEqual(set(catalog), set(studio.PROFILE_IDS))
+        self.assertEqual(len({x["search_intent"] for x in catalog.values()}), 5)
+        self.assertEqual(len({x["answer_promise"] for x in catalog.values()}), 5)
+        for category, intent in catalog.items():
+            with self.subTest(category=category):
+                self.assertEqual(intent["id"], category)
+                self.assertEqual(intent["schema_version"], 1)
+                self.assertEqual(len(intent["story_flow"]), 5)
+                self.assertEqual(set(intent["image_roles"]), set(topic_intents.IMAGE_ROLES))
+                self.assertEqual(len(intent["sha256"]), 64)
+                self.assertGreaterEqual(len(intent["source_hierarchy"]), 2)
+                self.assertGreaterEqual(len(intent["fact_checks"]), 2)
+
+    def test_build_writes_individual_intend_and_locks_canonical_purpose(self):
+        with tempfile.TemporaryDirectory() as root:
+            for category in studio.PROFILE_IDS:
+                with self.subTest(category=category):
+                    intent = topic_intents.load(category)
+                    topic = "이 카테고리에서 확인할 새 사례: " + category
+                    bundle = studio.build_bundle(
+                        topic, Path(root), explicit=category
+                    )
+                    lock = json.loads((bundle / "style-lock.json").read_text(encoding="utf-8"))
+                    article = (bundle / "intend.md").read_bytes()
+                    self.assertEqual(lock["intend_sha256"], intent["sha256"])
+                    self.assertEqual(lock["intend_file"], intent["source_path"])
+                    self.assertEqual(
+                        lock["artifacts_sha256"]["intend.md"],
+                        hashlib.sha256(article).hexdigest(),
+                    )
+                    self.assertIn(topic, article.decode("utf-8"))
+                    self.assertIn(intent["search_intent"], article.decode("utf-8"))
+                    self.assertIn("네이버·Notion 미저장", article.decode("utf-8"))
+                    self.assertEqual(studio.check_bundle(bundle)["intent_lock"], "passed")
+                    writer = (bundle / "writer-brief.md").read_text(encoding="utf-8")
+                    image = (bundle / "image-brief.md").read_text(encoding="utf-8")
+                    self.assertIn(intent["answer_promise"], writer)
+                    self.assertIn(intent["original_visual_target"], image)
+                    for role in topic_intents.IMAGE_ROLES:
+                        self.assertIn(intent["image_roles"][role], image)
+
+    def test_per_article_intend_does_not_claim_source_is_verified(self):
+        text = topic_intents.render_for_topic(
+            "economy", "마트 물가를 보는 이유",
+            case={"topic": "소비자물가지수", "as_of": "2026-10-26",
+                  "sources": [{"id": "S1"}],
+                  "facts": [{"id": "F1"}]},
+        )
+        self.assertIn("마트 물가를 보는 이유", text)
+        self.assertIn("근거 기준일: 2026-10-26", text)
+        self.assertIn("수록 출처: 1", text)
+        self.assertIn("아직 사람 확인 필요", text)
+        self.assertIn("95/100", text)
+
+    def test_tampered_per_article_intend_fails_closed(self):
+        with tempfile.TemporaryDirectory() as root:
+            bundle = studio.build_bundle("영화 해석", Path(root), "culture_people")
+            with (bundle / "intend.md").open("a", encoding="utf-8") as handle:
+                handle.write("\n주제 의도 위조")
+            with self.assertRaisesRegex(studio.StyleError, "modified or corrupt"):
+                studio.check_bundle(bundle)
+
+    def test_canonical_intend_drift_revokes_existing_bundle(self):
+        with tempfile.TemporaryDirectory() as root:
+            base = Path(root)
+            bundle = studio.build_bundle("전세 계약", base, "real_estate")
+            cloned = base / "topic-intents"
+            shutil.copytree(topic_intents.TOPIC_DIR, cloned)
+            altered = cloned / "real_estate" / "intend.md"
+            altered.write_text(altered.read_text(encoding="utf-8") + "\n개정 문구\n",
+                               encoding="utf-8")
+            with patch.object(topic_intents, "TOPIC_DIR", cloned):
+                with self.assertRaisesRegex(studio.StyleError, "intend.md drift"):
+                    studio.check_bundle(bundle)
+
+    def test_broken_or_wrong_category_intend_never_silently_falls_back(self):
+        with tempfile.TemporaryDirectory() as root:
+            cloned = Path(root) / "topics"
+            shutil.copytree(topic_intents.TOPIC_DIR, cloned)
+            selected = cloned / "life_health" / "intend.md"
+            raw = selected.read_text(encoding="utf-8")
+            selected.write_text(raw.replace('"id": "life_health"',
+                                            '"id": "economy"'), encoding="utf-8")
+            with patch.object(topic_intents, "TOPIC_DIR", cloned):
+                with self.assertRaisesRegex(topic_intents.IntentError, "category ID mismatch"):
+                    topic_intents.load("life_health")
+            selected.unlink()
+            with patch.object(topic_intents, "TOPIC_DIR", cloned):
+                with self.assertRaisesRegex(topic_intents.IntentError, "missing category intend.md"):
+                    topic_intents.load_all()
+
 
 
 if __name__ == "__main__":
