@@ -39,9 +39,12 @@ def load(category: str) -> dict:
         raise IntentError("unknown category for intend.md")
     path = TOPIC_DIR / category / "intend.md"
     try:
-        source = path.read_text(encoding="utf-8")
-    except OSError as error:
-        raise IntentError("missing category intend.md: " + str(path)) from error
+        original_bytes = path.read_bytes()
+        # Decode in memory. read_text() normalizes CRLF and would silently
+        # change the intended byte-for-byte SHA-256 proof.
+        source = original_bytes.decode("utf-8")
+    except (OSError, UnicodeError) as error:
+        raise IntentError("missing or unreadable category intend.md: " + str(path)) from error
     marker = re.escape(chr(96) * 3)
     blocks = re.findall(
         r"^" + marker + r"intent[ \t]*\n(.*?)\n" + marker + r"[ \t]*$",
@@ -83,7 +86,7 @@ def load(category: str) -> dict:
     return {
         **data,
         "source_path": "editorial_studio/topics/" + category + "/intend.md",
-        "sha256": hashlib.sha256(source.encode("utf-8")).hexdigest(),
+        "sha256": hashlib.sha256(original_bytes).hexdigest(),
     }
 
 
@@ -190,8 +193,9 @@ def render_for_topic(category: str, topic: str, *,
                 raise IntentError("source metadata must be a mapping")
             title = source.get("title")
             url = source.get("url")
-            if not _nonempty(title) or not _nonempty(url):
-                raise IntentError("source title/URL missing from reviewed source pack")
+            if (not _nonempty(title) or not isinstance(url, str)
+                    or not url.strip() or len(url) > 2048):
+                raise IntentError("source title/URL missing or over 2048 characters")
             lines.append("- " + _literal(str(title)) + ": " + _literal(str(url)))
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
