@@ -60,3 +60,5 @@ Git의 assume-unchanged 또는 skip-worktree 플래그가 있으면 git diff가 
 부모 Git bundle은 자식 submodule의 객체나 dirty 파일을 포함하지 않습니다. 따라서 tracked submodule(gitlink)이 발견되면 **백업 성공을 거부**합니다. Mac Codex가 그 submodule 저장소의 refs/작업트리/미커밋 및 미추적 파일을 별도 백업한 뒤 통합 복구 절차를 결정해야 합니다. untracked 내부 Git 저장소도 조용히 누락시키지 않고 중단합니다.
 
 Git bundle 검증은 단순 header 확인 외에 **독립 bare 저장소의 실제 unbundle·객체 fsck 및 원본 main ref 비교**를 수행합니다.
+
+Git index의 숨김 플래그 등 stage metadata는 별도의 git-index.raw에 바이트 그대로 보존하고 백업 전 index SHA와 비교합니다. 모든 원격/로컬 ref도 독립 bundle unbundle의 반환 refs 목록과 직접 대조합니다. 복구 용도로만 보존하며 git-index.raw를 원본 checkout에 자동 복원하거나 적용하지는 않습니다.
