@@ -97,6 +97,7 @@ def _complete_png(raw: bytes) -> bool:
     header: tuple[int, int, int, int, int] | None = None
     image_data: list[bytes] = []
     palette_entries = 0
+    idat_ended = False
     while offset + 12 <= len(raw):
         length = struct.unpack(">I", raw[offset : offset + 4])[0]
         end = offset + 12 + length
@@ -106,6 +107,18 @@ def _complete_png(raw: bytes) -> bool:
         payload = raw[offset + 8 : offset + 8 + length]
         recorded_crc = struct.unpack(">I", raw[end - 4 : end])[0]
         if zlib.crc32(kind + payload) & 0xFFFFFFFF != recorded_crc:
+            return False
+        # PNG chunk names must be ASCII letters with the reserved bit clear.
+        # Unknown critical chunks require a decoder we do not implement, so
+        # claiming the image is readable would be unsafe.
+        if (
+            any(not (65 <= byte <= 90 or 97 <= byte <= 122) for byte in kind)
+            or not (65 <= kind[2] <= 90)
+            or (
+                65 <= kind[0] <= 90
+                and kind not in {b"IHDR", b"PLTE", b"IDAT", b"IEND"}
+            )
+        ):
             return False
         if header is None:
             if kind != b"IHDR" or length != 13:
@@ -129,6 +142,12 @@ def _complete_png(raw: bytes) -> bool:
                 return False
             header = width, height, depth, channels, interlace
         elif kind == b"IHDR":
+            return False
+        # All IDAT chunks must be consecutive. Otherwise identical compressed
+        # bytes can pass our zlib check while violating the PNG file format.
+        if kind != b"IDAT" and image_data:
+            idat_ended = True
+        if kind == b"IDAT" and idat_ended:
             return False
         if kind == b"PLTE":
             # Indexed pixels have no meaning without a real palette. A
