@@ -265,3 +265,211 @@ def test_non_stage_approval_event_cannot_impersonate_q1(tmp_path: Path) -> None:
             root, manifest_path, run_log, "notion_write", run_id,
             "datasource-fixture",
         )
+
+
+@pytest.mark.parametrize("failure_after_approval", [False, True])
+def test_latest_failed_q1_blocks_prior_pass(
+    tmp_path: Path, failure_after_approval: bool
+) -> None:
+    root, manifest_path, manifest, run_id = _fixture(tmp_path)
+    run_log = root / "run.jsonl"
+    failed_q1 = _stage(run_id)
+    failed_q1.update({"status": "failed", "attempt": 2})
+    approval = _approval(manifest, run_id)
+    events = [_stage(run_id), failed_q1, approval]
+    if failure_after_approval:
+        events = [_stage(run_id), approval, failed_q1]
+    _write_log(run_log, events)
+
+    with pytest.raises(ContractError, match="Q1"):
+        _ = verify_gate(
+            root, manifest_path, run_log, "notion_write", run_id,
+            "datasource-fixture",
+        )
+
+
+def test_manifest_run_id_must_match_requested_run(tmp_path: Path) -> None:
+    root, manifest_path, manifest, _ = _fixture(tmp_path)
+    run_log = root / "run.jsonl"
+    requested_run = "RUN-other"
+    _write_log(run_log, [
+        _stage(requested_run), _approval(manifest, requested_run),
+    ])
+
+    with pytest.raises(ContractError, match="manifest run_id"):
+        _ = verify_gate(
+            root, manifest_path, run_log, "notion_write", requested_run,
+            "datasource-fixture",
+        )
+
+
+def test_q1_for_another_topic_cannot_authorize_manifest(tmp_path: Path) -> None:
+    root, manifest_path, manifest, run_id = _fixture(tmp_path)
+    run_log = root / "run.jsonl"
+    unrelated_q1 = _stage(run_id)
+    unrelated_q1["topic_id"] = "TOPIC-other"
+    _write_log(run_log, [unrelated_q1, _approval(manifest, run_id)])
+
+    with pytest.raises(ContractError, match="Q1"):
+        _ = verify_gate(
+            root, manifest_path, run_log, "notion_write", run_id,
+            "datasource-fixture",
+        )
+
+
+@pytest.mark.parametrize("unrelated_field", ["run_id", "topic_id"])
+def test_unrelated_q1_failure_does_not_revoke_approval(
+    tmp_path: Path, unrelated_field: str
+) -> None:
+    root, manifest_path, manifest, run_id = _fixture(tmp_path)
+    run_log = root / "run.jsonl"
+    unrelated_q1 = _stage(run_id)
+    unrelated_q1.update({"status": "failed", unrelated_field: "other"})
+    _write_log(run_log, [
+        _stage(run_id), _approval(manifest, run_id), unrelated_q1,
+    ])
+
+    result = verify_gate(
+        root, manifest_path, run_log, "notion_write", run_id,
+        "datasource-fixture",
+    )
+    assert result["decision"] == "approved"
+
+
+@pytest.mark.parametrize("fresh_approval", [False, True])
+def test_repaired_q1_requires_approval_after_latest_pass(
+    tmp_path: Path, fresh_approval: bool
+) -> None:
+    root, manifest_path, manifest, run_id = _fixture(tmp_path)
+    run_log = root / "run.jsonl"
+    failed_q1 = _stage(run_id)
+    failed_q1.update({"status": "failed", "attempt": 2})
+    repaired_q1 = _stage(run_id)
+    repaired_q1["attempt"] = 3
+    # Backdated retry results still require a subsequently appended approval.
+    events = [
+        _stage(run_id), _approval(manifest, run_id), failed_q1, repaired_q1,
+    ]
+    if fresh_approval:
+        events.append(_approval(
+            manifest, run_id, decided_at="2026-08-27T00:04:00+00:00"
+        ))
+    _write_log(run_log, events)
+
+    if fresh_approval:
+        result = verify_gate(
+            root, manifest_path, run_log, "notion_write", run_id,
+            "datasource-fixture",
+        )
+        assert result["decision"] == "approved"
+    else:
+        with pytest.raises(ContractError, match="approval predates content-assembler"):
+            _ = verify_gate(
+                root, manifest_path, run_log, "notion_write", run_id,
+                "datasource-fixture",
+            )
+
+
+
+def _q2_stage(run_id: str) -> JSONMap:
+    event = _stage(run_id)
+    event.update({
+        "stage": "notion-rider",
+        "started_at": "2026-08-27T00:01:30+00:00",
+        "ended_at": "2026-08-27T00:02:00+00:00",
+    })
+    return event
+
+
+def _gate_b_approval(manifest: JSONMap, run_id: str) -> JSONMap:
+    return _approval(
+        manifest, run_id, gate="naver_draft_save", target_id="blog-fixture",
+        notion_page_id="page-fixture",
+        notion_last_verified_at="2026-08-27T00:02:00+00:00",
+        notion_roundtrip_digest=manifest["artifact_digest"], blog_id="blog-fixture",
+    )
+
+
+def _verify_gate_b(root: Path, manifest_path: Path, run_log: Path, run_id: str) -> JSONMap:
+    return verify_gate(
+        root, manifest_path, run_log, "naver_draft_save", run_id,
+        "blog-fixture", notion_page_id="page-fixture",
+        notion_verified_at="2026-08-27T00:02:00+00:00", blog_id="blog-fixture",
+    )
+
+
+@pytest.mark.parametrize("failure_after_approval", [False, True])
+def test_latest_failed_q2_blocks_prior_gate_b_pass(
+    tmp_path: Path, failure_after_approval: bool
+) -> None:
+    root, manifest_path, manifest, run_id = _fixture(tmp_path, mode="formal")
+    run_log = root / "run.jsonl"
+    failed_q2 = _q2_stage(run_id)
+    failed_q2.update({"status": "failed", "attempt": 2})
+    approval = _gate_b_approval(manifest, run_id)
+    events = [_stage(run_id), _q2_stage(run_id), failed_q2, approval]
+    if failure_after_approval:
+        events = [_stage(run_id), _q2_stage(run_id), approval, failed_q2]
+    _write_log(run_log, events)
+
+    with pytest.raises(ContractError, match="Q2"):
+        _ = _verify_gate_b(root, manifest_path, run_log, run_id)
+
+
+@pytest.mark.parametrize("unrelated_field", ["run_id", "topic_id"])
+def test_unrelated_q2_pass_cannot_authorize_gate_b(
+    tmp_path: Path, unrelated_field: str
+) -> None:
+    root, manifest_path, manifest, run_id = _fixture(tmp_path, mode="formal")
+    run_log = root / "run.jsonl"
+    unrelated_q2 = _q2_stage(run_id)
+    unrelated_q2[unrelated_field] = "other"
+    _write_log(run_log, [
+        _stage(run_id), unrelated_q2, _gate_b_approval(manifest, run_id),
+    ])
+
+    with pytest.raises(ContractError, match="Q2"):
+        _ = _verify_gate_b(root, manifest_path, run_log, run_id)
+
+
+@pytest.mark.parametrize("unrelated_field", ["run_id", "topic_id"])
+def test_unrelated_q2_failure_does_not_revoke_gate_b_approval(
+    tmp_path: Path, unrelated_field: str
+) -> None:
+    root, manifest_path, manifest, run_id = _fixture(tmp_path, mode="formal")
+    run_log = root / "run.jsonl"
+    unrelated_q2 = _q2_stage(run_id)
+    unrelated_q2.update({"status": "failed", unrelated_field: "other"})
+    _write_log(run_log, [
+        _stage(run_id), _q2_stage(run_id),
+        _gate_b_approval(manifest, run_id), unrelated_q2,
+    ])
+
+    assert _verify_gate_b(root, manifest_path, run_log, run_id)["decision"] == "approved"
+
+
+@pytest.mark.parametrize("fresh_approval", [False, True])
+def test_repaired_q2_requires_approval_after_latest_pass(
+    tmp_path: Path, fresh_approval: bool
+) -> None:
+    root, manifest_path, manifest, run_id = _fixture(tmp_path, mode="formal")
+    run_log = root / "run.jsonl"
+    failed_q2 = _q2_stage(run_id)
+    failed_q2.update({"status": "failed", "attempt": 2})
+    repaired_q2 = _q2_stage(run_id)
+    repaired_q2["attempt"] = 3
+    events = [
+        _stage(run_id), _q2_stage(run_id), _gate_b_approval(manifest, run_id),
+        failed_q2, repaired_q2,
+    ]
+    if fresh_approval:
+        approval = _gate_b_approval(manifest, run_id)
+        approval["decided_at"] = "2026-08-27T00:04:00+00:00"
+        events.append(approval)
+    _write_log(run_log, events)
+
+    if fresh_approval:
+        assert _verify_gate_b(root, manifest_path, run_log, run_id)["decision"] == "approved"
+    else:
+        with pytest.raises(ContractError, match="approval predates notion-rider"):
+            _ = _verify_gate_b(root, manifest_path, run_log, run_id)

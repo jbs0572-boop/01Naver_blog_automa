@@ -3,7 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import tempfile
+import stat
+import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -110,28 +111,209 @@ def input_fingerprint(request: RunnerRequest) -> str:
     return "sha256:" + _digest_bytes(encoded)
 
 
-def atomic_write_json(path: Path, value: JSONMap) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary: Path | None = None
+_STATE_DIRECTORY_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+_STATE_READ_FLAGS = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
+
+
+def _open_state_parent(path: Path) -> tuple[int, tuple[tuple[str, int], ...]]:
+    """Open every parent by descriptor so a swapped path cannot redirect writes."""
+    absolute = Path(os.path.abspath(path))
     try:
-        fd, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
-        temporary = Path(temporary_name)
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            _ = handle.write(
-                json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
-            )
-            _ = handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, path)
-        temporary = None
+        root_fd = os.open(absolute.anchor, _STATE_DIRECTORY_FLAGS)
     except OSError as error:
-        raise ContractError(f"could not atomically write state: {path}") from error
-    finally:
-        if temporary is not None:
+        raise ContractError("runner state path is unsafe") from error
+    chain: list[tuple[str, int]] = []
+    parent_fd = root_fd
+    try:
+        for name in absolute.parts[1:-1]:
             try:
-                temporary.unlink(missing_ok=True)
+                _ = os.mkdir(name, 0o755, dir_fd=parent_fd)
+                os.fsync(parent_fd)
+            except FileExistsError:
+                pass
+            descriptor = os.open(name, _STATE_DIRECTORY_FLAGS, dir_fd=parent_fd)
+            chain.append((name, descriptor))
+            parent_fd = descriptor
+    except OSError as error:
+        for _, descriptor in reversed(chain):
+            os.close(descriptor)
+        os.close(root_fd)
+        raise ContractError("runner state path is unsafe") from error
+    return root_fd, tuple(chain)
+
+
+def _state_parent_is_current(
+    root_fd: int, chain: tuple[tuple[str, int], ...]
+) -> bool:
+    try:
+        root = os.stat("/", follow_symlinks=False)
+        opened_root = os.fstat(root_fd)
+        if not stat.S_ISDIR(root.st_mode) or (root.st_dev, root.st_ino) != (
+            opened_root.st_dev,
+            opened_root.st_ino,
+        ):
+            return False
+        parents = (root_fd, *(descriptor for _, descriptor in chain[:-1]))
+        return all(
+            (entry := os.stat(name, dir_fd=parent, follow_symlinks=False)).st_dev
+            == (opened := os.fstat(descriptor)).st_dev
+            and entry.st_ino == opened.st_ino
+            and stat.S_ISDIR(entry.st_mode)
+            for parent, (name, descriptor) in zip(parents, chain, strict=True)
+        )
+    except OSError:
+        return False
+
+
+def _read_state_at(parent_fd: int, name: str) -> bytes | None:
+    try:
+        descriptor = os.open(name, _STATE_READ_FLAGS, dir_fd=parent_fd)
+    except FileNotFoundError:
+        return None
+    except OSError as error:
+        raise ContractError("runner state path is unsafe") from error
+    try:
+        with os.fdopen(descriptor, "rb") as handle:
+            info = os.fstat(handle.fileno())
+            if not stat.S_ISREG(info.st_mode):
+                raise ContractError("runner state path is unsafe")
+            return handle.read()
+    except OSError as error:
+        raise ContractError("runner state path is unsafe") from error
+
+
+def _write_state_temp(parent_fd: int, name: str, encoded: bytes) -> tuple[int, int]:
+    descriptor = os.open(
+        name,
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+        0o600,
+        dir_fd=parent_fd,
+    )
+    path_identity: os.stat_result | None = None
+    try:
+        path_identity = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+        identity = os.fstat(descriptor)
+        if (path_identity.st_dev, path_identity.st_ino) != (
+            identity.st_dev,
+            identity.st_ino,
+        ):
+            raise OSError("temporary state path changed after creation")
+    except OSError:
+        os.close(descriptor)
+        try:
+            current = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+            if (
+                path_identity is not None
+                and stat.S_ISREG(current.st_mode)
+                and (current.st_dev, current.st_ino)
+                == (path_identity.st_dev, path_identity.st_ino)
+            ):
+                os.unlink(name, dir_fd=parent_fd)
+        except OSError:
+            pass
+        raise
+    owns_descriptor = True
+    try:
+        handle = os.fdopen(descriptor, "wb")
+        owns_descriptor = False
+        with handle:
+            _ = handle.write(encoded)
+            handle.flush()
+            _ = os.fsync(handle.fileno())
+        return identity.st_dev, identity.st_ino
+    except BaseException:
+        if owns_descriptor:
+            try:
+                os.close(descriptor)
             except OSError:
                 pass
+        try:
+            current = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+            if (current.st_dev, current.st_ino) == (identity.st_dev, identity.st_ino):
+                os.unlink(name, dir_fd=parent_fd)
+        except OSError:
+            pass
+        raise
+
+
+def _rollback_state_at(
+    parent_fd: int,
+    name: str,
+    replacement_identity: tuple[int, int],
+    previous: bytes | None,
+) -> None:
+    try:
+        current = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+        if (current.st_dev, current.st_ino) != replacement_identity:
+            return
+        if previous is None:
+            os.unlink(name, dir_fd=parent_fd)
+        else:
+            temporary = f".{name}.rollback-{uuid.uuid4().hex}"
+            identity = _write_state_temp(parent_fd, temporary, previous)
+            try:
+                current = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+                if (current.st_dev, current.st_ino) == replacement_identity:
+                    os.replace(temporary, name, src_dir_fd=parent_fd, dst_dir_fd=parent_fd)
+            finally:
+                try:
+                    current_temp = os.stat(
+                        temporary, dir_fd=parent_fd, follow_symlinks=False
+                    )
+                    if (current_temp.st_dev, current_temp.st_ino) == identity:
+                        os.unlink(temporary, dir_fd=parent_fd)
+                except FileNotFoundError:
+                    pass
+        os.fsync(parent_fd)
+    except OSError as error:
+        raise ContractError("runner state rollback failed") from error
+
+
+def atomic_write_json(path: Path, value: JSONMap) -> None:
+    encoded = (
+        json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
+    ).encode("utf-8")
+    root_fd, chain = _open_state_parent(path)
+    parent_fd = chain[-1][1] if chain else root_fd
+    temporary = f".{path.name}.{uuid.uuid4().hex}"
+    temporary_identity: tuple[int, int] | None = None
+    replacement_identity: tuple[int, int] | None = None
+    previous: bytes | None = None
+    try:
+        previous = _read_state_at(parent_fd, path.name)
+        temporary_identity = _write_state_temp(parent_fd, temporary, encoded)
+        if not _state_parent_is_current(root_fd, chain):
+            raise ContractError("runner path changed before state write")
+        os.replace(temporary, path.name, src_dir_fd=parent_fd, dst_dir_fd=parent_fd)
+        replacement_identity = temporary_identity
+        os.fsync(parent_fd)
+        if not _state_parent_is_current(root_fd, chain):
+            _rollback_state_at(parent_fd, path.name, replacement_identity, previous)
+            replacement_identity = None
+            raise ContractError("runner path changed during state write")
+    except ContractError:
+        raise
+    except OSError as error:
+        if replacement_identity is not None:
+            try:
+                _rollback_state_at(
+                    parent_fd, path.name, replacement_identity, previous
+                )
+                replacement_identity = None
+            except ContractError as rollback_error:
+                raise rollback_error from error
+        raise ContractError(f"could not atomically write state: {path}") from error
+    finally:
+        if temporary_identity is not None and replacement_identity is None:
+            try:
+                current = os.stat(temporary, dir_fd=parent_fd, follow_symlinks=False)
+                if (current.st_dev, current.st_ino) == temporary_identity:
+                    os.unlink(temporary, dir_fd=parent_fd)
+            except OSError:
+                pass
+        for _, descriptor in reversed(chain):
+            os.close(descriptor)
+        os.close(root_fd)
 
 
 def read_state(path: Path) -> JSONMap:
