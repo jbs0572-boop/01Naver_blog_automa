@@ -92,6 +92,13 @@ def _source_category(root: Path, category: str) -> tuple[Path, dict, dict, dict]
     lock=json.loads((spec.parent/'style-lock.json').read_text(encoding='utf8'))
     if lock.get('category')!=category or lock.get('profile_sha256')!=studio.profiles()[category]['sha256']:
         raise ValueError('frozen style profile SHA-256 mismatch')
+    # A ZIP is untrusted even when it carries a matching style lock.
+    # Reapply the source-pack and article contracts before citations, images,
+    # or a quality score can be produced. In particular, duplicate fact/source
+    # IDs must never be silently overwritten by dict comprehensions.
+    from editorial_studio import engine as evidence_engine
+    pack = evidence_engine.load_case(pack)
+    article = evidence_engine.validate_article(article, pack, studio.profiles()[category])
     meta=list((root/'approved-originals').glob(category+'.*'))
     photos=[p for p in meta if p.suffix.lower() in ('.jpg','.jpeg','.png','.webp')]
     if len(photos)!=1:raise ValueError(f'{category}: actual original missing')
