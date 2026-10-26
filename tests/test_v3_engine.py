@@ -347,7 +347,7 @@ def test_v3_rejects_wrong_film_or_reference_date_even_with_matching_category():
     [
         ("duplicate_source", "source IDs must be unique"),
         ("duplicate_fact", "fact IDs must be unique"),
-        ("unsafe_source_url", "public HTTPS host"),
+        ("unsafe_source_url", "IP URL not allowed"),
     ],
 )
 def test_archived_sources_cannot_bypass_original_evidence_validation(
