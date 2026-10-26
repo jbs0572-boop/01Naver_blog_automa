@@ -49,3 +49,5 @@
 - [visual-qa](ci/visual-qa/intend.md) — 승인 원본 보존, HTML/CSS 이미지 생성, Chromium 시각 품질 검사
 
 - [five-article-gallery](ci/five-article-gallery/intend.md) — 새 글 5편의 엔진 생성·Chromium 모바일/PC 스크린샷·품질 검증
+
+- [v3-three-image-quality](ci/v3-three-image-quality/intend.md) — 5카테고리 × 사진·근거·점검 3종, 95점 하드 게이트, 오프라인 Playwright 검사
