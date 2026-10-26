@@ -293,7 +293,7 @@ def _decoded_dimensions(raw: bytes) -> tuple[int, int]:
     PNG dimensions come from its already CRC-verified IHDR. The other formats
     have passed full Pillow verification before their header is inspected.
     """
-    if raw.startswith(b"\\x89PNG\\r\\n\\x1a\\n"):
+    if raw.startswith(b"\x89PNG\r\n\x1a\n"):
         return struct.unpack(">II", raw[16:24])
     try:
         from PIL import Image
