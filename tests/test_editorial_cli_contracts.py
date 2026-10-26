@@ -100,6 +100,9 @@ class ProtocolAndCLITests(unittest.TestCase):
             status = json.loads(outputs[0].read_text(encoding="utf-8"))
             self.assertEqual(status["state"], "DRAFT_ONLY")
             self.assertFalse(status["external_service_writes"])
+            self.assertEqual(status["intent_review"], "PENDING")
+            self.assertEqual(len(status["intend_sha256"]), 64)
+            self.assertEqual(len(status["intend_source_sha256"]), 64)
             self.assertFalse(status["score"]["ready_for_publication"])
             self.assertEqual(engine.main(["--case", str(source), "--output-root",
                                           str(Path(temp) / "bundles")]), 2)

@@ -182,4 +182,16 @@ def render_for_topic(category: str, topic: str, *,
             "- 최신성/정합성 확인: 원본 링크를 열어 확인하기 전에는 PASS 아님",
             "",
         ]
+        # URLs here are candidate DATA, not vetted source quotations. Preserve
+        # the article-specific research locations without activating Markdown links.
+        lines += ["### 직접 열어 사실을 대조할 출처"]
+        for source in sources:
+            if not isinstance(source, dict):
+                raise IntentError("source metadata must be a mapping")
+            title = source.get("title")
+            url = source.get("url")
+            if not _nonempty(title) or not _nonempty(url):
+                raise IntentError("source title/URL missing from reviewed source pack")
+            lines.append("- " + _literal(str(title)) + ": " + _literal(str(url)))
+        lines.append("")
     return "\n".join(lines).rstrip() + "\n"

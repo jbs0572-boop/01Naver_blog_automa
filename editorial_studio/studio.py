@@ -264,7 +264,7 @@ def main(argv: list[str] | None = None) -> int:
                              ensure_ascii=False))
         else:
             print(json.dumps(check_bundle(args.bundle, args.draft), ensure_ascii=False))
-    except (StyleError, OSError) as exc:
+    except (StyleError, topic_intents.IntentError, OSError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
     return 0

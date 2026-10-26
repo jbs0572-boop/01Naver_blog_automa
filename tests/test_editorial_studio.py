@@ -161,13 +161,15 @@ class IndependentStyleTests(unittest.TestCase):
         text = topic_intents.render_for_topic(
             "economy", "마트 물가를 보는 이유",
             case={"topic": "소비자물가지수", "as_of": "2026-10-26",
-                  "sources": [{"id": "S1"}],
+                  "sources": [{"id": "S1", "title": "통계청 공식 원문",
+                               "url": "https://kostat.go.kr/source"}],
                   "facts": [{"id": "F1"}]},
         )
         self.assertIn("마트 물가를 보는 이유", text)
         self.assertIn("근거 기준일: 2026-10-26", text)
         self.assertIn("수록 출처: 1", text)
         self.assertIn("아직 사람 확인 필요", text)
+        self.assertIn("https://kostat.go.kr/source", text)
         self.assertIn("95/100", text)
 
     def test_tampered_per_article_intend_fails_closed(self):
