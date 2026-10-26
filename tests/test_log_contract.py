@@ -161,3 +161,37 @@ def test_run_log_invalid_utf8_returns_contract_error(tmp_path: Path) -> None:
     )
     with pytest.raises(ContractError, match="not valid UTF-8"):
         _ = read_events(path)
+
+
+@pytest.mark.parametrize(
+    "decoder_error",
+    [RecursionError("too deeply nested"), ValueError("oversized integer")],
+)
+def test_run_log_decoder_failures_are_contract_errors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, decoder_error: Exception
+) -> None:
+    import tools.log_contract as log_contract
+
+    path = tmp_path / "decoder-error.jsonl"
+    _ = path.write_text('{"event_type": "baseline"}\n', encoding="utf-8")
+
+    def failing_loads(_line: str) -> object:
+        raise decoder_error
+
+    # Directly inject the documented decoder exceptions. Decoder recursion
+    # thresholds vary by Python release, but this regression must not skip.
+    with monkeypatch.context() as patch:
+        patch.setattr(log_contract.json, "loads", failing_loads)
+        with pytest.raises(ContractError, match="invalid JSON"):
+            _ = log_contract.read_events(path)
+
+
+def test_run_log_rejects_extremely_nested_json_without_uncaught_error(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "deep.jsonl"
+    _ = path.write_text(
+        "[" * 10000 + "0" + "]" * 10000 + "\n", encoding="utf-8"
+    )
+    with pytest.raises(ContractError, match="invalid JSON|JSON object required"):
+        _ = read_events(path)
