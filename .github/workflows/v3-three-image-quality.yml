@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'editorial_studio/v3/**'
+      - 'editorial_studio/topics/**'
       - 'editorial_studio/*.py'
       - 'editorial_studio/profiles/**'
       - 'editorial_studio/benchmarks/**'
@@ -17,6 +18,7 @@ on:
       - main
     paths:
       - 'editorial_studio/v3/**'
+      - 'editorial_studio/topics/**'
       - 'editorial_studio/*.py'
       - 'editorial_studio/profiles/**'
       - 'editorial_studio/benchmarks/**'
@@ -61,6 +63,13 @@ jobs:
           result = generate(fixture, root/'preview')
           assert result['status'] == 'PASS'
           assert result['images_total'] == 15 and result['screenshots_total'] == 10
+          assert result['intends_total'] == 5
+          assert all((root/'preview'/row['category']/'intend.md').is_file()
+                     and row['intent_review'] == 'PENDING'
+                     and row['intend_contract_verified']
+                     and len(row['intend_sha256']) == 64
+                     and len(row['intend_source_sha256']) == 64
+                     for row in result['results'])
           assert len(result['results']) == 5
           assert all(item['evaluation']['score'] >= 95 for item in result['results'])
           assert all(item['original_same_sha256'] and not item['mobile_qa']['issues']

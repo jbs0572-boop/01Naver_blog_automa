@@ -5,8 +5,12 @@
 
 ## 필수 읽기 순서
 1. `editorial_studio/intend.md`와 `editorial_studio/RESEARCH_STYLES_2026-10-25.md`
-2. 주제 결정 후 `editorial_studio/profiles/{선택된카테고리}.md` 단 한 개
-3. 실제 구현 시 `editorial_studio/studio.py`와 `editorial_studio/README.md`
+2. 주제 결정 후 `editorial_studio/topics/{선택된카테고리}/intend.md` 단 한 개(독자 문제·검색 의도·자료 출처)와 `editorial_studio/profiles/{선택된카테고리}.md` 단 한 개(문체·디자인)
+3. 실제 글별 생성된 `intend.md`를 읽고 제목·검색 의도·원본 이미지 목적을 확인
+4. 실제 구현 시 `editorial_studio/studio.py`와 `editorial_studio/README.md`
+
+## 카테고리별 의도
+`topics/{category}/intend.md`는 왜 조사하고 어떤 가치와 이미지를 만들어야 하는지 정의한다. 실제 글마다 별도의 `intend.md`를 생성하고 원본 의도 SHA-256으로 고정한다. 카테고리별 프로필은 말투와 레이아웃만 정의한다. 원문 대조 미완료와 인간 검수 대기는 독립적으로 기록하며, 이 문서는 Notion·네이버 쓰기 승인이 아니다.
 
 ## 스타일 일관성
 같은 카테고리는 **동일한 프로필 MD**, 말투·논조·5개 이야기 역할을 사용한다. 다른 주제더라도 목소리는 그대로 둔다. 실제 소제목 문구는 소재별로 달라질 수 있다. 다른 카테고리 지침을 혼합하지 않는다. 파일 SHA-256 불일치나 선택 근거가 모호할 때에는 작업을 통과로 기록하지 않는다.
