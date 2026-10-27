@@ -45,7 +45,7 @@ def load(category: str) -> dict:
         # Normalize only for parsing; never normalize bytes used in the digest.
         source = original_bytes.decode("utf-8").replace("\r\n", "\n")
     except (OSError, UnicodeError) as error:
-        raise IntentError("missing or unreadable category intend.md: " + str(path)) from error
+        raise IntentError("missing category intend.md or unreadable source: " + str(path)) from error
     marker = re.escape(chr(96) * 3)
     blocks = re.findall(
         r"^" + marker + r"intent[ \t]*\n(.*?)\n" + marker + r"[ \t]*$",
